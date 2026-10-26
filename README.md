@@ -30,6 +30,19 @@ and games played while the app wasn't running).
 
 Everything is saved in the `data/` folder inside the project. Only Python's standard library is used.
 
+## Tests
+
+From the project folder:
+
+```
+python3 -m unittest
+node tests/js/run.js
+```
+
+The first runs the Python tests (Python's built-in `unittest`), the second the page's badge and score rules (plain Node,
+no packages). Neither needs League open, a Riot key or the internet, and neither reads or changes your `data/` folder:
+the tests use small made-up games (`tests/helpers.py`) and a pretend League client.
+
 ## How the code is organised
 
 | File | What it does |
@@ -55,3 +68,4 @@ Everything is saved in the `data/` folder inside the project. Only Python's stan
 | `duostats/grades.py`, `config.py`, `errors.py` | Small shared helpers |
 | `web/index.html`, `web/style.css` | The page and its look |
 | `web/js/` | The page's code, one file per tab (`overview.js`, `live.js`, `srank.js`, ...) |
+| `tests/` | The tests: one `test_*.py` file per part of the app, and `js/` for the page's badge and score rules |
