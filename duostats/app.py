@@ -10,7 +10,6 @@ import webbrowser
 
 from . import config
 from .augments import AugmentCatalog
-from .builds import BuildAdvisor
 from .chat import PostGameChatReader
 from .errors import DuoStatsError
 from .games import clean_riot_id
@@ -43,7 +42,6 @@ class App:
         self.tracker = GameTracker(self.storage, self.client, self.season, self.chat, self.live)
         self.stats = StatsService(self.storage, self.client, self.riot, self.directory, self.tracker)
         self.augments = AugmentCatalog(self.storage, self.client)
-        self.builds = BuildAdvisor(self.storage, self.client, self.riot)
 
     # ---- the Riot API key ----
     def load_saved_key(self):

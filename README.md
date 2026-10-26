@@ -48,7 +48,6 @@ Everything is saved in the `data/` folder inside the project. Only Python's stan
 | `duostats/season.py` | Season-best grades for the S Rank Challenge |
 | `duostats/chat.py` | Reading S grades from the post-game chat |
 | `duostats/live.py` | Which champion you're on right now |
-| `duostats/builds.py` | Recommended builds (parked: not shown in the Live tab for now) |
 | `duostats/augments.py` | Augment names, icons and descriptions |
 | `duostats/ugg.py` | Opening u.gg build pages |
 | `duostats/storage.py` | Everything saved on this Mac |
@@ -56,4 +55,3 @@ Everything is saved in the `data/` folder inside the project. Only Python's stan
 | `duostats/grades.py`, `config.py`, `errors.py` | Small shared helpers |
 | `web/index.html`, `web/style.css` | The page and its look |
 | `web/js/` | The page's code, one file per tab (`overview.js`, `live.js`, `srank.js`, ...) |
-| `extension/` | Skill tracker browser extension (parked, with the recommended builds) |

@@ -6,10 +6,8 @@ look at everything but change nothing (see access.py), and may need a PIN first.
 
 from __future__ import annotations
 
-import io
 import json
 import mimetypes
-import zipfile
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -61,11 +59,6 @@ class Handler(BaseHTTPRequestHandler):
         if not self.access.host_allowed(self.headers.get("Host", "")):
             self.send(403, {"error": "This address isn't one of this Mac's names."})
             return False
-        if self.viewer and path == "/api/skills" and self.access.pin and self.headers.get("X-Duo-Pin") is not None:
-            ok, message = self.access.try_pin(self.client_address[0], self.headers.get("X-Duo-Pin", ""))   # the extension
-            if not ok:
-                self.send(403, {"error": message})
-            return ok
         if self.viewer and path != "/api/pin" and not path.startswith("/img/") and not self.access.unlocked(self.headers.get("Cookie", "")):
             if path in ("/", "/index.html"):
                 self.send_static("pin.html")
@@ -84,9 +77,6 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if url.path in ("/", "/index.html"):
                 return self.send_static("index.html")
-            if url.path == "/extension.zip":   # the skill tracker browser extension, to load unpacked
-                return self.send(200, extension_zip(), "application/zip", headers={
-                    "Content-Disposition": 'attachment; filename="duo-stats-skill-tracker.zip"'})
             if url.path.startswith(("/js/", "/style.css", "/img/")):
                 return self.send_static(url.path.lstrip("/"))
             if url.path == "/api/status":
@@ -104,8 +94,6 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, app.match(game_id))
             if url.path == "/api/showcase":
                 return self.send(200, app.showcases())
-            if url.path == "/api/build":
-                return self.send(200, app.builds.build((query.get("champ") or [""])[0], (query.get("queue") or [""])[0]))
             if url.path == "/api/augments":
                 return self.send(200, app.augments.for_page())
             if url.path.startswith("/api/augicon/"):
@@ -135,7 +123,6 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/settings": lambda: app.save_settings(body),
                 "/api/stats": lambda: app.load_stats(body, save=not self.viewer),   # viewers see the host's settings
                 "/api/srank": lambda: app.s_rank(body),
-                "/api/skills": lambda: app.builds.record_skills(body, app.tracker.players()),   # from the extension
                 "/api/showcase": lambda: app.save_showcase(body, self.viewer),
                 "/api/open": lambda: {"ok": True, "result": app.ugg.open(str(body.get("url", "")))},
             }
@@ -150,17 +137,6 @@ class Handler(BaseHTTPRequestHandler):
             self.send(502, {"error": str(e)})
         except Exception as e:   # keep the app alive whatever happens
             self.send(500, {"error": f"Unexpected error: {e}"})
-
-
-def extension_zip() -> bytes:
-    """The extension/ folder as a zip, so a duo partner can download it from the page."""
-    folder = config.PROJECT_DIR / "extension"
-    data = io.BytesIO()
-    with zipfile.ZipFile(data, "w", zipfile.ZIP_DEFLATED) as z:
-        for f in sorted(folder.rglob("*")):
-            if f.is_file() and not f.name.startswith("."):
-                z.write(f, "duo-stats-skill-tracker/" + f.relative_to(folder).as_posix())
-    return data.getvalue()
 
 
 class DuoStatsServer(ThreadingHTTPServer):

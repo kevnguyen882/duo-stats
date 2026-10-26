@@ -39,11 +39,9 @@ function itemIcon(id, n){
 
 // ---- who this browser is, and what to show ----
 const LIVE_SHOW = [['history','History & items']];
-// The recommended build panel (buildPanel below, builds.py, extension/) is parked: not shown until it's picked up again.
-const SHOW_BUILDS = false;
 let liveMe = store.get('duo_live_me') || '';   // riot id (lowercase) of who's playing on this browser; '' = work it out
-let liveShow = (()=>{ try{ return {build:true, history:true, partner:true, ...JSON.parse(store.get('duo_live_show') || '{}')}; }
-                       catch(e){ return {build:true, history:true, partner:true}; } })();
+let liveShow = (()=>{ try{ return {history:true, partner:true, ...JSON.parse(store.get('duo_live_show') || '{}')}; }
+                       catch(e){ return {history:true, partner:true}; } })();
 function liveMeIndex(){
   const ps = lastData ? lastData.players : [], ids = ps.map(p=>p.riotId.toLowerCase());
   if(liveMe && ids.includes(liveMe)) return ids.indexOf(liveMe);
@@ -63,54 +61,6 @@ function liveBar(){
       `<button data-live-me="${esc(p.riotId.toLowerCase())}" class="${i===me?'on':''}" aria-pressed="${i===me}">${esc(shortName(p.riotId))}</button>`).join('')}</div></div>` : ''}
     <div class="lbgroup"><span>Show</span><div class="seg" role="group" aria-label="Show while in game">${LIVE_SHOW.map(([k,l])=>
       `<button data-live-show="${k}" class="${liveShow[k]?'on':''}" aria-pressed="${!!liveShow[k]}">${l}</button>`).join('')}</div></div>`;
-}
-
-// ---- recommended builds, from the app (cached here; asked again while skill orders are still being fetched) ----
-const buildCache = {};
-function getBuild(alias, queueId){
-  const key = alias + '|' + queueId, c = buildCache[key];
-  const stale = !c || (c.data && c.data.skillsPending && Date.now() - c.at > 15000 && !c.data.skillsProblem);
-  if(stale && !(c && c.loading)){
-    buildCache[key] = {...(c||{}), loading: true};
-    api(`/api/build?champ=${encodeURIComponent(alias)}&queue=${encodeURIComponent(queueId||'')}`)
-      .then(d=>{ buildCache[key] = {data: d, at: Date.now()}; renderLive(); })
-      .catch(()=>{ buildCache[key] = {data: null, at: Date.now()}; });
-  }
-  return c && c.data;
-}
-
-const augName = id => ((augNames||{})[id] || {}).name || 'Augment #'+id;
-function augLine(a){
-  const info = (augNames||{})[a.id] || {};
-  return `<div class="bldaug" data-aug="${esc(a.id)}"><img class="augic ${esc(info.rarity||'')}" src="/api/augicon/${encodeURIComponent(a.id)}" alt=""
-    onerror="this.style.visibility='hidden'"><span>${esc(augName(a.id))}</span><small>${pct(a.wins/a.picks)} · ${a.picks} pick${a.picks>1?'s':''}</small></div>`;
-}
-function skillGrid(sk){
-  const seq = sk.sequence;
-  return `<div class="skorder">${[...sk.maxOrder].map(k=>`<b class="sk sk${k}">${k}</b>`).join('<span>›</span>')}
-      <small>maxed in ${sk.maxGames} of ${sk.games} games</small></div>
-    <div class="skgrid" style="--n:${seq.length}" aria-label="Skill order by level: ${esc([...seq].join(', '))}">
-      ${'QWER'.split('').map(k=>`<b class="sk sk${k}">${k}</b>${[...seq].map((s,i)=>`<i class="${s===k?'on sk'+k:''}">${s===k?i+1:''}</i>`).join('')}`).join('')}</div>`;
-}
-function buildPanel(alias, name, queueId){
-  const b = getBuild(alias, queueId), mode = QUEUES[queueId] || 'this mode';
-  const ugg = `<button class="ghost" data-ugg="${esc(uggUrl(alias, queueId))}">See the build on u.gg</button>`;
-  if(!b) return `<div class="bld"><h3>Recommended build</h3><p class="empty"><span class="spin"></span>Working it out…</p></div>`;
-  if(b.games < 3) return `<div class="bld"><h3>Recommended build</h3><div class="bldthin">
-      <p>Only ${b.games} game${b.games===1?'':'s'} of ${esc(name)} in ${esc(mode)} saved so far, from any player. Not enough to go on yet.</p>${ugg}</div></div>`;
-  const items = b.items.filter(i=>finishedItem(i.id)).slice(0,6);
-  const skills = b.skills ? skillGrid(b.skills) + (b.skillsRecorded ? `<small class="d">${b.skillsRecorded} of these recorded by the Duo Stats skill tracker extension.</small>` : '')
-    : b.skillsProblem ? `<p class="empty">${esc(b.skillsProblem)}</p><button class="ghost sm" data-ugg="${esc(uggUrl(alias, queueId))}">Skill order on u.gg</button>
-        <a class="ghost sm extlink" href="/extension.zip">Get the skill tracker extension</a>`
-    : b.skillsPending ? `<p class="empty"><span class="spin"></span>Fetching skill orders from Riot (${b.skillsPending} game${b.skillsPending>1?'s':''} to go)…</p>`
-    : '<p class="empty">No skill orders recorded yet.</p>';
-  return `<div class="bld"><h3>Recommended build <small>from ${b.games} games of ${esc(name)} in ${esc(mode)}, both teams · ${pct(b.wins/b.games)} won</small></h3>
-    <div class="bldgrid">
-      <div><h4>Best augments</h4>${b.augments.slice(0,6).map(augLine).join('') || '<p class="empty">No augments recorded.</p>'}</div>
-      <div><h4>Items winners ended with</h4>${items.length ? `<div class="items">${items.map(i=>itemIcon(i.id, i.games)).join('')}</div>
-        <small class="d">The number is how many winning games had it.</small>` : '<p class="empty">No wins recorded yet.</p>'}
-        <h4 style="margin-top:14px">Skill order</h4>${skills}</div>
-    </div></div>`;
 }
 
 // ---- S Rank Challenge status on the champion: your best grade this season, or a chance to get one, and your partner's ----
@@ -168,12 +118,10 @@ function liveCard(det, player, color, queueId, isMe){
       <div><h3>Augments in ${whose} wins</h3>${augTiers.length ? augTiers.map(([tier, list])=>`<div class="augtier">
           <span class="rar ${tier}">${tier}</span><div class="augrow1">${list.map(augChip).join('')}</div></div>`).join('')
         : '<div class="empty">No augments recorded for these wins.</div>'}</div></div>` : ''}`;
-  const inGame = live && ['GameStart','InProgress','Reconnect'].includes(live.phase);
   return `<div class="lp ${det.hover?'hovering':''}" style="--c:${color}">
     <div class="lphead">${icon(det.alias)}<div><div class="who">${isMe ? 'You' : esc(shortName(det.riotId))}${det.hover ? ' <span class="tag">considering…</span>' : ''}</div>
       <div class="champ">${esc(det.name||det.alias)}</div>${srankStatus(det, player, color)}</div>
       ${det.hover ? '' : `<button class="ghost" data-ugg="${esc(uggUrl(det.alias, queueId))}">u.gg build</button>`}</div>
-    ${SHOW_BUILDS && inGame && liveShow.build && isMe ? buildPanel(det.alias, det.name||det.alias, queueId) : ''}
     ${history}
   </div>`;
 }

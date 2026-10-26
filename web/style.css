@@ -570,7 +570,7 @@ body.scdragging,body.scdragging *{cursor:grabbing !important}
 .viewing{font-size:13px;color:var(--muted);margin:-12px 0 16px}
 body.viewer #settings .form,body.viewer #settings .optsec,body.viewer #settings > .note{display:none}
 
-/* Live tab: the Playing as / Show bar, the recommended build, the ARAM bench and the last-game recap */
+/* Live tab: the Playing as / Show bar, the ARAM bench and the last-game recap */
 .livebar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;margin:6px 0 14px}
 .lbgroup{display:flex;align-items:center;gap:8px}
 .lbgroup > span{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
@@ -579,29 +579,6 @@ body.viewer #settings .form,body.viewer #settings .optsec,body.viewer #settings 
 .livebar .seg button.on{background:var(--panel2);color:var(--text)}
 .lp.hovering{opacity:.72;border-style:dashed}
 .lp.hovering .lphead .ic{filter:grayscale(.4)}
-
-.bld{margin:12px 0 4px;padding:12px 14px;border-radius:10px;background:var(--panel2);border:1px solid color-mix(in srgb, var(--c) 35%, var(--line))}
-.bld h3{margin:0 0 10px;font-size:14px}
-.bld h3 small{font-weight:400;color:var(--muted);font-size:12px;margin-left:6px}
-.bld h4{margin:0 0 6px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
-.bldgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-@media(max-width:700px){.bldgrid{grid-template-columns:1fr}}
-.bldaug{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px;cursor:help}
-.bldaug .augic{width:26px;height:26px;flex:none}
-.bldaug span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.bldaug small{color:var(--muted);white-space:nowrap}
-.bldthin{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px}
-.bldthin p{margin:0;font-size:13px;color:var(--muted);flex:1;min-width:200px}
-.bld .d{font-size:11.5px;color:var(--muted)}
-.sk{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:6px;font-size:12px;font-weight:800;color:#fff;font-style:normal}
-.skQ{background:#3b82f6}.skW{background:#22a06b}.skE{background:#d97706}.skR{background:#c026d3}
-.skorder{display:flex;align-items:center;gap:6px;margin-bottom:8px}
-.skorder > span{color:var(--muted)}
-.skorder small{color:var(--muted);font-size:11.5px;margin-left:6px}
-.skgrid{display:grid;grid-template-columns:22px repeat(var(--n), minmax(14px, 1fr));gap:2px;overflow-x:auto}
-.skgrid i{height:22px;border-radius:4px;background:color-mix(in srgb, var(--line) 55%, transparent);font-style:normal;font-size:10px;font-weight:700;
-  display:grid;place-items:center;color:#fff}
-.skgrid i.skQ{background:#3b82f6}.skgrid i.skW{background:#22a06b}.skgrid i.skE{background:#d97706}.skgrid i.skR{background:#c026d3}
 
 .bench{margin-top:16px}
 .bench h3{margin:0 0 8px;font-size:14px}
@@ -624,8 +601,6 @@ body.viewer #settings .form,body.viewer #settings .optsec,body.viewer #settings 
 .rcp .ic{width:40px;height:40px;margin:0;box-shadow:0 0 0 2px var(--c)}
 .rcpm .d{font-size:12.5px;color:var(--muted)}
 .rcp .score{display:flex;flex-direction:column;align-items:flex-end;padding-right:14px}
-.bld .ghost.sm{padding:4px 10px;font-size:12px;margin-top:4px}
-.bld a.extlink{display:inline-block;margin:4px 0 0 6px;padding:4px 10px;font-size:12px;border:1px solid var(--line);border-radius:8px;color:var(--text);text-decoration:none}
 /* Live: the u.gg button for this browser's player, at the right of the phase line */
 .phase{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px}
 .phase .uggmain{margin-left:auto;padding:7px 14px;font-weight:700}
