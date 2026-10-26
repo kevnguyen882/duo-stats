@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>luggi duc</title>
+<!-- shown to other computers on the network until they enter the PIN set with --pin -->
+<style>
+  :root{--bg:#0b0f17;--panel:#121826;--line:#243049;--text:#e7ecf5;--muted:#8a96ad;--gold:#c8aa6e;--loss:#ff5c6c;color-scheme:dark}
+  @media (prefers-color-scheme: light){:root{--bg:#e6e3dc;--panel:#fdfcf9;--line:#d9d4c9;--text:#161b26;--muted:#687083;--gold:#9a7428;--loss:#d92d43;color-scheme:light}}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:grid;place-items:center;padding:16px;background:var(--bg);color:var(--text);
+    font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif}
+  form{width:min(340px,100%);background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px}
+  h1{font-size:24px;margin:0 0 4px}h1 span{color:var(--gold)}
+  h1.logo{margin:0 0 10px}h1.logo img{display:block;height:91px;width:auto}   /* light or dark lines, picked by the system theme */
+  p{color:var(--muted);margin:0 0 16px;font-size:14px}
+  input{width:100%;font:inherit;font-size:20px;letter-spacing:6px;text-align:center;padding:10px;border-radius:10px;border:1px solid var(--line);
+    background:var(--bg);color:var(--text)}
+  input:focus{outline:2px solid var(--gold);outline-offset:1px}
+  button{width:100%;margin-top:12px;padding:10px;border:0;border-radius:10px;background:var(--gold);color:#111;font:inherit;font-weight:700;cursor:pointer}
+  .err{color:var(--loss);font-size:13px;min-height:18px;margin-top:8px}
+</style>
+</head>
+<body>
+<form id="f">
+  <h1 class="logo"><picture><source srcset="/img/logo-light.png" media="(prefers-color-scheme: light)"><img src="/img/logo-dark.png" alt="luggi duc" width="720" height="208"></picture></h1>
+  <p>Enter the PIN to open it. You'll only need to do this once on this browser.</p>
+  <input id="pin" inputmode="numeric" autocomplete="off" aria-label="PIN" autofocus>
+  <button>Open</button>
+  <div class="err" id="err" role="alert"></div>
+</form>
+<script>
+document.getElementById('f').onsubmit = async e => {
+  e.preventDefault();
+  const err = document.getElementById('err'); err.textContent = '';
+  try{
+    const r = await fetch('/api/pin', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({pin: document.getElementById('pin').value})});
+    if(r.ok) return location.reload();
+    err.textContent = (await r.json().catch(()=>({}))).error || 'That didn\'t work.';
+  }catch(e){ err.textContent = 'Couldn\'t reach luggi duc. Is it still running?'; }
+};
+</script>
+</body>
+</html>

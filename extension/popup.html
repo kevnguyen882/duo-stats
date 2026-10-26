@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Duo Stats Skill Tracker</title>
+<style>
+  :root{--bg:#121826;--panel:#182033;--line:#243049;--text:#e7ecf5;--muted:#8a96ad;--gold:#c8aa6e;--ok:#3ccf8e;--bad:#ff5c6c;color-scheme:dark}
+  body{margin:0;width:320px;padding:14px;background:var(--bg);color:var(--text);font:13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+  h1{font-size:16px;margin:0 0 2px}h1 span{color:var(--gold)}
+  p{margin:0 0 10px;color:var(--muted)}
+  label{display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:10px 0 4px}
+  input{width:100%;box-sizing:border-box;padding:7px 9px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--text);font:inherit}
+  button{margin-top:10px;padding:7px 12px;border-radius:8px;border:0;background:var(--gold);color:#111;font:inherit;font-weight:700;cursor:pointer}
+  button.ghost{background:none;border:1px solid var(--line);color:var(--text);font-weight:600}
+  .box{margin-top:12px;padding:10px;border-radius:10px;background:var(--panel)}
+  .ok{color:var(--ok)}.bad{color:var(--bad)}
+  code{font-size:12px;letter-spacing:1px}
+</style>
+</head>
+<body>
+  <h1>Duo <span>Stats</span> skill tracker</h1>
+  <p>Records the order you level your abilities during games and sends it to Duo Stats.</p>
+
+  <label for="url">Duo Stats address</label>
+  <input id="url" placeholder="http://kevins-macbook-pro.local:8765">
+  <label for="pin">PIN <span style="text-transform:none;font-weight:400">(only on another computer)</span></label>
+  <input id="pin" type="password" autocomplete="off">
+  <button id="save">Save</button>
+
+  <div class="box" id="status">Checking…</div>
+
+  <div class="box">
+    <b>First game on this computer?</b>
+    <p style="margin:4px 0 0">While you're in a game, open the game's data page once and accept the warning
+      (Advanced → Proceed). League uses its own certificate, which browsers don't know.</p>
+    <button class="ghost" id="allow">Open the game's data page</button>
+  </div>
+<script src="popup.js"></script>
+</body>
+</html>

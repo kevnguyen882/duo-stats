@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Duo Stats Skill Tracker",
+  "version": "1.0.0",
+  "description": "Records the order you level your abilities in League games and sends it to your Duo Stats app.",
+  "permissions": ["storage", "alarms"],
+  "host_permissions": ["https://127.0.0.1:2999/*"],
+  "optional_host_permissions": ["http://*/*"],
+  "background": {"service_worker": "background.js"},
+  "action": {"default_title": "Duo Stats Skill Tracker", "default_popup": "popup.html"}
+}

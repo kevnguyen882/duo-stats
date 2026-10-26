@@ -1,0 +1,5 @@
+# saved games, settings and the LAN PIN secret stay on this Mac
+data/
+__pycache__/
+*.pyc
+.DS_Store
