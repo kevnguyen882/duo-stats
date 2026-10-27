@@ -21,9 +21,18 @@ document.documentElement.dataset.theme=t})()</script>
   <div id="game" class="hidden">
     <div class="uscore" id="scoreboard"></div>
     <div class="srtools"><div class="seg" role="group" aria-label="Whose utopia" id="whose"></div></div>
-    <div class="uscene"><canvas id="scene" aria-label="The utopia" role="img"></canvas></div>
+    <div class="uscene" id="town"><canvas id="scene" aria-label="The utopia (click the Duck Infirmary or Penta Plaza to visit them)" role="img"></canvas></div>
+    <!-- Penta Plaza takes the scene's place while you visit it -->
+    <section class="panel uplaza hidden" id="plaza">
+      <div class="uplaza-top"><button class="ghost" data-back>← Back to the utopia</button><h2>Penta Plaza</h2></div>
+      <div class="uplaza-scene"><canvas id="plazaScene" role="img"></canvas></div><p class="unote" id="plazaNote"></p></section>
+    <!-- so does the Duck Infirmary -->
+    <section class="panel uplaza ulab hidden" id="lab">
+      <div class="uplaza-top"><button class="ghost" data-back>← Back to the utopia</button><h2>Duck Infirmary</h2></div>
+      <div class="uplaza-scene"><canvas id="labScene" role="img"></canvas></div><p class="unote" id="labNote"></p>
+      <div id="labBuild"></div></section>
     <div class="ures" id="resources"></div>
-    <div class="ugrid">
+    <div class="ugrid" id="townPanels">   <!-- the main utopia only -->
       <section class="panel"><h2>Build</h2><div id="build"></div></section>
       <section class="panel"><h2>Defenders</h2><div id="squad"></div></section>
     </div>

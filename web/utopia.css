@@ -25,6 +25,20 @@
 .uscene{border-radius:12px;overflow:hidden;border:1px solid var(--line);background:#69a84f;line-height:0}
 .uscene canvas{width:100%;height:auto;display:block;image-rendering:pixelated}
 
+/* Penta Plaza: a golden duck for each pentakill game, carrying its champion's banner */
+.uplaza{margin-bottom:0}
+.uplaza-top{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.uplaza-top h2{margin:0}
+.uplaza-top button{padding:6px 12px;font-size:13px}
+.uscene canvas.go{cursor:pointer}
+.ulab .uplaza-scene{background:#1d3b45}
+#labBuild{margin-top:6px}
+.uplaza-scene{border-radius:10px;overflow:hidden;border:1px solid var(--line);background:#ddd5c6;line-height:0}
+.uplaza-scene canvas{width:100%;height:auto;display:block;image-rendering:pixelated}
+.uplaza-scene canvas.over{cursor:help}
+#tip .ugold{color:#c9952a}
+[data-theme="dark"] #tip .ugold{color:#f7c948}
+
 /* breadcrumbs, feathers and the duck pipeline */
 .ures{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
 .ures > div{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:7px 12px;display:flex;align-items:center;gap:8px;font-size:13.5px}

@@ -3,10 +3,17 @@ import unittest
 from duostats import utopia
 from duostats.games import Player
 from duostats.utopia import (DuckUtopia, advance, apply_badges, boost_breakdown, catch_up, crumb_rate, goose_wave,
-                             new_utopia, raid, score, upgrade_cost)
+                             grow_minutes, migrate, new_utopia, penta_plaza, raid, score, spawn_cost, upgrade_cost)
 from tests.helpers import TempStorageCase
 
 MIN = 60000
+
+
+def empty(riot_id="A#1", now=0):
+    """A new utopia with an empty pond, to follow ducks through the pipeline."""
+    s = new_utopia(riot_id, now)
+    s["pond"] = 0
+    return s
 
 
 def row(mid, start, win=True, champion="Annie", **over):
@@ -24,7 +31,7 @@ class PipelineTests(unittest.TestCase):
         self.assertAlmostEqual(s["crumbs"], utopia.FOUNDING_GIFT + 4 * utopia.DUCK_RATE * 10)
 
     def test_duckling_waits_for_a_nest_grows_then_joins_the_pond(self):
-        s = new_utopia("A#1", 0)
+        s = empty()
         s["lost"] = utopia.nest_space(1) + 2   # two more than the nests hold
         advance(s, 0)
         self.assertEqual((len(s["ducklings"]), s["lost"]), (utopia.nest_space(1), 2))
@@ -35,7 +42,7 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual((s["pond"], s["edge"]), (5, 1))   # the pond holds 5: one waits at the edge
 
     def test_new_pond_ducks_collect_from_when_they_arrive(self):
-        s = new_utopia("A#1", 0)
+        s = empty()
         s["crumbs"], s["lost"] = 0, 1
         advance(s, 0)
         advance(s, (utopia.GROW_MINUTES + 10) * MIN)
@@ -48,15 +55,33 @@ class PipelineTests(unittest.TestCase):
         self.assertAlmostEqual(crumb_rate(s), 10 * (1 + 2 * utopia.BAKERY_BONUS) * 1.5)
 
 
+class InfirmaryTests(unittest.TestCase):
+    def test_costs_and_times(self):
+        self.assertEqual(spawn_cost(0), utopia.SPAWN_COST)
+        self.assertLess(spawn_cost(1) - spawn_cost(0), spawn_cost(50) - spawn_cost(49))   # slow at first, then steep
+        self.assertEqual(grow_minutes(0), 8 * 60)
+        self.assertLess(grow_minutes(5), grow_minutes(0))
+
+    def test_old_utopias_lose_the_timer_but_keep_waiting_ducklings(self):
+        s = new_utopia("A#1", 0)
+        s.update(held=2, nextSpawn=5)
+        s["levels"].update(incubator=3, serum=1)
+        del s["spawned"], s["levels"]["incubation"]
+        migrate(s)
+        self.assertEqual((s["lost"], s["spawned"], s["levels"]["incubation"]), (2, 0, 0))
+        self.assertNotIn("incubator", s["levels"])
+        self.assertNotIn("nextSpawn", s)
+
+
 class RewardTests(unittest.TestCase):
     def test_badges(self):
         s = new_utopia("A#1", 0)
-        apply_badges(s, row("1", 0, triples=2, quadras=1, pentas=1, grade="S"), grown=False)
-        self.assertEqual((s["lost"], s["golden"], s["champs"]), (1, 1, {"Annie": "S"}))
+        apply_badges(s, row("1", 0, triples=2, quadras=1, pentas=1, grade="S"))
+        self.assertEqual((s["lost"], s["golden"], s["champs"]), (0, 1, {"Annie": "S"}))   # a win isn't a duckling any more
         self.assertAlmostEqual(s["boost"], 2 * utopia.TRIPLE_BOOST + utopia.QUADRA_BOOST)
-        apply_badges(s, row("2", 0, win=False, grade="S+"), grown=False)
-        self.assertEqual((s["lost"], s["fire"], s["champs"]["Annie"]), (1, 1, "S+"))
-        apply_badges(s, row("3", 0, win=False, grade="A"), grown=False)   # not an S grade: nothing
+        apply_badges(s, row("2", 0, win=False, grade="S+"))
+        self.assertEqual((s["fire"], s["champs"]["Annie"]), (1, "S+"))
+        apply_badges(s, row("3", 0, win=False, grade="A"))   # not an S grade: nothing
         self.assertEqual(s["champs"]["Annie"], "S+")
 
     def test_boost_breakdown_adds_up(self):
@@ -67,13 +92,23 @@ class RewardTests(unittest.TestCase):
         s["games"] = ["1", "2", "3", "4"]
         for r in rows[:4]:
             if not r["remake"]:
-                apply_badges(s, r, grown=True)
+                apply_badges(s, r)
         b = boost_breakdown(s, rows)
         self.assertEqual((b["triples"], b["quadras"]), (3, 2))
         self.assertAlmostEqual(b["fromTriples"] + b["fromQuadras"], s["boost"])
         self.assertAlmostEqual(b["sinceFounding"], utopia.QUADRA_BOOST)   # only game 3 came after
         self.assertEqual([c["champion"] for c in b["champions"]], ["Draven", "Vi"])
         self.assertEqual([g["champion"] for g in b["latest"]], ["Draven", "Vi", "Draven"])   # newest first
+
+    def test_penta_plaza_has_a_duck_per_penta_game(self):
+        s = new_utopia("A#1", 0)
+        rows = [row("3", 30, champion="Vi", pentas=2), row("1", 10, champion="Draven", pentas=1),
+                row("2", 20, pentas=0), row("4", 40, champion="Jinx", pentas=1, remake=True),
+                row("5", 50, champion="Kayn", pentas=1)]   # game 5 isn't counted in the utopia yet
+        s["games"] = ["1", "2", "3", "4"]
+        plaza = penta_plaza(s, rows)
+        self.assertEqual([(d["champion"], d["pentas"]) for d in plaza], [("Draven", 1), ("Vi", 2)])   # oldest first
+        self.assertEqual(plaza[1]["start"], 30)
 
     def test_catch_up_curve(self):
         self.assertEqual(catch_up(1000, 1000), 1.0)
@@ -150,19 +185,23 @@ class GameTests(TempStorageCase):
     def test_founding_day_replays_history(self):
         v = self.game.state(viewer=False, now=1000)
         one, two = v["players"]
-        self.assertEqual((one["pond"], one["golden"], one["founding"]["wins"]), (1, 1, 1))
+        self.assertEqual((one["pond"], one["edge"], one["golden"], one["founding"]["wins"]),
+                         (utopia.STARTING_DUCKS, 0, 1, 1))   # wins aren't ducks
         self.assertEqual(two["champs"], {"Garen": "S"})
         self.assertEqual(one["crumbs"], utopia.FOUNDING_GIFT)
         self.assertEqual(one["raids"], [])   # history doesn't raid
+        self.assertEqual([d["champion"] for d in one["plaza"]], ["Annie"])
+        self.assertEqual(two["plaza"], [])
         self.assertTrue(two["leading"] or one["leading"])
 
-    def test_a_new_game_gives_a_duckling_and_raids_both(self):
+    def test_a_new_win_gives_breadcrumbs_and_raids_both(self):
         self.game.state(viewer=False, now=1000)
         self.rows["duo one#na1"].insert(0, row("3", 3))
         self.rows["duo two#na2"].insert(0, row("3", 3, champion="Garen"))
         v = self.game.state(viewer=False, now=2000)
         one, two = v["players"]
-        self.assertEqual(len(one["ducklings"]), 1)
+        self.assertEqual(len(one["ducklings"]), 0)   # no duckling for a win: they come from the infirmary
+        self.assertIn(f"{utopia.WIN_CRUMBS} breadcrumbs", one["log"][-1 if not one["raids"] else 1]["text"])
         self.assertEqual(one["raids"][0]["matchId"], "3")
         self.assertEqual(one["raids"][0]["geese"], two["raids"][0]["geese"])   # the same wave
         again = self.game.state(viewer=False, now=3000)
@@ -186,6 +225,50 @@ class GameTests(TempStorageCase):
         self.assertEqual(p["crumbs"], utopia.FOUNDING_GIFT - upgrade_cost("nests", 1))
         with self.assertRaises(ValueError):   # can't afford the pond now
             self.game.act({"owner": "duo one#na1", "action": "upgrade", "building": "pond"}, viewer=False, now=0)
+
+    def give(self, crumbs):
+        data = self.game._load()
+        data["players"]["duo one#na1"]["crumbs"] = crumbs
+        self.storage.write_json(self.game.path, data)
+
+    def test_spawning_a_duckling(self):
+        self.game.state(viewer=False, now=1)   # (now=0 would mean "the real time")
+        self.give(10000)
+        spawn = {"owner": "duo one#na1", "action": "spawn"}
+        p = self.game.act(spawn, viewer=False, now=1)["players"][0]
+        self.assertEqual((p["ducklings"], p["spawned"], p["crumbs"]), ([1 + 8 * 60 * MIN], 1, 10000 - utopia.SPAWN_COST))
+        self.assertEqual(p["lab"]["spawnCost"], spawn_cost(1))
+        for _ in range(utopia.nest_space(1) - 1):
+            self.game.act(spawn, viewer=False, now=1)
+        with self.assertRaises(ValueError):   # the nests are full
+            self.game.act(spawn, viewer=False, now=1)
+        p = self.game.state(viewer=False, now=1 + 8 * 60 * MIN)["players"][0]
+        self.assertEqual((len(p["ducklings"]), p["edge"]), (0, utopia.nest_space(1)))   # grown; the pond was full
+
+    def test_incubation_upgrade_speeds_up_growing_ducklings(self):
+        self.game.state(viewer=False, now=1)
+        self.give(10000)
+        self.game.act({"owner": "duo one#na1", "action": "spawn"}, viewer=False, now=1)
+        p = self.game.act({"owner": "duo one#na1", "action": "upgrade", "building": "incubation"}, viewer=False, now=1)["players"][0]
+        self.assertEqual(p["levels"]["incubation"], 1)
+        self.assertEqual(p["ducklings"], [1 + round(8 * 60 * MIN * utopia.INCUBATION_SPEEDUP)])
+
+    def test_old_utopias_start_over_once_keeping_badge_ducks(self):
+        self.game.state(viewer=False, now=1)
+        data = self.game._load()
+        old = data["players"]["duo one#na1"]
+        old.update(crumbs=99999, pond=40, edge=7, feathers=12, champs={"Annie": "S"}, fire=2, boost=0.5, raidWins=3)
+        old["levels"]["pond"] = 6
+        del data["version"]   # saved before the fresh start
+        self.storage.write_json(self.game.path, data)
+        p = self.game.state(viewer=False, now=2)["players"][0]
+        self.assertEqual((p["crumbs"], p["pond"], p["edge"], p["feathers"], p["raidWins"], p["levels"]["pond"]),
+                         (utopia.FOUNDING_GIFT, utopia.STARTING_DUCKS, 0, 0, 0, 1))
+        self.assertEqual((p["golden"], p["champs"], p["fire"], p["boost"]), (1, {"Annie": "S"}, 2, 0.5))
+        self.assertEqual(len(p["plaza"]), 1)
+        self.assertEqual(self.storage.read_json(self.storage.path("utopia-before-fresh-start.json"))["players"]["duo one#na1"]["crumbs"], 99999)
+        again = self.game.state(viewer=False, now=60 * MIN)["players"][0]
+        self.assertGreater(again["crumbs"], utopia.FOUNDING_GIFT)   # only once: it carries on from there
 
     def test_only_your_own_utopia(self):
         with self.assertRaises(PermissionError):

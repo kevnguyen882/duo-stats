@@ -58,6 +58,28 @@ const CLASS_KIT = {   // extra pixels on the plain duck for each League class
 };
 const KIT_PAL = {M: '#9aa3ad', D: '#3b5ba5', Y: '#f7c948', P: '#7c3aed', T: '#8b5a2b', C: '#38bdf8', G: '#2f9e44',
   W: '#ffffff', R: '#e03131', H: '#343a40', Z: '#fff3bf', F: '#fa5252', Q: '#ffd43b'};
+const CHAMP_DUCK = [   // a game with more than one pentakill: crowned, caped, sashed and flexing (20x20, drawn at 40x40)
+  '....................',
+  '..........Q.Q.Q.....',
+  '..........QQQQQ.....',
+  '..........QCQRQ.....',
+  '.........BBBBBBB....',
+  '.........BBBBBKBOO..',
+  '.........BBBBBBBOOO.',
+  '..........BBBBBB....',
+  '.FF.SS.....BBBB.....',
+  '.FFSBBS...BBBBBB....',
+  '.FFSBMBS.BBBBBBBB...',
+  'FFFSBBBBSBBBBBRBBB..',
+  'FFFFSBBBBBBBBRBBBBB.',
+  'FFFFBSBBBBBBRBBBBBB.',
+  'FFFFBBBBBBBRBBBBBBB.',
+  'FFF.BBBBBBRBBBBBBBS.',
+  'FF...SBBBRBBBBBBBS..',
+  '......SSSSSSSSSSS...',
+  '........OO....OO....',
+  '.......OOO...OOO....',
+];
 const DUCKLING = [
   '............',
   '......YYY...',
@@ -194,6 +216,7 @@ function buildArt(){
   ART['duck-plain'] = duckWith({});
   ART['duckling'] = fromMap(DUCKLING, {Y: '#ffe066', S: '#f2c94c', K: '#1b1b1b', O: '#f29a2e'}, 2);
   ART['duck-golden'] = duckWith({B: '#f7c948', S: '#c9952a'}, [[8, 0, 'Z'], [9, 0, 'Z'], [10, 0, 'Z']]);
+  ART['duck-golden-champion'] = fromMap(CHAMP_DUCK, {B: '#f7c948', S: '#c9952a', M: '#fff3bf', K: '#1b1b1b', O: '#f29a2e', Q: '#e67700', C: '#38bdf8', R: '#e03131', F: '#c92a2a'}, 2);
   ART['duck-fire'] = duckWith({B: '#ff8a4c', S: '#d9480f'}, [[8, 0, 'F'], [10, 0, 'F'], [9, 0, 'Q']]);
   Object.entries(CLASS_KIT).forEach(([cls, kit])=>{ ART['duck-' + cls] = duckWith({}, kit); });
   ART['banner'] = canvasOf(16, 24, (g, px)=>{ px(1, 0, 2, 24, '#6b4423'); px(3, 1, 12, 14, '#c8aa6e'); px(5, 3, 8, 10, '#1f2937'); px(3, 15, 5, 3, '#c8aa6e'); px(10, 15, 5, 3, '#c8aa6e'); });
@@ -209,6 +232,33 @@ function buildArt(){
   });
   ART['goose-king'] = fromMap(overlay(GOOSE, [...line(3, 0, 4, 'Y'), [4, 1, 'R']]), GOOSE_PAL, 4);
   Object.entries(ICONS).forEach(([name, [rows, pal]])=>{ ART[name] = fromMap(rows, pal, 2); });
+  // the Duck Infirmary: the building in the utopia, and its lab inside
+  ART['building-infirmary'] = chunky(48, px=>{
+    px(3, 8, 18, 14, '#f1f3f5'); px(2, 6, 20, 3, '#adb5bd'); px(3, 21, 18, 2, '#868e96');
+    px(10, 10, 4, 10, '#e03131'); px(7, 13, 10, 4, '#e03131');                // a red cross
+    px(9, 18, 6, 4, '#495057'); px(4, 10, 3, 3, '#74c0fc'); px(17, 10, 3, 3, '#74c0fc');
+    px(18, 1, 3, 6, '#ced4da'); px(19, 2, 1, 4, '#63e6be');                    // a bubbling tube on the roof
+  });
+  ART['lab-tile'] = canvasOf(32, 32, (g, px)=>{
+    px(0, 0, 32, 32, '#1d3b45'); px(0, 0, 32, 1, '#2b5563'); px(0, 0, 1, 32, '#2b5563'); px(16, 0, 1, 32, '#24485a'); px(0, 16, 32, 1, '#24485a');
+  });
+  ART['lab-chamber'] = canvasOf(40, 112, (g, px)=>{   // the glass is left clear: the fluid is drawn behind it
+    px(2, 0, 36, 10, '#868e96'); px(2, 0, 36, 2, '#ced4da'); px(16, 2, 8, 3, '#495057');
+    px(0, 96, 40, 16, '#5c636a'); px(0, 96, 40, 2, '#adb5bd'); px(4, 102, 32, 6, '#343a40');
+    px(3, 10, 2, 86, 'rgba(220,240,255,.55)'); px(35, 10, 2, 86, 'rgba(220,240,255,.55)'); px(8, 14, 2, 70, 'rgba(255,255,255,.35)');
+  });
+  ART['egg'] = fromMap(['..WWW...', '.WWWWW..', 'WWWSWWW.', 'WWWWWWW.', 'WWWWWSW.', 'WSWWWWW.', '.WWWWW..', '..WWW...'], {W: '#fff8e1', S: '#e9d8a6'}, 2);
+  ART['tile-plaza'] = canvasOf(32, 32, (g, px)=>{   // pale paving stones, so the golden ducks stand out
+    px(0, 0, 32, 32, '#a39a8c');
+    [[0, 0, 15, 7], [16, 0, 16, 7], [0, 8, 9, 7], [10, 8, 13, 7], [24, 8, 8, 7], [0, 16, 15, 7], [16, 16, 16, 7], [0, 24, 6, 8], [7, 24, 14, 8], [22, 24, 10, 8]]
+      .forEach(([x, y, w, h], i)=>{ px(x, y, w, h, i % 3 ? '#ddd5c6' : '#e8e1d3'); px(x, y, w, 1, '#f4efe6'); });
+  });
+  ART['plaza-fountain'] = chunky(64, px=>{   // a golden duck on a fountain
+    px(2, 20, 28, 9, '#8d6e2f'); px(3, 21, 26, 7, '#3a86c8'); px(5, 22, 6, 1, '#a5d8ff'); px(19, 25, 7, 1, '#a5d8ff');
+    px(13, 10, 6, 12, '#d4a73a'); px(12, 9, 8, 2, '#f2d27f');
+    px(12, 4, 7, 5, '#f7c948'); px(16, 2, 3, 3, '#f7c948'); px(19, 3, 2, 1, '#f29a2e'); px(17, 3, 1, 1, '#1b1b1b');
+    [[9, 6], [22, 5], [8, 13], [23, 12]].forEach(([x, y])=>px(x, y, 1, 3, '#a5d8ff'));
+  });
   ART['tile-grass'] = tile('grass'); ART['tile-water'] = tile('water'); ART['tile-mud'] = tile('mud');
   ART['ui-raid-board'] = canvasOf(128, 96, (g, px)=>{ px(0, 0, 128, 96, '#6b4423'); px(4, 4, 120, 88, '#a47148'); });
 }

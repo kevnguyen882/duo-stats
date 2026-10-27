@@ -4,17 +4,19 @@ Each tracked player has a utopia, kept in data/utopia.json. Everything is worked
 the same race, and it's brought up to date whenever the page asks: idle breadcrumbs are counted from the time that
 passed, so nothing runs in the background.
 
-  Founding Day  the first time, each player's saved games together are replayed: every win is a grown duck, every
-                triple / quadra a permanent breadcrumb boost, every pentakill a golden duck, every S- or S a champion
-                duck and every S+ a fire duck. Founding ducks are already grown; the pond only holds so many, so the
-                rest wait at its edge until it's upgraded.
+  Founding Day  the first time, each player's saved games together are replayed: every triple / quadra is a
+                permanent breadcrumb boost, every pentakill a golden duck, every S- or S a champion duck and every
+                S+ a fire duck. The pond starts with STARTING_DUCKS ducks.
   each new game together, after that
-                a win gives a duckling (which needs a nest, then grows, then moves to the pond), the badges give their
-                rewards, and geese raid both utopias. Your five defenders fight them automatically.
+                a win gives bonus breadcrumbs, the badges give their rewards, and geese raid both utopias. Your five
+                defenders fight them automatically.
 
-The duck pipeline: ducklings wait in the lost and found box until a nest is free, grow for GROW_MINUTES, then move to
-the pond, or wait at its edge if it's full. Only ducks in the pond collect breadcrumbs (golden, champion and fire ducks
-collect wherever they are).
+The duck pipeline: new ducks come from the Duck Infirmary, a lab whose nests are fluid chambers. You spawn a
+duckling into a free nest for breadcrumbs (spawn_cost(), a little more after each one; never while the nests are
+full). It grows there for grow_minutes(), then moves to the pond, or waits at its edge if it's full. Only ducks in
+the pond collect breadcrumbs (golden, champion and fire ducks collect wherever they are). The infirmary's upgrades:
+more nests, and a shorter incubation time. Wins used to give ducklings; any still in the old lost and found box move
+to nests.
 
 First version: the numbers below are guesses to see how it plays, and are meant to be tuned.
 """
@@ -29,25 +31,39 @@ from .grades import grade_rank, now_ms
 
 # ---- tuning ----
 FOUNDING_GIFT = 300          # breadcrumbs to start with, so there's a first choice to make straight away
+STARTING_DUCKS = 5           # ducks in the pond to start with (it holds 5 at level 1)
+FRESH_START = 2              # data version: utopias saved before this start over once (see fresh_start)
 DUCK_RATE = 1.0              # breadcrumbs a minute for each duck in the pond
 GOLDEN_RATE = 3.0            # ... for each golden duck (pentakills)
 CHAMPION_RATE = 1.5          # ... for each champion duck (S- or S on a champion)
 FIRE_RATE = 2.0              # ... for each fire duck (S+)
 BAKERY_BONUS = 0.25          # +25% breadcrumbs per bakery level
 TRIPLE_BOOST, QUADRA_BOOST = 0.005, 0.015   # permanent breadcrumb boost per triple / quadra kill
-GROW_MINUTES = 30            # how long a duckling takes to grow
+GROW_MINUTES = 8 * 60        # how long a duckling takes to grow in its nest, before incubation upgrades
+INCUBATION_SPEEDUP = 0.8     # each incubation time level: 20% less time in the nest
+SPAWN_COST = 100             # breadcrumbs for the first duckling spawned ...
+SPAWN_GROWTH = 1.05          # ... and 5% more for each one after (slow at first, then steep)
 WIN_CRUMBS = 100              # bonus breadcrumbs for a new win (catch-up boost applies)
 MAX_REPORTS, MAX_LOG = 10, 30
 
 # building -> (first cost, cost growth per level, highest level, names by level)
 BUILDINGS = {
-    "nests":  (300, 1.7, 12, [(1, "Nests"), (4, "Duck village"), (7, "Duck skyline")]),
+    "nests":  (300, 1.7, 12, [(1, "Nests")]),   # in the Duck Infirmary
     "pond":   (400, 1.8, 12, [(1, "Pond"), (4, "Lake"), (7, "Lagoon")]),
     "bakery": (500, 1.9, 10, [(1, "Bakery")]),
     "spa":    (20000, 4.0, 2, [(1, "Spa"), (2, "Hot springs")]),
     "fence":  (600, 1.7, 9, [(1, "Fences"), (4, "Scarecrows"), (7, "Honk-proof walls")]),
+    "incubation": (500, 2.0, 10, [(1, "Incubation time")]),   # in the Duck Infirmary
 }
-START_LEVELS = {"nests": 1, "pond": 1, "bakery": 0, "spa": 0, "fence": 0}
+START_LEVELS = {"nests": 1, "pond": 1, "bakery": 0, "spa": 0, "fence": 0, "incubation": 0}
+
+
+def grow_minutes(level: int) -> float:
+    return GROW_MINUTES * INCUBATION_SPEEDUP ** level     # 8 h, 6 h 24, 5 h 7 ... 51 min at level 10
+
+
+def spawn_cost(spawned: int) -> int:
+    return round(SPAWN_COST * SPAWN_GROWTH ** spawned)    # 100, 105, 110 ... 163 for the 11th, 1,147 for the 51st
 
 
 def nest_space(level: int) -> int:
@@ -111,7 +127,7 @@ def crumb_rate(s: dict) -> float:
 
 # ---- the duck pipeline over time ----
 def advance(s: dict, now: int):
-    """Bring a utopia up to `now`: breadcrumbs collected, ducklings moved into nests, grown, and into the pond."""
+    """Bring a utopia up to `now`: breadcrumbs collected, ducklings grown and into the pond."""
     t = s["tick"]
     while True:
         _fill_nests(s, t)
@@ -131,11 +147,22 @@ def advance(s: dict, now: int):
 
 
 def _fill_nests(s: dict, t: int):
-    free = nest_space(s["levels"]["nests"]) - len(s["ducklings"])
-    take = max(0, min(free, s["lost"]))
+    """Ducklings from the old lost and found box (from when wins gave ducklings) into free nests."""
+    take = max(0, min(nest_space(s["levels"]["nests"]) - len(s["ducklings"]), s["lost"]))
     if take:
         s["lost"] -= take
-        s["ducklings"] += [t + GROW_MINUTES * 60000] * take
+        s["ducklings"] += [t + round(grow_minutes(s["levels"]["incubation"]) * 60000)] * take
+
+
+def migrate(s: dict):
+    """Utopias saved before the Duck Infirmary, or its first version (which hatched ducklings on a timer)."""
+    for b in ("incubator", "serum"):
+        s["levels"].pop(b, None)
+    for b, lvl in START_LEVELS.items():
+        s["levels"].setdefault(b, lvl)
+    s["lost"] += s.pop("held", 0)
+    s.pop("nextSpawn", None)
+    s.setdefault("spawned", 0)
 
 
 def _fill_pond(s: dict):
@@ -164,6 +191,17 @@ def boost_breakdown(s: dict, rows: list) -> dict:
             "champions": sorted(champs.values(), key=lambda c: (-c["boost"], c["champion"]))[:5],
             "latest": [{"champion": r["champion"], "triples": r.get("triples") or 0, "quadras": r.get("quadras") or 0,
                         "start": r.get("start")} for r in sorted(games, key=lambda r: -(r.get("start") or 0))[:3]]}
+
+
+def penta_plaza(s: dict, rows: list) -> list:
+    """Penta Plaza's residents: one golden duck for each game with a pentakill, oldest first. A game with more than
+    one pentakill makes one bigger duck (it still counts as a golden duck per pentakill for breadcrumbs and score)."""
+    counted = set(s["games"])
+    games = [r for r in rows if r["matchId"] in counted and not r.get("remake") and r.get("pentas")]
+    return [{"matchId": r["matchId"], "champion": r["champion"], "pentas": r["pentas"], "start": r.get("start"),
+             "win": bool(r.get("win")), "kills": r.get("kills") or 0, "deaths": r.get("deaths") or 0,
+             "assists": r.get("assists") or 0, "grade": r.get("grade")}
+            for r in sorted(games, key=lambda r: r.get("start") or 0)]
 
 
 # ---- defenders ----
@@ -312,20 +350,25 @@ def raid(defenders: list, seed, wave: int, fence: int, max_rounds: int = 15) -> 
 # ---- the game ----
 def new_utopia(riot_id: str, now: int) -> dict:
     return {"riotId": riot_id, "founded": now, "tick": now, "crumbs": float(FOUNDING_GIFT), "feathers": 0,
-            "levels": dict(START_LEVELS), "ducklings": [], "lost": 0, "pond": 0, "edge": 0,
+            "levels": dict(START_LEVELS), "ducklings": [], "lost": 0, "spawned": 0, "pond": STARTING_DUCKS, "edge": 0,
             "golden": 0, "boost": 0.0, "champs": {}, "fire": 0, "games": [], "raids": [], "raidWins": 0,
             "squad": [], "training": {}, "log": [], "founding": None}
 
 
-def apply_badges(s: dict, r: dict, grown: bool) -> list:
-    """One game's rewards. grown: Founding Day, when a win's duck is already grown. Returns what happened."""
+def fresh_start(s: dict, now: int) -> dict:
+    """The Duck Infirmary's fresh start: breadcrumbs, ducks, buildings and defenders back to the beginning. Kept: the
+    ducks earned by badges (golden, champion and fire), the multikill boost, and which games have been counted."""
+    new = new_utopia(s["riotId"], now)
+    for k in ("golden", "champs", "fire", "boost", "games", "founded", "founding"):
+        new[k] = s[k]
+    new["log"] = [{"t": now, "text": f"Fresh start: {STARTING_DUCKS} ducks in the pond and {FOUNDING_GIFT} breadcrumbs. "
+                                     "Golden, champion and fire ducks and the multikill boost stay."}]
+    return new
+
+
+def apply_badges(s: dict, r: dict) -> list:
+    """One game's badge rewards (new ducks come from the infirmary, not wins). Returns what happened."""
     got = []
-    if r.get("win"):
-        if grown:
-            s["edge"] += 1   # moved into the pond (as space allows) afterwards
-        else:
-            s["lost"] += 1   # waits for a nest
-        got.append("a duckling" if not grown else "a duck")
     if r.get("triples") or r.get("quadras"):
         s["boost"] = round(s["boost"] + TRIPLE_BOOST * (r.get("triples") or 0) + QUADRA_BOOST * (r.get("quadras") or 0), 4)
         got.append("a breadcrumb boost")
@@ -352,7 +395,7 @@ class DuckUtopia:
 
     def _load(self) -> dict:
         data = self.storage.read_json(self.path, {})
-        return data if isinstance(data, dict) and isinstance(data.get("players"), dict) else {"players": {}, "raids": 0}
+        return data if isinstance(data, dict) and isinstance(data.get("players"), dict) else {"players": {}, "raids": 0, "version": FRESH_START}
 
     def _classes(self) -> dict:
         try:
@@ -385,6 +428,11 @@ class DuckUtopia:
     # ---- keeping up with games ----
     def _update(self, now: int) -> dict:
         data = self._load()
+        if data.get("version", 1) < FRESH_START:   # once: a copy of the old utopias is kept, then they start over
+            if data["players"]:
+                self.storage.write_json(self.storage.path("utopia-before-fresh-start.json"), data)
+            data["players"] = {k: fresh_start(s, now) for k, s in data["players"].items()}
+            data["version"] = FRESH_START
         players = self.tracker.players()
         rows = self.stats.together(players) if players else {}
         classes = self._classes()
@@ -392,6 +440,7 @@ class DuckUtopia:
             if p.key not in data["players"]:
                 data["players"][p.key] = self._found(p, rows.get(p.key, []), now)
         for p in players:
+            migrate(data["players"][p.key])
             advance(data["players"][p.key], now)
         # new games together since Founding Day, oldest first: rewards, then the same goose wave for both
         seen = set().union(*(set(data["players"][p.key]["games"]) for p in players)) if players else set()
@@ -411,9 +460,10 @@ class DuckUtopia:
                 if r.get("remake"):
                     continue
                 boost = catch_up(scores[key], best)
-                got = apply_badges(s, r, grown=False)
+                got = apply_badges(s, r)
                 if r.get("win"):
                     s["crumbs"] += WIN_CRUMBS * boost
+                    got.insert(0, f"{round(WIN_CRUMBS * boost)} breadcrumbs")
                 if got:
                     self._note(s, now, f"{'Won' if r.get('win') else 'Played'} on {r['champion']}: {', '.join(got)}.")
                 recs = champion_records(rows.get(key, []))
@@ -440,16 +490,15 @@ class DuckUtopia:
             if r.get("remake"):
                 continue
             before = (s["golden"], len(s["champs"]), s["fire"])
-            apply_badges(s, r, grown=True)
+            apply_badges(s, r)
             summary["games"] += 1
             summary["wins"] += 1 if r.get("win") else 0
             summary["boosts"] += (r.get("triples") or 0) + (r.get("quadras") or 0)
             summary["golden"] += s["golden"] - before[0]
             summary["champs"] += len(s["champs"]) - before[1]
             summary["fire"] += s["fire"] - before[2]
-        _fill_pond(s)
         s["founding"] = summary
-        self._note(s, now, f"Founding Day: {summary['wins']} wins together became ducks.")
+        self._note(s, now, f"Founding Day: {summary['games']} games together replayed.")
         return s
 
     def _squad(self, s: dict, recs: dict, classes: dict) -> list:
@@ -493,7 +542,11 @@ class DuckUtopia:
             if s["crumbs"] < cost:
                 raise ValueError(f"Not enough breadcrumbs: {cost:,} needed.")
             s["crumbs"] -= cost
+            old = s["levels"][b]
             s["levels"][b] += 1
+            if b == "incubation":   # the ducklings already growing speed up too
+                k = grow_minutes(old + 1) / grow_minutes(old)
+                s["ducklings"] = [now + round(max(0, d - now) * k) for d in s["ducklings"]]
             if b == "pond":
                 _fill_pond(s)
             if b == "nests":
@@ -502,6 +555,16 @@ class DuckUtopia:
             self._note(s, now, f"Built the {name}." if level == 1 or name != building_name(b, level - 1)
                        else f"Upgraded the {name} to level {level}.")
             return {"built": name, "level": level}
+        if action == "spawn":
+            if len(s["ducklings"]) + s["lost"] >= nest_space(s["levels"]["nests"]):
+                raise ValueError("The nests are full: upgrade the nests, or wait for a duckling to grow.")
+            cost = spawn_cost(s["spawned"])
+            if s["crumbs"] < cost:
+                raise ValueError(f"Not enough breadcrumbs: {cost:,} needed.")
+            s["crumbs"] -= cost
+            s["spawned"] += 1
+            s["ducklings"].append(now + round(grow_minutes(s["levels"]["incubation"]) * 60000))
+            return {"spawned": s["spawned"]}
         if action == "squad":
             squad = [c for c in body.get("squad") or [] if isinstance(c, str) and c in recs]
             if len(set(squad)) != len(squad) or not 1 <= len(squad) <= 5:
@@ -546,12 +609,16 @@ class DuckUtopia:
             recs = champion_records(rows.get(p.key, []))
             lv = s["levels"]
             out.append({
-                **{k: s[k] for k in ("riotId", "feathers", "levels", "lost", "pond", "edge", "golden", "boost",
+                **{k: s[k] for k in ("riotId", "feathers", "levels", "lost", "spawned", "pond", "edge", "golden", "boost",
                                      "champs", "fire", "raids", "raidWins", "training", "log", "founding", "founded")},
                 "crumbs": round(s["crumbs"], 2), "ducklings": sorted(s["ducklings"]),
                 "score": scores[i], "catchUp": catch_up(scores[i], best), "leading": len(scores) > 1 and scores[i] == best and scores.count(best) == 1,
                 "rate": round(crumb_rate(s), 3), "nestSpace": nest_space(lv["nests"]), "pondSpace": pond_space(lv["pond"]),
                 "districts": districts(s), "boostFrom": boost_breakdown(s, rows.get(p.key, [])),
+                "plaza": penta_plaza(s, rows.get(p.key, [])),
+                "lab": {"spawnCost": spawn_cost(s["spawned"]), "grow": grow_minutes(lv["incubation"]),
+                        "growNext": grow_minutes(lv["incubation"] + 1) if upgrade_cost("incubation", lv["incubation"]) is not None else None,
+                        "nestSpaceNext": nest_space(lv["nests"] + 1)},
                 "buildings": {b: {"level": lv[b], "name": building_name(b, lv[b]) if lv[b] else None,
                                   "next": building_name(b, lv[b] + 1) if upgrade_cost(b, lv[b]) is not None else None,
                                   "cost": upgrade_cost(b, lv[b])} for b in BUILDINGS},
@@ -559,4 +626,4 @@ class DuckUtopia:
                 "champions": sorted(({"champion": c, "cls": classes.get(c, "fighter"), "games": r["games"]}
                                      for c, r in recs.items()), key=lambda x: (-x["games"], x["champion"])),
             })
-        return {"now": now, "me": 1 if viewer else 0, "players": out, "growMinutes": GROW_MINUTES}
+        return {"now": now, "me": 1 if viewer else 0, "players": out, "goldenRate": GOLDEN_RATE}
