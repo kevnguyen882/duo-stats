@@ -60,7 +60,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send(403, {"error": "This address isn't one of this Mac's names."})
             return False
         if self.viewer and path != "/api/pin" and not path.startswith("/img/") and not self.access.unlocked(self.headers.get("Cookie", "")):
-            if path in ("/", "/index.html"):
+            if path in ("/", "/index.html", "/utopia"):
                 self.send_static("pin.html")
             else:
                 self.send(401, {"error": "Enter the PIN first."})
@@ -77,7 +77,9 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if url.path in ("/", "/index.html"):
                 return self.send_static("index.html")
-            if url.path.startswith(("/js/", "/style.css", "/img/")):
+            if url.path == "/utopia":   # Duck Utopia, the idle game
+                return self.send_static("utopia.html")
+            if url.path.startswith(("/js/", "/style.css", "/utopia.css", "/img/")):
                 return self.send_static(url.path.lstrip("/"))
             if url.path == "/api/status":
                 return self.send(200, {**app.status(), "viewer": self.viewer})
@@ -94,6 +96,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, app.match(game_id))
             if url.path == "/api/showcase":
                 return self.send(200, app.showcases())
+            if url.path == "/api/utopia":
+                return self.send(200, app.utopia.state(self.viewer))
             if url.path == "/api/augments":
                 return self.send(200, app.augments.for_page())
             if url.path.startswith("/api/augicon/"):
@@ -124,6 +128,7 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/stats": lambda: app.load_stats(body, save=not self.viewer),   # viewers see the host's settings
                 "/api/srank": lambda: app.s_rank(body),
                 "/api/showcase": lambda: app.save_showcase(body, self.viewer),
+                "/api/utopia": lambda: app.utopia.act(body, self.viewer),
                 "/api/open": lambda: {"ok": True, "result": app.ugg.open(str(body.get("url", "")))},
             }
             if self.path not in routes:

@@ -42,6 +42,7 @@ class ChampionCatalog:
         self.display = {}    # alias -> display name
         self.by_name = {}    # lowercase display name -> alias
         self.variants = {}   # id of a game mode's copy of a champion -> the real champion's alias
+        self.roles = {}      # alias -> League classes, e.g. ["mage", "support"] (Duck Utopia's defenders)
 
     # Real champions have ids below 1000. Some game modes add copies with their own ids and aliases
     # ("Jade_Leona", 60089); those aren't separate champions and have no Data Dragon picture.
@@ -55,6 +56,7 @@ class ChampionCatalog:
                 self.alias[c["id"]] = alias
                 self.display[alias] = c.get("name") or alias
                 self.by_name[str(c.get("name", "")).lower()] = alias
+                self.roles[alias] = [str(r).lower() for r in c.get("roles") or []]
         for c in entries:
             if c["id"] >= self.VARIANT_IDS_FROM:
                 real = self.by_name.get(str(c.get("name", "")).lower())
@@ -211,7 +213,8 @@ class LeagueClient:
                 urllib.request.Request(u, headers={"User-Agent": config.USER_AGENT}), timeout=15).read())
             version = req("https://ddragon.leagueoflegends.com/api/versions.json")[0]
             data = req(f"https://ddragon.leagueoflegends.com/cdn/{version}/data/en_US/champion.json")["data"]
-            return [{"id": int(c["key"]), "alias": c["id"], "name": c["name"]} for c in data.values()]
+            return [{"id": int(c["key"]), "alias": c["id"], "name": c["name"], "roles": c.get("tags") or []}
+                    for c in data.values()]
         except Exception:
             return []
 

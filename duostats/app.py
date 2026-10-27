@@ -24,6 +24,7 @@ from .stats import StatsService
 from .storage import Storage
 from .tracker import GameTracker
 from .ugg import UggOpener
+from .utopia import DuckUtopia
 
 
 class App:
@@ -42,6 +43,7 @@ class App:
         self.tracker = GameTracker(self.storage, self.client, self.season, self.chat, self.live)
         self.stats = StatsService(self.storage, self.client, self.riot, self.directory, self.tracker)
         self.augments = AugmentCatalog(self.storage, self.client)
+        self.utopia = DuckUtopia(self.storage, self.stats, self.tracker, self.client)
 
     # ---- the Riot API key ----
     def load_saved_key(self):

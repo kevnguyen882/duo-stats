@@ -55,6 +55,10 @@ class StatsService:
         game = gamesmod.parse(*saved, champions)
         return gamesmod.match_detail(game, self.tracker.players(), self.storage.game_grades(game.game_id))
 
+    def together(self, players) -> dict:
+        """{player key: rows} for every saved game the players played together, newest first, from what's on this Mac."""
+        return self._rows(players, None)
+
     def _fetch_from_riot(self, player, region: str, count: int, queue):
         if not player.api_puuid:
             return
