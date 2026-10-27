@@ -2,8 +2,8 @@ import unittest
 
 from duostats import utopia
 from duostats.games import Player
-from duostats.utopia import (DuckUtopia, advance, apply_badges, catch_up, crumb_rate, goose_wave, new_utopia, raid,
-                             score, upgrade_cost)
+from duostats.utopia import (DuckUtopia, advance, apply_badges, boost_breakdown, catch_up, crumb_rate, goose_wave,
+                             new_utopia, raid, score, upgrade_cost)
 from tests.helpers import TempStorageCase
 
 MIN = 60000
@@ -58,6 +58,22 @@ class RewardTests(unittest.TestCase):
         self.assertEqual((s["lost"], s["fire"], s["champs"]["Annie"]), (1, 1, "S+"))
         apply_badges(s, row("3", 0, win=False, grade="A"), grown=False)   # not an S grade: nothing
         self.assertEqual(s["champs"]["Annie"], "S+")
+
+    def test_boost_breakdown_adds_up(self):
+        s = new_utopia("A#1", 100)
+        rows = [row("1", 50, champion="Draven", triples=2, quadras=1), row("2", 60, champion="Vi", triples=1),
+                row("3", 150, champion="Draven", quadras=1), row("4", 160, champion="Vi", triples=5, remake=True),
+                row("5", 170, champion="Vi", triples=3)]   # game 5 isn't counted in the utopia yet
+        s["games"] = ["1", "2", "3", "4"]
+        for r in rows[:4]:
+            if not r["remake"]:
+                apply_badges(s, r, grown=True)
+        b = boost_breakdown(s, rows)
+        self.assertEqual((b["triples"], b["quadras"]), (3, 2))
+        self.assertAlmostEqual(b["fromTriples"] + b["fromQuadras"], s["boost"])
+        self.assertAlmostEqual(b["sinceFounding"], utopia.QUADRA_BOOST)   # only game 3 came after
+        self.assertEqual([c["champion"] for c in b["champions"]], ["Draven", "Vi"])
+        self.assertEqual([g["champion"] for g in b["latest"]], ["Draven", "Vi", "Draven"])   # newest first
 
     def test_catch_up_curve(self):
         self.assertEqual(catch_up(1000, 1000), 1.0)

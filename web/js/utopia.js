@@ -78,6 +78,7 @@ setInterval(()=>{ if(U && U.players.some(p=>p.ducklings.length && p.ducklings[0]
 // ---- drawing the panels ----
 function renderPanels(){
   renderScore(); renderWhose(); renderResources(); renderBuild(); renderSquad(); renderRaids(); renderLog();
+  if(tipEl && !tipEl.isConnected) showTip({target: document.body});   // what it was over has been redrawn
 }
 function renderScore(){
   const ps = U.players;
@@ -112,7 +113,22 @@ function renderResources(){
     ${p.edge ? `<div class="warn">${pic('duck-plain')}<b>${p.edge}</b><span>waiting at the pond's edge (upgrade the pond)</span></div>` : ''}
     <div>${pic('duckling')}<b>${p.ducklings.length}/${p.nestSpace}</b><span>ducklings in nests${p.ducklings.length ? ` · next grows in <span id="grow">${growLeft(p)}</span>` : ''}</span></div>
     ${p.lost ? `<div class="warn">${pic('duckling')}<b>${p.lost}</b><span>in the lost and found (upgrade the nests)</span></div>` : ''}
-    ${p.boost ? `<div><b>+${Math.round(p.boost * 100)}%</b><span>multikill boost</span></div>` : ''}`;
+    ${p.boost ? `<div class="utipped" tabindex="0" data-tip-html="${esc(boostTip(p))}"><b>+${pctOf(p.boost)}</b><span>multikill boost</span></div>` : ''}`;
+}
+const pctOf = v => `${+(v * 100).toFixed(1)}%`;
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+function kills(t, q){ return [t && plural(t, 'triple'), q && plural(q, 'quadra')].filter(Boolean).join(', '); }
+// the multikill boost's hover card: what it's made of, which champions earned most of it, and the latest games
+function boostTip(p){
+  const b = p.boostFrom;
+  const day = ts => ts ? new Date(ts).toLocaleDateString(undefined, {month: 'short', day: 'numeric'}) : '';
+  return `<b>Multikill boost +${pctOf(p.boost)}</b>
+    <p>Every triple kill adds ${pctOf(b.perTriple)} and every quadra kill ${pctOf(b.perQuadra)} to your breadcrumbs, for good.</p>
+    <table class="utip"><tr><td>${plural(b.triples, 'triple kill')} × ${pctOf(b.perTriple)}</td><td>+${pctOf(b.fromTriples)}</td></tr>
+      <tr><td>${plural(b.quadras, 'quadra kill')} × ${pctOf(b.perQuadra)}</td><td>+${pctOf(b.fromQuadras)}</td></tr>
+      ${b.sinceFounding ? `<tr class="sub"><td>since Founding Day</td><td>+${pctOf(b.sinceFounding)}</td></tr>` : ''}</table>
+    ${b.champions.length ? `<div class="uth">Most from</div><table class="utip">${b.champions.map(c=>`<tr><td>${esc(c.champion)} <span>${kills(c.triples, c.quadras)}</span></td><td>+${pctOf(c.boost)}</td></tr>`).join('')}</table>` : ''}
+    ${b.latest.length ? `<div class="uth">Latest</div><table class="utip">${b.latest.map(g=>`<tr><td>${esc(g.champion)} <span>${kills(g.triples, g.quadras)}</span></td><td>${day(g.start)}</td></tr>`).join('')}</table>` : ''}`;
 }
 function renderBuild(){
   const p = U.players[viewing], own = mine();
@@ -209,6 +225,24 @@ async function act(body, isPractice){
   }catch(e){ $('#msg').className = 'msg err'; $('#msg').textContent = e.message; setTimeout(()=>{ $('#msg').textContent = ''; }, 5000); }
   finally{ busy = false; affordable(); }
 }
+
+// ---- hover cards (styled by style.css's #tip, like the main page's) ----
+const tip = document.createElement('div'); tip.id = 'tip'; document.body.appendChild(tip);
+let tipEl = null;
+function showTip(e){
+  const el = e.target.closest && e.target.closest('[data-tip-html]');
+  if(el === tipEl) return;
+  tipEl = el; tip.classList.toggle('on', !!el);
+  if(!el) return;
+  tip.innerHTML = el.dataset.tipHtml;
+  const r = el.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+  let y = r.top - h - 8; if(y < 8) y = r.bottom + 8;
+  tip.style.left = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), innerWidth - w - 8) + 'px'; tip.style.top = y + 'px';
+}
+document.addEventListener('mouseover', showTip);
+document.addEventListener('focusin', showTip);
+document.addEventListener('focusout', e=>{ if(e.target === tipEl) showTip({target: document.body}); });
+addEventListener('scroll', ()=>showTip({target: document.body}), {passive: true, capture: true});
 
 // numbers that tick between checks
 setInterval(()=>{

@@ -144,6 +144,28 @@ def _fill_pond(s: dict):
     s["edge"] -= take
 
 
+def boost_breakdown(s: dict, rows: list) -> dict:
+    """Where the multikill boost came from: the games behind it, by kind, by champion, and the latest ones."""
+    counted = set(s["games"])
+    games = [r for r in rows if r["matchId"] in counted and not r.get("remake") and (r.get("triples") or r.get("quadras"))]
+    triples = sum(r.get("triples") or 0 for r in games)
+    quadras = sum(r.get("quadras") or 0 for r in games)
+    champs = {}
+    for r in games:
+        c = champs.setdefault(r["champion"], {"champion": r["champion"], "triples": 0, "quadras": 0})
+        c["triples"] += r.get("triples") or 0
+        c["quadras"] += r.get("quadras") or 0
+    for c in champs.values():
+        c["boost"] = round(TRIPLE_BOOST * c["triples"] + QUADRA_BOOST * c["quadras"], 4)
+    since = [r for r in games if (r.get("start") or 0) >= s["founded"]]
+    return {"triples": triples, "quadras": quadras, "perTriple": TRIPLE_BOOST, "perQuadra": QUADRA_BOOST,
+            "fromTriples": round(TRIPLE_BOOST * triples, 4), "fromQuadras": round(QUADRA_BOOST * quadras, 4),
+            "sinceFounding": round(sum(TRIPLE_BOOST * (r.get("triples") or 0) + QUADRA_BOOST * (r.get("quadras") or 0) for r in since), 4),
+            "champions": sorted(champs.values(), key=lambda c: (-c["boost"], c["champion"]))[:5],
+            "latest": [{"champion": r["champion"], "triples": r.get("triples") or 0, "quadras": r.get("quadras") or 0,
+                        "start": r.get("start")} for r in sorted(games, key=lambda r: -(r.get("start") or 0))[:3]]}
+
+
 # ---- defenders ----
 CLASSES = ("tank", "mage", "marksman", "support", "fighter", "assassin")
 STAR = {"S-": 1, "S": 2, "S+": 3}
@@ -529,7 +551,7 @@ class DuckUtopia:
                 "crumbs": round(s["crumbs"], 2), "ducklings": sorted(s["ducklings"]),
                 "score": scores[i], "catchUp": catch_up(scores[i], best), "leading": len(scores) > 1 and scores[i] == best and scores.count(best) == 1,
                 "rate": round(crumb_rate(s), 3), "nestSpace": nest_space(lv["nests"]), "pondSpace": pond_space(lv["pond"]),
-                "districts": districts(s),
+                "districts": districts(s), "boostFrom": boost_breakdown(s, rows.get(p.key, [])),
                 "buildings": {b: {"level": lv[b], "name": building_name(b, lv[b]) if lv[b] else None,
                                   "next": building_name(b, lv[b] + 1) if upgrade_cost(b, lv[b]) is not None else None,
                                   "cost": upgrade_cost(b, lv[b])} for b in BUILDINGS},
