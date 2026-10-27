@@ -1,4 +1,4 @@
-// Duck Utopia's art: simple placeholder pixel sprites, one per asset in the design doc, at its final size.
+// Ducktopia's art: simple placeholder pixel sprites, one per asset in the design doc, at its final size.
 // Drop a finished PNG into web/img/utopia/ with the same name (e.g. duck-plain.png) and it replaces the placeholder
 // the next time the page opens; nothing else needs changing.
 //   art(name)  -> a canvas or image to draw (the placeholder until the PNG, if any, has loaded)

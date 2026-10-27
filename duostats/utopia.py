@@ -1,4 +1,4 @@
-"""Duck Utopia: an idle duck-city race, powered by the games you play together (see the design doc).
+"""Ducktopia (first called Duck Utopia): an idle duck-city race, powered by the games you play together (see the design doc).
 
 Each tracked player has a utopia, kept in data/utopia.json. Everything is worked out on this Mac so both of you see
 the same race, and it's brought up to date whenever the page asks: idle breadcrumbs are counted from the time that
@@ -88,7 +88,7 @@ def building_name(building: str, level: int) -> str:
 
 # ---- the race ----
 def score(s: dict) -> int:
-    """The Utopia Score: ducks, buildings, districts and raid wins."""
+    """The Ducktopia Score: ducks, buildings, districts and raid wins."""
     ducks = s["pond"] + s["edge"] + len(s["ducklings"]) + s["lost"]
     lv = s["levels"]
     return (10 * ducks + 50 * s["golden"] + 40 * len(s["champs"]) + 50 * s["fire"]
@@ -417,7 +417,7 @@ class DuckUtopia:
             players = self.tracker.players()
             i = 1 if viewer else 0
             if len(players) <= i or str(body.get("owner", "")).lower() != players[i].key:
-                raise PermissionError("You can only build in your own utopia.")
+                raise PermissionError("You can only build in your own Ducktopia.")
             s = data["players"][players[i].key]
             result = self._do(s, body, players[i], now, data)
             self.storage.write_json(self.path, data)

@@ -1,4 +1,4 @@
-// Duck Utopia (utopia.html): the race head to head, each player's utopia as a little pixel scene, and what you can do
+// Ducktopia (utopia.html): the race head to head, each player's utopia as a little pixel scene, and what you can do
 // in your own. All the rules live on the Mac running the app (duostats/utopia.py); this page shows the state, counts
 // breadcrumbs up between checks, and sends your choices. As with showcases, only your own utopia can be changed:
 // player 1 from the Mac running the app, player 2 from another computer.
@@ -22,7 +22,7 @@ const COLORS = ['var(--p1)', 'var(--p2)'];
 const BUILD_INFO = {   // building -> (art for its level, what it does)
   pond: [l=>`pond-${l >= 7 ? '3-lagoon' : l >= 4 ? '2-lake' : '1-pond'}`, (p)=>`Room for ${p.pondSpace} ducks; only ducks in the pond collect breadcrumbs`],
   bakery: [l=>`bakery-${Math.min(3, Math.max(1, Math.ceil(l / 3)))}`, (p)=>p.levels.bakery ? `+${p.levels.bakery * 25}% breadcrumbs (+25% a level)` : 'Makes breadcrumbs faster: +25% a level'],
-  spa: [l=>l >= 2 ? 'spa-2-hotsprings' : 'spa-1-spa', ()=>'Luxury and bragging rights: a big boost to your Utopia Score'],
+  spa: [l=>l >= 2 ? 'spa-2-hotsprings' : 'spa-1-spa', ()=>'Luxury and bragging rights: a big boost to your Ducktopia Score'],
   fence: [()=>'tile-mud', (p)=>p.levels.fence ? `Geese bite ${Math.round(Math.min(.06 * p.levels.fence, .5) * 100)}% softer in raids` : 'Goose defences: geese bite 6% softer a level in raids'],
 };
 const LAB = ['nests', 'incubation'];   // the Duck Infirmary's upgrades, shown in its lab rather than under Build
@@ -89,12 +89,12 @@ function renderScore(){
       <b>${esc(shortName(p.riotId))}${i === U.me ? ' (you)' : ''}</b>
       ${p.leading ? `<span class="crown">${pic('icon-crown')}Leading</span>` : ''}
       ${p.catchUp > 1 ? `<span class="boost" title="Catch-up boost: rewards from new games are multiplied while behind">${pic('icon-catchup')}×${p.catchUp}</span>` : ''}
-      <div class="n">${fmt(p.score)}</div><div class="d">Utopia Score · ${p.raidWins} raid${p.raidWins === 1 ? '' : 's'} won</div></div>`)
+      <div class="n">${fmt(p.score)}</div><div class="d">Ducktopia Score · ${p.raidWins} raid${p.raidWins === 1 ? '' : 's'} won</div></div>`)
     .join(ps.length > 1 ? '<div class="uvs">VS</div>' : '');
   if(ps.length < 2) $('#scoreboard').style.gridTemplateColumns = '1fr';
 }
 function renderWhose(){
-  $('#whose').innerHTML = U.players.map((p, i)=>`<button data-view="${i}" class="${viewing === i ? 'on' : ''}" aria-pressed="${viewing === i}">${esc(shortName(p.riotId))}'s utopia${i === U.me ? ' (you)' : ''}</button>`).join('');
+  $('#whose').innerHTML = U.players.map((p, i)=>`<button data-view="${i}" class="${viewing === i ? 'on' : ''}" aria-pressed="${viewing === i}">${esc(shortName(p.riotId))}'s Ducktopia${i === U.me ? ' (you)' : ''}</button>`).join('');
 }
 $('#whose').addEventListener('click', e=>{
   const b = e.target.closest('[data-view]'); if(!b) return;
@@ -143,7 +143,7 @@ function renderBuild(){
     const [img, what] = BUILD_INFO[b];
     return buildRow(b, x, p, own, img(Math.max(1, x.level)), what(p), x.next && x.level ? (x.next === x.name ? `level ${x.level + 1}` : x.next) : '');
   }).join('') + (own ? '' : `<p class="unote">Only ${esc(shortName(p.riotId))} can build here.</p>`)
-    + '<p class="unote">The nests and spawning ducklings are in the Duck Infirmary: click it in the utopia.</p>';
+    + '<p class="unote">The nests and spawning ducklings are in the Duck Infirmary: click it in your Ducktopia.</p>';
   affordable();
 }
 function renderLab(){
@@ -219,7 +219,7 @@ function report(rep, who, i){
 function renderRaids(){
   const ps = U.players, latest = ps.map(p=>p.raids[0]).filter(Boolean).sort((a, b)=>b.t - a.t)[0];
   const same = latest ? ps.map(p=>p.raids.find(r=>r.matchId === latest.matchId)) : [];
-  $('#raids').innerHTML = `<p class="unote" style="margin-top:0">After every game you play together, the same wave of geese raids both utopias, and each squad of five fights it automatically.
+  $('#raids').innerHTML = `<p class="unote" style="margin-top:0">After every game you play together, the same wave of geese raids both Ducktopias, and each squad of five fights it automatically.
       A win brings breadcrumbs and goose feathers; a loss lets the geese steal some breadcrumbs. Buildings are never damaged.</p>
     ${latest ? `<div class="uraids">${ps.map((p, i)=>report(same[i], shortName(p.riotId), i)).join('')}</div>`
       : '<p class="uempty">No raids yet: the first one comes after your next game together.</p>'}
@@ -625,10 +625,10 @@ function founding(){
                 ['duck-fire', f.fire, 'S+ grades lit up the Volcano Spa']].filter(r=>r[1] > 0);
   const box = $('#founding');
   box.innerHTML = `<div class="box"><canvas></canvas><h2 id="foundTitle">Founding Day</h2>
-    <p>${f.games} games together, replayed. Your utopia starts from your history.</p>
+    <p>${f.games} games together, replayed. Your Ducktopia starts from your history.</p>
     <ul>${rows.map(([img, n, text], i)=>`<li style="animation-delay:${300 + i * 450}ms">${pic(img)}<b>${n}</b><span>${text}</span></li>`).join('')}</ul>
     <p>New ducks are spawned in the Duck Infirmary and grow in its nests, then move to the pond to collect breadcrumbs.</p>
-    <button data-found-close>Enter your utopia</button></div>`;
+    <button data-found-close>Enter your Ducktopia</button></div>`;
   box.classList.remove('hidden');
   box.querySelector('button').focus();
   // ducks raining down behind the list

@@ -63,12 +63,12 @@ the tests use small made-up games (`tests/helpers.py`) and a pretend League clie
 | `duostats/live.py` | Which champion you're on right now |
 | `duostats/augments.py` | Augment names, icons and descriptions |
 | `duostats/ugg.py` | Opening u.gg build pages |
-| `duostats/utopia.py` | Duck Utopia, the idle game: its rules, raids and saved state (`data/utopia.json`) |
+| `duostats/utopia.py` | Ducktopia, the idle game: its rules, raids and saved state (`data/utopia.json`) |
 | `duostats/storage.py` | Everything saved on this Mac |
 | `duostats/keychain.py` | The Riot API key in the macOS Keychain |
 | `duostats/grades.py`, `config.py`, `errors.py` | Small shared helpers |
 | `web/index.html`, `web/style.css` | The page and its look |
-| `web/utopia.html`, `web/utopia.css`, `web/js/utopia.js` | The Duck Utopia page (opened from the link at the top, or `/utopia`) |
-| `web/js/utopia-art.js` | Duck Utopia's placeholder pixel art; a PNG with the same name in `web/img/utopia/` replaces each one |
+| `web/utopia.html`, `web/utopia.css`, `web/js/utopia.js` | The Ducktopia page (opened from the link at the top, or `/ducktopia`) |
+| `web/js/utopia-art.js` | Ducktopia's placeholder pixel art; a PNG with the same name in `web/img/utopia/` replaces each one |
 | `web/js/` | The page's code, one file per tab (`overview.js`, `live.js`, `srank.js`, ...) |
 | `tests/` | The tests: one `test_*.py` file per part of the app, and `js/` for the page's badge and score rules |

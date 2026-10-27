@@ -60,7 +60,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send(403, {"error": "This address isn't one of this Mac's names."})
             return False
         if self.viewer and path != "/api/pin" and not path.startswith("/img/") and not self.access.unlocked(self.headers.get("Cookie", "")):
-            if path in ("/", "/index.html", "/utopia"):
+            if path in ("/", "/index.html", "/utopia", "/ducktopia"):
                 self.send_static("pin.html")
             else:
                 self.send(401, {"error": "Enter the PIN first."})
@@ -77,7 +77,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if url.path in ("/", "/index.html"):
                 return self.send_static("index.html")
-            if url.path == "/utopia":   # Duck Utopia, the idle game
+            if url.path in ("/ducktopia", "/utopia"):   # Ducktopia, the idle game (/utopia: its first name)
                 return self.send_static("utopia.html")
             if url.path.startswith(("/js/", "/style.css", "/utopia.css", "/img/")):
                 return self.send_static(url.path.lstrip("/"))
