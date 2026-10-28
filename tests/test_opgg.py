@@ -49,6 +49,7 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(len(got["core"]), 2)
         self.assertEqual(got["starter"][0]["items"], [2003, 2003, 3802])   # boots aren't mistaken for starters
         self.assertEqual(len(got["starter"]), 3)                           # the top 3 only
+        self.assertEqual(got["boots"], [{"items": [3020], "pick": 85.9, "win": 55.1, "games": 2245}])
         self.assertEqual([b["items"] for b in got["final"]], [[4645 + i] for i in range(6)])   # the top 6 items
         self.assertEqual(got["final"][0]["pick"], 60.0)
 

@@ -2,7 +2,7 @@
 //   champion select  this browser's player's champion only (a hovered one shows as "considering"), and the ARAM
 //                    bench with both of your records on each champion and which ones would be new S Rank chances
 //   in game          that player's history on the champion ("Show" turns it off)
-//   champion select and in game, ARAM and ARAM Mayhem: op.gg's starting items, core builds, final build items and
+//   champion select and in game, ARAM and ARAM Mayhem: op.gg's starting items, core builds and boots, final build items and
 //                    most-picked augments
 //   between games    a recap of the last game: results, grades, scores and badges
 
@@ -82,8 +82,10 @@ function opggPanel(det, queueId){
     return `<div class="opb"><div class="items">${Object.entries(n).map(([id,c])=>itemIcon(id, c>1 ? c+'×' : '')).join('')}</div>
       <div class="opbs"><span class="${b.win>=50?'w':'lo'}">${b.win.toFixed(1)}% WR</span><span>${b.pick.toFixed(1)}% pick</span><span>${f0(b.games)} games</span></div></div>`; };
   const builds = (label, list, cls='') => `<h3 class="${cls}">${label}</h3>${list && list.length ? list.map(build).join('') : '<div class="empty">op.gg has none yet.</div>'}`;
-  // the items most often in finished builds, each with the % of games it was built in and its win rate
+  // single items (boots, the items most often in finished builds), each with its win rate and the % of games it was built in
   const finalItem = b=>itemIcon(b.items[0], `<span class="${b.win>=50?'w':'lo'}">${b.win.toFixed(1)}%</span><span>${b.pick.toFixed(1)}%</span>`);
+  const boots = d.boots && d.boots.length ? `<h4 class="opsub">Boots <small class="opnote">win rate · % of games built</small></h4>
+    <div class="items opfinal">${d.boots.map(finalItem).join('')}</div>` : '';
   const final = `<h3 class="lpsub">Final build items <small class="opnote">win rate · % of games built</small></h3>${d.final && d.final.length
     ? `<div class="items opfinal">${d.final.map(finalItem).join('')}</div>` : '<div class="empty">op.gg has none yet.</div>'}`;
   const augChip = a=>{ const g = (augNames||{})[a.id] || {};
@@ -92,7 +94,7 @@ function opggPanel(det, queueId){
   const augs = d.augments ? `<h3>Most-picked augments <small class="opnote">% of games picked</small></h3>${['Prismatic','Gold','Silver'].map(tier=>`<div class="augtier">
       <span class="rar ${tier}">${tier}</span><div class="augrow1">${(d.augments[tier]||[]).map(augChip).join('') || '<span class="empty">None yet.</span>'}</div></div>`).join('')}` : '';
   return `<div class="opgg">${head(d)}${d.stale ? '<p class="note">Couldn\'t reach op.gg just now, so these are from the last time it could.</p>' : ''}
-    <div class="lpgrid"><div>${builds('Starting items', d.starter)}${builds('Core build', d.core, 'lpsub')}${final}</div><div>${augs}</div></div></div>`;
+    <div class="lpgrid"><div>${builds('Starting items', d.starter)}${builds('Core build', d.core, 'lpsub')}${boots}${final}</div><div>${augs}</div></div></div>`;
 }
 
 // ---- a player's card ----

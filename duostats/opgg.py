@@ -1,5 +1,5 @@
-"""op.gg's builds for a champion in ARAM and ARAM Mayhem: starting items, core builds, the items most often in
-finished builds, and the most-picked Prismatic, Gold and Silver augments. Read from op.gg's normal public pages and kept on this Mac for a few hours."""
+"""op.gg's builds for a champion in ARAM and ARAM Mayhem: starting items, core builds, boots, the items most often
+in finished builds, and the most-picked Prismatic, Gold and Silver augments. Read from op.gg's normal public pages and kept on this Mac for a few hours."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from .storage import Storage
 MODES = {2400: "aram-mayhem", 450: "aram"}   # queue id -> op.gg's name for the mode
 PAGE = "https://op.gg/lol/modes/{mode}/{slug}/{page}"
 REFRESH_HOURS = 12   # op.gg updates its numbers daily
-FORMAT = 2           # bumped when what's saved changes, so older copies are fetched again
+FORMAT = 3           # bumped when what's saved changes, so older copies are fetched again
 BROWSER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Safari/605.1.15"
 RARITY = {1: "Silver", 4: "Gold", 8: "Prismatic"}
 SHOW_BUILDS, SHOW_FINAL, SHOW_AUGMENTS = 3, 6, 6   # starting item sets and core builds; final items; augments of each rarity
@@ -68,11 +68,12 @@ def _build(row: dict) -> dict:
 
 
 def parse_items(page_html: str) -> dict:
-    """{"starter": [...], "core": [...], "final": [...]} from a champion's items page, each {items, pick, win, games},
-    most picked first. final: single finished items, pick being the % of games they were built in."""
+    """{"starter": [...], "core": [...], "boots": [...], "final": [...]} from a champion's items page, each
+    {items, pick, win, games}, most picked first. boots and final: single items, pick being the % of games they were built in."""
     data = page_data(page_html)
     found = {key: [_build(r) for r in _list_after(data, label) if isinstance(r, dict) and r.get("ids")][:show]
              for key, label, show in (("starter", "Starter items", SHOW_BUILDS), ("core", "Core builds", SHOW_BUILDS),
+                                      ("boots", "Boots", SHOW_BUILDS),
                                       ("final", "Items", SHOW_FINAL))}
     if not found["core"]:
         raise DuoStatsError("Couldn't read the builds on op.gg's page (its layout may have changed).")
