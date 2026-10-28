@@ -585,12 +585,14 @@ const lab = (()=>{
     g.font = 'bold 9px ui-monospace, Menlo, monospace'; g.textAlign = align; g.textBaseline = 'top';
     g.lineWidth = 3; g.strokeStyle = 'rgba(10,20,26,.9)'; g.strokeText(text, x, y); g.fillStyle = color; g.fillText(text, x, y);
   }
-  // where each chamber goes: one row of up to 13, a second row beyond that, shrunk to fit
+  // where each chamber goes: one row of up to 13, a second row beyond that, shrunk to fit.
+  // The second row sits half a step over, so its pipes come down through the gaps in the first.
   function layout(n){
-    const cols = Math.min(n, 13), rows = Math.ceil(n / cols), gap = 26;
-    const k = Math.min(1, (LW - 24) / (cols * 40 + (cols - 1) * gap), ((LH - 66) / rows - 14) / 112);
-    const w = 40 * k, h = 112 * k, x0 = (LW - (cols * w + (cols - 1) * gap * k)) / 2;
-    return Array.from({length: n}, (_, i)=>({x: x0 + (i % cols) * (w + gap * k), y: 44 + Math.floor(i / cols) * (h + 14), w, h, k}));
+    const cols = Math.min(n, 13), rows = Math.ceil(n / cols), gap = 26, half = rows > 1 ? (40 + gap) / 2 : 0;
+    const k = Math.min(1, (LW - 24) / (cols * 40 + (cols - 1) * gap + half), ((LH - 66) / rows - 14) / 112);
+    const w = 40 * k, h = 112 * k, x0 = (LW - (cols * w + (cols - 1) * gap * k + half * k)) / 2;
+    return Array.from({length: n}, (_, i)=>{ const row = Math.floor(i / cols);
+      return {x: x0 + row * half * k + (i % cols) * (w + gap * k), y: 44 + row * (h + 14), w, h, k}; });
   }
   const left = (p, i) => Math.max(0, p.ducklings[i] - nowApp());
   const progress = (p, i) => Math.min(1, Math.max(0, 1 - left(p, i) / (p.lab.grow * 60000)));
@@ -624,8 +626,9 @@ const lab = (()=>{
     for(let y = 0; y < LH; y += 32) for(let x = 0; x < LW; x += 32) g.drawImage(art('lab-tile'), x, y, 32, 32);
     g.fillStyle = '#16303a'; g.fillRect(0, 0, LW, 36); g.fillStyle = '#2b5563'; g.fillRect(0, 36, LW, 2);   // the back wall
     const cs = layout(p.nestSpace);
+    g.fillStyle = '#5c636a';
+    cs.forEach(c=>g.fillRect(Math.round(c.x + c.w / 2 - 2), 30, 4, Math.round(c.y - 30)));                  // pipes from the ceiling, behind the chambers
     cs.forEach((c, i)=>{
-      g.fillStyle = '#5c636a'; g.fillRect(Math.round(c.x + c.w / 2 - 2), 30, 4, Math.round(c.y - 30));      // pipes from the ceiling
       const growing = i < p.ducklings.length;
       chamber(c, growing, growing ? progress(p, i) : 0, now, i);
       if(c.k >= .6) label(growing ? short(left(p, i)) : 'empty', c.x + c.w / 2, c.y + c.h + 3, growing ? '#ffe066' : '#adb5bd');
