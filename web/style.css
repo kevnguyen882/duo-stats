@@ -720,3 +720,16 @@ h1.logo .lg-light{display:none}
 :root[data-theme="light"] h1.logo .lg-light{display:block}
 :root[data-theme="light"] h1.logo .lg-dark{display:none}
 @media(max-width:600px){h1.logo img{height:77px}}
+
+/* op.gg's builds on the Live card */
+.opgg{margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.opgg h3.opggh{font-size:13px;color:var(--text);margin:0;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
+.opggh a{font-size:12px;font-weight:600;color:var(--gold);text-decoration:none}
+.opggh a:hover{text-decoration:underline}
+.opgg .opnote{font-size:10.5px;text-transform:none;letter-spacing:0;color:var(--muted);font-weight:500}
+.opb{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin-bottom:8px}
+.opb .items{gap:4px}
+.opb .item{width:40px}
+.opb .item img,.opb .item span.ph{width:34px;height:34px;margin-bottom:1px}
+.opbs{display:flex;flex-wrap:wrap;gap:2px 10px;font-size:12px;color:var(--muted)}
+.opbs .w,.opbs .lo{font-weight:700}

@@ -7,6 +7,7 @@
     settings.json                Riot IDs, region and other choices made on the page
     augments.json, augicons/     augment names and icons
     augment_descriptions.json    augment descriptions from the League of Legends Wiki
+    opgg/<mode>-<champion>.json  op.gg's builds and augments for a champion, refreshed every few hours
     postgame_messages.jsonl      post-game system messages, kept for checking the chat reader
 """
 
