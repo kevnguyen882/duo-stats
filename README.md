@@ -63,6 +63,7 @@ the tests use small made-up games (`tests/helpers.py`) and a pretend League clie
 | `duostats/live.py` | Which champion you're on right now |
 | `duostats/augments.py` | Augment names, icons and descriptions |
 | `duostats/ugg.py` | Opening u.gg build pages |
+| `duostats/opgg.py` | op.gg's starting items, core builds and top augments for the Live tab (ARAM and ARAM Mayhem) |
 | `duostats/utopia.py` | Ducktopia, the idle game: its rules, raids and saved state (`data/utopia.json`) |
 | `duostats/storage.py` | Everything saved on this Mac |
 | `duostats/keychain.py` | The Riot API key in the macOS Keychain |

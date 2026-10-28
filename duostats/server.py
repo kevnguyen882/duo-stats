@@ -100,6 +100,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, app.utopia.state(self.viewer))
             if url.path == "/api/augments":
                 return self.send(200, app.augments.for_page())
+            if url.path == "/api/opgg":   # op.gg's builds for the champion on the Live tab
+                return self.send(200, app.opgg.builds((query.get("champ") or [""])[0], (query.get("queue") or [""])[0]))
             if url.path.startswith("/api/augicon/"):
                 data = app.augments.icon(url.path.rsplit("/", 1)[-1])
                 return self.send(200, data, "image/png", "max-age=86400") if data else self.send(404, {"error": "No icon"})

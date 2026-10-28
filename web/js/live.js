@@ -2,6 +2,7 @@
 //   champion select  this browser's player's champion only (a hovered one shows as "considering"), and the ARAM
 //                    bench with both of your records on each champion and which ones would be new S Rank chances
 //   in game          that player's history on the champion ("Show" turns it off)
+//   champion select and in game, ARAM and ARAM Mayhem: op.gg's starting items, core builds and most-picked augments
 //   between games    a recap of the last game: results, grades, scores and badges
 // The gold u.gg button at the top opens the build page for the champion this browser's player has locked in.
 
@@ -31,17 +32,17 @@ function finishedItem(id){
   if(tags.includes('Consumable') || tags.includes('Trinket') || it.consumed) return false;
   return !(it.into && it.into.length) && ((it.gold||{}).total||0) >= 900;
 }
-function itemIcon(id, n){
+function itemIcon(id, n, count=true){   // count: show n× under it
   const it = itemData && itemData[id], name = it ? it.name : 'Item '+id;
   const img = ddVer ? `<img src="https://ddragon.leagueoflegends.com/cdn/${ddVer}/img/item/${id}.png" alt="" onerror="this.outerHTML='<span class=ph></span>'">` : '<span class="ph"></span>';
-  return `<div class="item" title="${esc(name)}">${img}${n}×</div>`;
+  return `<div class="item" title="${esc(name)}">${img}${count ? n+'×' : ''}</div>`;
 }
 
 // ---- who this browser is, and what to show ----
-const LIVE_SHOW = [['history','History & items']];
+const LIVE_SHOW = [['history','History & items'], ['opgg','op.gg builds']];
 let liveMe = store.get('duo_live_me') || '';   // riot id (lowercase) of who's playing on this browser; '' = work it out
-let liveShow = (()=>{ try{ return {history:true, partner:true, ...JSON.parse(store.get('duo_live_show') || '{}')}; }
-                       catch(e){ return {history:true, partner:true}; } })();
+let liveShow = (()=>{ try{ return {history:true, partner:true, opgg:true, ...JSON.parse(store.get('duo_live_show') || '{}')}; }
+                       catch(e){ return {history:true, partner:true, opgg:true}; } })();
 function liveMeIndex(){
   const ps = lastData ? lastData.players : [], ids = ps.map(p=>p.riotId.toLowerCase());
   if(liveMe && ids.includes(liveMe)) return ids.indexOf(liveMe);
@@ -75,6 +76,35 @@ function srankStatus(det, player, color){
   return `<div class="lpsr">${mine ? `<span>S Rank: best this season ${badge(mine, color)}</span>`
       : `<span class="lpsrchance">🎯 No S on ${champ} yet this season</span>`}
     ${other ? `<span class="lpsrother">${esc(shortName(other.riotId))}: ${theirs ? badge(theirs, COLORS[j]) : 'no S yet'}</span>` : ''}</div>`;
+}
+
+// ---- op.gg's builds for the champion: asked for once per champion and mode, the app keeps them for a few hours ----
+const opgg = {};   // "alias|queue" -> {data} or {error}; missing while loading
+function opggPanel(det, queueId){
+  if(![450, 2400].includes(queueId)) return '';
+  const key = det.alias+'|'+queueId, got = opgg[key];
+  if(!got){
+    opgg[key] = {loading: true};
+    api(`/api/opgg?champ=${encodeURIComponent(det.alias)}&queue=${queueId}`)
+      .then(d=>{ opgg[key] = {data: d}; }, e=>{ opgg[key] = {error: e.message}; }).then(()=>renderLive(true));
+  }
+  const champ = esc(det.name||det.alias), mode = esc(QUEUES[queueId]||'');
+  const head = d => `<h3 class="opggh">op.gg · ${champ} in ${mode}${d && d.url ? ` <a href="${esc(d.url)}" target="_blank" rel="noopener">open op.gg ↗</a>` : ''}</h3>`;
+  if(!got || got.loading) return `<div class="opgg">${head()}<p class="empty"><span class="spin"></span>Loading op.gg's builds…</p></div>`;
+  if(got.error) return `<div class="opgg">${head()}<p class="empty">${esc(got.error)}</p></div>`;
+  const d = got.data;
+  // a set of items, repeats shown once with a count (2 Health Potions), then how often it's picked and won
+  const build = b=>{ const n = {}; b.items.forEach(id=>n[id] = (n[id]||0)+1);
+    return `<div class="opb"><div class="items">${Object.entries(n).map(([id,c])=>itemIcon(id, c, c>1)).join('')}</div>
+      <div class="opbs"><span class="${b.win>=50?'w':'lo'}">${b.win.toFixed(1)}% WR</span><span>${b.pick.toFixed(1)}% pick</span><span>${f0(b.games)} games</span></div></div>`; };
+  const builds = (label, list, cls='') => `<h3 class="${cls}">${label}</h3>${list && list.length ? list.map(build).join('') : '<div class="empty">op.gg has none yet.</div>'}`;
+  const augChip = a=>{ const g = (augNames||{})[a.id] || {};
+    return `<span class="augn" data-aug="${esc(a.id)}" tabindex="0"><img class="augic ${esc(g.rarity||'')}" src="/api/augicon/${encodeURIComponent(a.id)}" alt=""
+      onerror="this.style.visibility='hidden'"><span>${esc((g.name||'').trim() || a.name || 'Augment #'+a.id)}</span><small>${a.pick.toFixed(1)}%</small></span>`; };
+  const augs = d.augments ? `<div><h3>Most-picked augments <small class="opnote">% of games picked</small></h3>${['Prismatic','Gold','Silver'].map(tier=>`<div class="augtier">
+      <span class="rar ${tier}">${tier}</span><div class="augrow1">${(d.augments[tier]||[]).map(augChip).join('') || '<span class="empty">None yet.</span>'}</div></div>`).join('')}</div>` : '';
+  return `<div class="opgg">${head(d)}${d.stale ? '<p class="note">Couldn\'t reach op.gg just now, so these are from the last time it could.</p>' : ''}
+    <div class="lpgrid"><div>${builds('Starting items', d.starter)}${builds('Core build', d.core, 'lpsub')}</div>${augs}</div></div>`;
 }
 
 // ---- a player's card ----
@@ -123,6 +153,7 @@ function liveCard(det, player, color, queueId, isMe){
       <div class="champ">${esc(det.name||det.alias)}</div>${srankStatus(det, player, color)}</div>
       ${det.hover ? '' : `<button class="ghost" data-ugg="${esc(uggUrl(det.alias, queueId))}">u.gg build</button>`}</div>
     ${history}
+    ${liveShow.opgg ? opggPanel(det, queueId) : ''}
   </div>`;
 }
 
@@ -205,5 +236,6 @@ function renderLive(force){
 function liveTab(){
   return `<div class="livebar" id="livebar"></div>
     <div class="panel" id="livebox"></div>
-    <p class="note">Your history on a champion comes from your own saved games. "Open u.gg build" opens the champion's page on u.gg.</p>`;
+    <p class="note">Your history on a champion comes from your own saved games. op.gg builds are op.gg's numbers for everyone
+      playing the champion in ARAM or ARAM Mayhem. "Open u.gg build" opens the champion's page on u.gg.</p>`;
 }
