@@ -84,15 +84,15 @@ function opggPanel(det, queueId){
   const builds = (label, list, cls='') => `<h3 class="${cls}">${label}</h3>${list && list.length ? list.map(build).join('') : '<div class="empty">op.gg has none yet.</div>'}`;
   // the items most often in finished builds, each with the % of games it was built in and its win rate
   const finalItem = b=>itemIcon(b.items[0], `<span class="${b.win>=50?'w':'lo'}">${b.win.toFixed(1)}%</span><span>${b.pick.toFixed(1)}%</span>`);
-  const final = `<h3>Final build items <small class="opnote">win rate · % of games built</small></h3>${d.final && d.final.length
+  const final = `<h3 class="lpsub">Final build items <small class="opnote">win rate · % of games built</small></h3>${d.final && d.final.length
     ? `<div class="items opfinal">${d.final.map(finalItem).join('')}</div>` : '<div class="empty">op.gg has none yet.</div>'}`;
   const augChip = a=>{ const g = (augNames||{})[a.id] || {};
     return `<span class="augn" data-aug="${esc(a.id)}" tabindex="0"><img class="augic ${esc(g.rarity||'')}" src="/api/augicon/${encodeURIComponent(a.id)}" alt=""
       onerror="this.style.visibility='hidden'"><span>${esc((g.name||'').trim() || a.name || 'Augment #'+a.id)}</span><small>${a.pick.toFixed(1)}%</small></span>`; };
-  const augs = d.augments ? `<h3 class="lpsub">Most-picked augments <small class="opnote">% of games picked</small></h3>${['Prismatic','Gold','Silver'].map(tier=>`<div class="augtier">
+  const augs = d.augments ? `<h3>Most-picked augments <small class="opnote">% of games picked</small></h3>${['Prismatic','Gold','Silver'].map(tier=>`<div class="augtier">
       <span class="rar ${tier}">${tier}</span><div class="augrow1">${(d.augments[tier]||[]).map(augChip).join('') || '<span class="empty">None yet.</span>'}</div></div>`).join('')}` : '';
   return `<div class="opgg">${head(d)}${d.stale ? '<p class="note">Couldn\'t reach op.gg just now, so these are from the last time it could.</p>' : ''}
-    <div class="lpgrid"><div>${builds('Starting items', d.starter)}${builds('Core build', d.core, 'lpsub')}</div><div>${final}${augs}</div></div></div>`;
+    <div class="lpgrid"><div>${builds('Starting items', d.starter)}${builds('Core build', d.core, 'lpsub')}${final}</div><div>${augs}</div></div></div>`;
 }
 
 // ---- a player's card ----
