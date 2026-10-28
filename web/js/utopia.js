@@ -72,13 +72,13 @@ function accept(s){
   $('#msg').textContent = '';
   $('#game').classList.remove('hidden');
   renderPanels();
-  scene.reset(); plaza.reset(); lab.reset(); quarter.reset(); volcano.reset();
+  scene.reset(); plaza.reset(); lab.reset(); quarter.reset(); volcano.reset(); spaRoom.reset();
   founding(); checkFireDucks();
   // the main page's fire duck pop-up links here: #volcano=<player index> opens that player's Volcano Spa
   const link = !openedFromLink && /^#volcano(?:=(\d))?$/.exec(location.hash);
   if(link){
     openedFromLink = true;
-    if(link[1] && U.players[+link[1]] && +link[1] !== viewing){ viewing = +link[1]; renderPanels(); scene.reset(); plaza.reset(); lab.reset(); quarter.reset(); volcano.reset(); }
+    if(link[1] && U.players[+link[1]] && +link[1] !== viewing){ viewing = +link[1]; renderPanels(); scene.reset(); plaza.reset(); lab.reset(); quarter.reset(); volcano.reset(); spaRoom.reset(); }
     show('volcano');
   }
 }
@@ -108,7 +108,7 @@ function renderWhose(){
 $('#whose').addEventListener('click', e=>{
   const b = e.target.closest('[data-view]'); if(!b) return;
   viewing = +b.dataset.view; store.set('utopia_view', viewing); picking = false;
-  renderPanels(); scene.reset(); plaza.reset(); lab.reset(); quarter.reset(); volcano.reset();
+  renderPanels(); scene.reset(); plaza.reset(); lab.reset(); quarter.reset(); volcano.reset(); spaRoom.reset();
 });
 
 function growLeft(p){ return p.ducklings.length ? clock(p.ducklings[0] - nowApp()) : ''; }
@@ -327,22 +327,18 @@ const SALT_ART = {eucalyptus: 'duck-fighter', chili: 'duck-fire', golden: 'duck-
 let soakPick = {champion: null, salt: 'eucalyptus', temp: 'warm'};
 function renderSpa(){
   const p = U.players[viewing], own = mine(), pools = p.levels.spa;
+  $('#spaTitle').textContent = pools >= 2 ? 'Hot springs' : 'Spa';
   const heatNote = `${plural(p.fire, 'fire duck')} from the Volcano Spa heat the water: every perk ${p.heat ? `is <b>${Math.round(p.heat * 100)}%</b> stronger` : 'gets stronger with each one'} (+5% a fire duck, up to +50%).`;
   if(!pools){
-    $('#spa').innerHTML = `<p class="unote" style="margin-top:0">Build the Spa (in Build) to open recovery soaks: a defender soaks with bath salts, sits out raids while it does,
+    $('#spaDetail').innerHTML = `<p class="unote">Build the Spa (in Build, back in your Ductopia) to open recovery soaks: a defender soaks with bath salts, sits out raids while it does,
       and comes out with a perk for its next goose raid or boss fight. Hotter water costs more and does more.</p><p class="unote">${heatNote}</p>`;
     return;
   }
   const busyC = new Set([...p.soaks.map(x=>x.champion), ...Object.keys(p.perks)]);
-  const pool = i => { const x = p.soaks[i]; return x
-    ? `<div class="upool ${x.temp}">${pic(SALT_ART[x.salt], 'pix spr')}<div><b>${esc(x.champion)}</b><span>${U.temps.find(t=>t.id === x.temp).name} · ${U.salts.find(s=>s.id === x.salt).name.toLowerCase()} · ${perkText(x)}</span>
-        <span>out in <b data-until="${x.until}">${timeLeft(x.until - nowApp())}</b></span></div></div>`
-    : `<div class="upool empty"><div><b>Empty pool</b><span>${own ? 'Pick a defender below' : 'Nobody soaking'}</span></div></div>`; };
   const refreshed = Object.entries(p.perks);
-  let html = `<p class="unote" style="margin-top:0">A soak takes a defender out of raids for a while; it comes out refreshed with its salt's perk, which is used up by its next goose raid or boss fight
+  let html = `<p class="unote">A soak takes a defender out of raids for a while; it comes out refreshed with its salt's perk, which is used up by its next goose raid or boss fight
       (golden salts: its next raid). ${pools < 2 ? 'The Hot springs add a second pool.' : ''}</p>
-    <div class="upools">${Array.from({length: pools}, (_, i)=>pool(i)).join('')}</div>
-    <p class="unote">${heatNote}</p>
+    ${p.soaks.length ? `<h3 class="uspah">Soaking</h3>${p.soaks.map(x=>`<div class="udef">${pic(SALT_ART[x.salt], 'duck pix')}${champIcon(x.champion)}<div class="t"><b>${esc(x.champion)}</b><span>${U.temps.find(t=>t.id === x.temp).name} · ${esc(U.salts.find(s=>s.id === x.salt).name.toLowerCase())} · ${perkText(x)} · out in <strong data-until="${x.until}">${timeLeft(x.until - nowApp())}</strong></span></div></div>`).join('')}` : ''}
     ${refreshed.length ? `<h3 class="uspah">Refreshed</h3>${refreshed.map(([c, k])=>`<div class="udef">${pic(SALT_ART[k.salt], 'duck pix')}${champIcon(c)}<div class="t"><b>${esc(c)}</b><span>${perkText(k)} · for its next ${k.salt === 'golden' ? 'raid win' : 'raid or boss fight'}</span></div></div>`).join('')}` : ''}`;
   if(own){
     const squad = p.squad.map(d=>d.champion), others = p.champions.map(c=>c.champion).filter(c=>!squad.includes(c));
@@ -358,16 +354,82 @@ function renderSpa(){
       <div class="ubtns"><button data-soak data-cost="${temp.cost}">Start soak ${pic('icon-breadcrumb')}${fmt(temp.cost)}</button></div>`
       : '<p class="uempty">Every defender is soaking or already refreshed.</p>'}`;
   }
-  $('#spa').innerHTML = html;
+  $('#spaDetail').innerHTML = html;
   affordable();
 }
-$('#spa').addEventListener('click', e=>{
+$('#spaDetail').addEventListener('click', e=>{
   const s = e.target.closest('[data-salt]'), t = e.target.closest('[data-temp]');
   if(s){ soakPick.salt = s.dataset.salt; renderSpa(); }
   else if(t){ soakPick.temp = t.dataset.temp; renderSpa(); }
   else if(e.target.closest('[data-soak]')) act({action: 'soak', ...soakPick});
 });
-$('#spa').addEventListener('change', e=>{ if(e.target.matches('[data-soak-champ]')) soakPick.champion = e.target.value; });
+$('#spaDetail').addEventListener('change', e=>{ if(e.target.matches('[data-soak-champ]')) soakPick.champion = e.target.value; });
+
+// the Spa's scene: its pools, coloured by temperature, with the soaking ducks bobbing in the steam, and the fire ducks
+// from the Volcano Spa along the back, heating the water
+const SPW = 480, SPH = 200, POOL_WATER = {warm: ['#74c0fc', '#4dabf7'], hot: ['#ffc078', '#ff922b'], scalding: ['#ff8787', '#fa5252']};
+const spaRoom = (()=>{
+  const cv = $('#spaScene'), g = cv.getContext('2d');
+  function size(){   // (also called when the spa is shown)
+    const css = cv.clientWidth || SPW, dpr = window.devicePixelRatio || 1;
+    cv.width = Math.round(css * dpr); cv.height = Math.round(css * dpr * SPH / SPW);
+  }
+  function reset(){
+    if(!U) return;
+    const p = U.players[viewing];
+    cv.setAttribute('aria-label', !p.levels.spa ? 'The Spa: not built yet'
+      : `The Spa: ${p.soaks.length ? p.soaks.map(x=>`${x.champion} soaking`).join(', ') : 'empty pools'}`);
+  }
+  function label(text, x, y, color = '#fff'){
+    g.font = 'bold 9px ui-monospace, Menlo, monospace'; g.textAlign = 'center'; g.textBaseline = 'top';
+    g.lineWidth = 3; g.strokeStyle = 'rgba(16,24,32,.9)'; g.strokeText(text, x, y); g.fillStyle = color; g.fillText(text, x, y);
+  }
+  function draw(now){
+    requestAnimationFrame(draw);
+    if(!U || view !== 'spa') return;
+    const p = U.players[viewing], k = cv.width / SPW, pools = Math.max(1, p.levels.spa);
+    g.setTransform(k, 0, 0, k, 0, 0); g.imageSmoothingEnabled = false;
+    // stone floor, and a back wall where the fire ducks sit
+    for(let y = 0; y < SPH; y += 32) for(let x = 0; x < SPW; x += 32) g.drawImage(art('tile-plaza'), x, y, 32, 32);
+    g.fillStyle = '#5c4b3f'; g.fillRect(0, 0, SPW, 34); g.fillStyle = '#3d3029'; g.fillRect(0, 34, SPW, 4);
+    const fire = Math.min(p.fire, 12);
+    for(let i = 0; i < fire; i++) g.drawImage(art('duck-fire'), SPW / 2 - fire * 10 + i * 20 + 2, 12 + Math.round(Math.sin(now / 500 + i) * 1), 16, 16);
+    label(p.fire ? `${plural(p.fire, 'fire duck')} heating the water · perks +${Math.round(p.heat * 100)}%` : 'No fire ducks yet: an S+ brings one to heat the water', SPW / 2, 40, '#ffd8a8');
+    g.drawImage(art('lounge-plant'), 4, 132, 48, 48); g.drawImage(art('lounge-plant'), SPW - 52, 132, 48, 48);
+    // the pools
+    const pw = pools >= 2 ? 170 : 220, gap = 40, x0 = (SPW - pools * pw - (pools - 1) * gap) / 2;
+    for(let i = 0; i < pools; i++){
+      const x = x0 + i * (pw + gap), y = 70, ph = 100, soak = p.levels.spa ? p.soaks[i] : null;
+      const [hi, lo] = soak ? POOL_WATER[soak.temp] : ['#a5d8ff', '#74c0fc'];
+      g.fillStyle = '#868e96'; g.fillRect(x - 6, y - 6, pw + 12, ph + 12);   // the stone rim
+      g.fillStyle = '#ced4da'; g.fillRect(x - 6, y - 6, pw + 12, 3);
+      const w = g.createLinearGradient(0, y, 0, y + ph); w.addColorStop(0, hi); w.addColorStop(1, lo);
+      g.fillStyle = w; g.fillRect(x, y, pw, ph);
+      g.fillStyle = 'rgba(255,255,255,.35)';   // ripples
+      for(let r = 0; r < 4; r++){ const rx = x + ((now / 30 + r * 53) % (pw - 24)), ry = y + 14 + r * 22; g.fillRect(Math.round(rx), ry, 18, 2); }
+      if(!soak){ label(p.levels.spa ? 'Empty pool' : '', x + pw / 2, y + ph / 2 - 4, '#e7f5ff'); continue; }
+      // steam, more of it the hotter the water
+      const puffs = {warm: 3, hot: 6, scalding: 10}[soak.temp];
+      for(let s = 0; s < puffs; s++){
+        const t = (now / 2200 + s / puffs) % 1, sx = x + 16 + ((s * 37) % (pw - 32)) + Math.sin(now / 600 + s) * 4;
+        g.globalAlpha = .55 * (1 - t); g.fillStyle = '#fff'; g.fillRect(Math.round(sx), Math.round(y + 40 - t * 60), 6, 6); g.globalAlpha = 1;
+      }
+      const bob = Math.sin(now / 650 + i * 2) * 2;
+      duckWithHat(g, (p.squad.find(d=>d.champion === soak.champion) || {}).cls || (p.champions.find(c=>c.champion === soak.champion) || {}).cls || 'fighter',
+                  hatOf(p, soak.champion), x + pw / 2 - 16, y + 30 + bob, 32);
+      g.fillStyle = 'rgba(255,255,255,.5)'; g.fillRect(x + pw / 2 - 18, y + 58 + Math.round(bob), 36, 2);   // where the water meets the duck
+      label(`${soak.champion} · ${perkText(soak)}`, x + pw / 2, y + 68);
+      label(`${U.temps.find(t=>t.id === soak.temp).name} · out in ${timeLeft(soak.until - nowApp())}`, x + pw / 2, y + 80, '#fff3bf');
+    }
+    if(!p.levels.spa){
+      g.fillStyle = 'rgba(16,20,28,.55)'; g.fillRect(0, 0, SPW, SPH);
+      label('🔒', SPW / 2, 80); label('Build the Spa to open the pools', SPW / 2, 98, '#e7f5ff');
+    }
+  }
+  window.addEventListener('resize', size);
+  size(); requestAnimationFrame(draw);
+  return {reset, size};
+})();
 
 // ---- a boss fight, played back round by round (from the fight's steps) ----
 const MOVE_NOTE = {ult: 'Pentakill ultimate!', first: 'Strikes first from the shadows!', double: 'Double hit!'};
@@ -574,7 +636,7 @@ const scene = (()=>{
     // bakery and spa (an empty plot until built)
     if(p.levels.bakery) { sprite(BUILD_INFO.bakery[0](p.levels.bakery), 404, 6, 64); label(`Bakery ${p.levels.bakery}`, 436, 70); }
     else lot(404, 6, 'Bakery plot');
-    if(p.levels.spa) { sprite(BUILD_INFO.spa[0](p.levels.spa), 404, 90, 64); label(p.levels.spa >= 2 ? 'Hot springs' : 'Spa', 436, 154); }
+    if(p.levels.spa) { sprite(BUILD_INFO.spa[0](p.levels.spa), 404, 90, 64); label(`${p.levels.spa >= 2 ? 'Hot springs' : 'Spa'}${p.soaks.length ? ` ♨${p.soaks.length}` : ''}`, 436, 154); }
     else lot(404, 90, 'Spa plot');
     // districts: unlocked by real achievements only
     const D = [['penta', 'district-penta-plaza', 'Plaza', 'a penta', p.golden, 'duck-golden'],   // short: they sit close together
@@ -587,8 +649,8 @@ const scene = (()=>{
       else { label('🔒', x + 24, y + 16); label(`needs ${need}`, x + 24, y + 50, 'center', '#dee2e6'); }
     });
   }
-  // clicking the Duck Infirmary or a district visits it
-  const SPOTS = [{view: 'lab', x: 8, y: 6, w: 64, h: 76}, {view: 'plaza', x: 322, y: 196, w: 48, h: 66}, {view: 'quarter', x: 376, y: 196, w: 48, h: 66},
+  // clicking the Duck Infirmary, the Spa or a district visits it
+  const SPOTS = [{view: 'lab', x: 8, y: 6, w: 64, h: 76}, {view: 'spa', x: 404, y: 90, w: 64, h: 74}, {view: 'plaza', x: 322, y: 196, w: 48, h: 66}, {view: 'quarter', x: 376, y: 196, w: 48, h: 66},
                  {view: 'volcano', x: 430, y: 196, w: 48, h: 66}];
   const spotAt = e => {
     const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * W / r.width, y = (e.clientY - r.top) * H / r.height;
@@ -1051,14 +1113,14 @@ function checkFireDucks(){
     if(e.target.closest('.toastx')) return close();
     const v = e.target.closest('[data-visit-volcano]'); if(!v) return;
     viewing = +v.dataset.visitVolcano; store.set('utopia_view', viewing);
-    renderPanels(); scene.reset(); plaza.reset(); lab.reset(); quarter.reset(); volcano.reset();
+    renderPanels(); scene.reset(); plaza.reset(); lab.reset(); quarter.reset(); volcano.reset(); spaRoom.reset();
     show('volcano'); close(); $('#volcano').scrollIntoView({behavior: 'smooth', block: 'start'});
   });
 }
 
 // Penta Plaza, the Duck Infirmary, the Champion Quarter and the Volcano Spa take the place of the utopia scene,
 // each with a button back
-const VIEWS = {town: () => scene, plaza: () => plaza, lab: () => lab, quarter: () => quarter, volcano: () => volcano};
+const VIEWS = {town: () => scene, plaza: () => plaza, lab: () => lab, quarter: () => quarter, volcano: () => volcano, spa: () => spaRoom};
 let view = 'town';
 function show(v){
   view = v;

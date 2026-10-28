@@ -21,7 +21,7 @@ document.documentElement.dataset.theme=t})()</script>
   <div id="game" class="hidden">
     <div class="uscore" id="scoreboard"></div>
     <div class="srtools"><div class="seg" role="group" aria-label="Whose utopia" id="whose"></div></div>
-    <div class="uscene" id="town"><canvas id="scene" aria-label="Ductopia (click the Duck Infirmary, Penta Plaza, the Champion Quarter or the Volcano Spa to visit them)" role="img"></canvas></div>
+    <div class="uscene" id="town"><canvas id="scene" aria-label="Ductopia (click the Duck Infirmary, the Spa, Penta Plaza, the Champion Quarter or the Volcano Spa to visit them)" role="img"></canvas></div>
     <!-- Penta Plaza takes the scene's place while you visit it -->
     <section class="panel uplaza hidden" id="plaza">
       <div class="uplaza-top"><button class="ghost" data-back>← Back to Ductopia</button><h2>Penta Plaza</h2></div>
@@ -36,6 +36,11 @@ document.documentElement.dataset.theme=t})()</script>
       <div class="uplaza-top"><button class="ghost" data-back>← Back to Ductopia</button><h2>Champion Quarter</h2></div>
       <div class="uplaza-scene"><canvas id="quarterScene" role="img"></canvas></div><p class="unote" id="quarterNote"></p>
       <div id="quarterDetail"></div></section>
+    <!-- and the Spa, where defenders soak for perks -->
+    <section class="panel uplaza uspa hidden" id="spa">
+      <div class="uplaza-top"><button class="ghost" data-back>← Back to Ductopia</button><h2 id="spaTitle">Spa</h2></div>
+      <div class="uplaza-scene"><canvas id="spaScene" role="img"></canvas></div>
+      <div id="spaDetail"></div></section>
     <!-- and the Volcano Spa, where the fire ducks soak -->
     <section class="panel uplaza uvolcano hidden" id="volcano">
       <div class="uplaza-top"><button class="ghost" data-back>← Back to Ductopia</button><h2>Volcano Spa</h2></div>
@@ -48,7 +53,6 @@ document.documentElement.dataset.theme=t})()</script>
     </div>
     <section class="panel"><h2>Goose raids</h2><div id="raids"></div></section>
     <section class="panel"><h2>Training Grounds</h2><div id="grounds"></div></section>
-    <section class="panel"><h2>Spa</h2><div id="spa"></div></section>
     <section class="panel"><h2>What's happened</h2><div id="log"></div></section>
   </div>
 </div>

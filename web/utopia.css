@@ -38,6 +38,7 @@
 .uquarter .uplaza-scene canvas.over{cursor:pointer}
 /* the Volcano Spa: the scene, and every fire duck listed under it */
 .uvolcano .uplaza-scene{background:#3b3236}
+.uspa .uplaza-scene{background:#5c4b3f}
 .uvlist{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px;margin-top:12px}
 .uvduck{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:10px;background:var(--panel2);border:1px solid var(--line);outline:none}
 .uvduck:focus-visible{outline:2px solid var(--gold);outline-offset:1px}
@@ -168,16 +169,6 @@ section.panel{margin-bottom:14px}
 @keyframes found-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 .ufound button{position:relative}
 /* the Spa */
-.upools{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin:8px 0}
-.upool{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;color:#fff;min-height:64px;
-  background:linear-gradient(#4dabf7,#1c7ed6);box-shadow:inset 0 0 0 3px rgba(255,255,255,.25)}
-.upool.hot{background:linear-gradient(#ffa94d,#e8590c)}
-.upool.scalding{background:linear-gradient(#ff6b6b,#c92a2a)}
-.upool.empty{background:rgba(127,127,127,.12);color:var(--muted);box-shadow:inset 0 0 0 2px var(--line)}
-.upool .spr{width:40px;height:40px;animation:bob 2.4s ease-in-out infinite}
-.upool div{display:flex;flex-direction:column;gap:2px;font-size:12.5px;min-width:0}
-.upool b{font-size:14px}
-@keyframes bob{50%{transform:translateY(3px)}}
 .uspah{margin:14px 0 6px;font-size:14px}
 .uperk{color:#e8590c;font-weight:700}
 .usel{display:flex;align-items:center;gap:8px;font-size:13px;margin:4px 0 10px}
@@ -233,5 +224,5 @@ section.panel{margin-bottom:14px}
 .uend{min-height:22px;margin-bottom:10px;font-weight:800}
 .uend .won{color:#2f9e44}
 .uend .lost{color:#e03131}
-@media (prefers-reduced-motion: reduce){ .ufound li,.ugeese img{animation:none;opacity:1} .ufighter .spr,.upop,.upool .spr{animation:none!important} .upop{opacity:0} }
+@media (prefers-reduced-motion: reduce){ .ufound li,.ugeese img{animation:none;opacity:1} .ufighter .spr,.upop{animation:none!important} .upop{opacity:0} }
 @media(max-width:600px){.usd .n{font-size:26px}.uscore{gap:6px}.usd{padding:10px}}
