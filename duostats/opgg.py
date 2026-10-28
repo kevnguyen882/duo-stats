@@ -1,5 +1,5 @@
 """op.gg's builds for a champion in ARAM and ARAM Mayhem: starting items, core builds, boots, the items most often
-in finished builds, and the most-picked Prismatic, Gold and Silver augments. Read from op.gg's normal public pages and kept on this Mac for a few hours."""
+in finished builds, the skill order, and the most-picked Prismatic, Gold and Silver augments. Read from op.gg's normal public pages and kept on this Mac for a few hours."""
 
 from __future__ import annotations
 
@@ -15,10 +15,11 @@ from .storage import Storage
 MODES = {2400: "aram-mayhem", 450: "aram"}   # queue id -> op.gg's name for the mode
 PAGE = "https://op.gg/lol/modes/{mode}/{slug}/{page}"
 REFRESH_HOURS = 12   # op.gg updates its numbers daily
-FORMAT = 3           # bumped when what's saved changes, so older copies are fetched again
+FORMAT = 4           # bumped when what's saved changes, so older copies are fetched again
 BROWSER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Safari/605.1.15"
 RARITY = {1: "Silver", 4: "Gold", 8: "Prismatic"}
-SHOW_BUILDS, SHOW_FINAL, SHOW_AUGMENTS = 3, 6, 6   # starting item sets and core builds; final items; augments of each rarity
+SHOW_BUILDS, SHOW_FINAL, SHOW_AUGMENTS, SHOW_SKILLS = 3, 6, 6, 2   # starting item sets and core builds; final items;
+                                                                   # augments of each rarity; skill orders
 
 
 def slug(alias: str) -> str:
@@ -96,6 +97,40 @@ def parse_augments(page_html: str, rarity_of=None) -> dict:
     return tiers
 
 
+def parse_skills(page_html: str) -> dict:
+    """{"orders": [...], "spells": {...}} from a champion's skills page. orders, most picked first: {max, order, pick, win,
+    games}, max being the order the skills are maxed in (["Q", "W", "E"]) and order the most picked level-by-level path
+    for it (15 keys). spells: key -> {name, image}, image being the icon's file name ("AhriQ.png")."""
+    data = page_data(page_html)
+    at = data.find('{"skill_masteries":')
+    if at < 0:
+        raise DuoStatsError("Couldn't read the skill order on op.gg's page (its layout may have changed).")
+    try:
+        rows = json.JSONDecoder().raw_decode(data, at)[0]["skill_masteries"]
+    except (ValueError, KeyError):
+        raise DuoStatsError("Couldn't read the skill order on op.gg's page (its layout may have changed).")
+    orders, spells = [], {}
+    for m in sorted((r for r in rows if isinstance(r, dict)), key=lambda r: -_number(r.get("play")))[:SHOW_SKILLS]:
+        paths = [b for b in m.get("builds") or [] if isinstance(b, dict) and isinstance(b.get("order"), list)]
+        if not paths:
+            continue
+        top = max(paths, key=lambda b: _number(b.get("play")))
+        for sk in top.get("skills") if isinstance(top.get("skills"), list) else []:   # later ones are only references
+            if isinstance(sk, dict) and sk.get("key"):
+                spells.setdefault(sk["key"], {"name": sk.get("name") or "",
+                                              "image": str(sk.get("image_url") or "").rsplit("/", 1)[-1]})
+        orders.append({"max": [str(k) for k in m.get("ids") or []], "order": [str(k) for k in top["order"]],
+                       "pick": round(_number(m.get("pick_rate")) * 100, 1), "win": round(_number(m.get("win_rate")) * 100, 1),
+                       "games": int(_number(m.get("play")))})
+    # op.gg often leaves the ultimate off its list; its icon is usually named like the others ("AhriQ.png" -> "AhriR.png")
+    prefixes = {sp["image"][:-len(f"{k}.png")] for k, sp in spells.items() if sp["image"].endswith(f"{k}.png")}
+    if len(prefixes) == 1 and len(spells) > 1:
+        prefix = prefixes.pop()
+        for k in {k for o in orders for k in o["order"]} - set(spells):
+            spells[k] = {"name": "", "image": f"{prefix}{k}.png"}
+    return {"orders": orders, "spells": spells}
+
+
 class OpggBuilds:
     def __init__(self, storage: Storage, rarity_of=None, fetch=None):
         """rarity_of: a function giving {augment id: rarity} from the game's list. fetch: url -> page HTML (for tests)."""
@@ -141,6 +176,10 @@ class OpggBuilds:
         url = PAGE.format(mode=mode, slug=name, page="build")
         out = {"mode": mode, "url": url, "fetched": time.time(), "format": FORMAT,
                **parse_items(self.fetch(PAGE.format(mode=mode, slug=name, page="items")))}
+        try:   # the builds are still worth showing without it
+            out["skills"] = parse_skills(self.fetch(PAGE.format(mode=mode, slug=name, page="skills")))
+        except DuoStatsError:
+            out["skills"] = {"orders": [], "spells": {}}
         if mode == "aram-mayhem":   # augments are only in Mayhem
             rarity = {}
             try:

@@ -5,7 +5,7 @@ import time
 import unittest
 
 from duostats.errors import DuoStatsError
-from duostats.opgg import OpggBuilds, parse_augments, parse_items, slug
+from duostats.opgg import OpggBuilds, parse_augments, parse_items, parse_skills, slug
 
 from .helpers import TempStorageCase
 
@@ -38,6 +38,18 @@ def augments_page() -> str:
     return page('["$","$L63",null,' + json.dumps({"data": rows}) + "]")
 
 
+def skills_page() -> str:
+    spells = [{"name": "Orb", "key": "Q", "image_url": "https://x/spell/AhriQ.png"},
+              {"name": "Fox-Fire", "key": "W", "image_url": "https://x/spell/AhriW.png"}]
+    masteries = [{"ids": ["Q", "E", "W"], "play": 900, "pick_rate": 0.23, "win_rate": 0.537,
+                  "builds": [{"order": list("QWEQQRQEQERWWEE"), "play": 300, "skills": "$5e:refs"}]},
+                 {"ids": ["Q", "W", "E"], "play": 2950, "pick_rate": 0.701, "win_rate": 0.5241,
+                  "builds": [{"order": list("QWEQQRQEQWRWWWE"), "play": 95, "skills": "$5e:refs"},
+                             {"order": list("QWEQQRQWQWRWWEE"), "play": 1843, "skills": spells}]},
+                 {"ids": ["W", "Q", "E"], "play": 5, "pick_rate": 0.01, "win_rate": 1, "builds": []}]
+    return page('["$","$L60",null,' + json.dumps({"skill_masteries": masteries, "mode": "aram"}) + "]")
+
+
 class ParseTest(unittest.TestCase):
     def test_slug(self):
         self.assertEqual(slug("MonkeyKing"), "monkeyking")
@@ -57,6 +69,18 @@ class ParseTest(unittest.TestCase):
         with self.assertRaises(DuoStatsError):
             parse_items(page('{"nothing":"here"}'))
 
+    def test_skills(self):
+        got = parse_skills(skills_page())
+        self.assertEqual(got["orders"][0], {"max": ["Q", "W", "E"], "order": list("QWEQQRQWQWRWWEE"),   # its most picked path
+                                            "pick": 70.1, "win": 52.4, "games": 2950})
+        self.assertEqual([o["max"] for o in got["orders"]], [["Q", "W", "E"], ["Q", "E", "W"]])   # the top 2
+        self.assertEqual(got["spells"]["W"], {"name": "Fox-Fire", "image": "AhriW.png"})
+        self.assertEqual(got["spells"]["R"], {"name": "", "image": "AhriR.png"})   # left off op.gg's list: named like the others
+
+    def test_skills_layout_changed(self):
+        with self.assertRaises(DuoStatsError):
+            parse_skills(page('{"nothing":"here"}'))
+
     def test_augments(self):
         got = parse_augments(augments_page(), {"201": "Gold"})
         self.assertEqual([a["id"] for a in got["Silver"]], [100, 101, 102, 103, 104, 105])   # most picked 6
@@ -69,11 +93,14 @@ class BuildsTest(TempStorageCase):
         super().setUp()
         self.asked = []
         self.down = False
+        self.skills = skills_page()
 
         def fetch(url):
             self.asked.append(url)
             if self.down:
                 raise DuoStatsError("Couldn't reach op.gg")
+            if url.endswith("/skills"):
+                return self.skills
             return augments_page() if url.endswith("/augments") else items_page()
         self.opgg = OpggBuilds(self.storage, lambda: {}, fetch)
 
@@ -81,19 +108,26 @@ class BuildsTest(TempStorageCase):
         got = self.opgg.builds("MonkeyKing", 2400)
         self.assertEqual(got["url"], "https://op.gg/lol/modes/aram-mayhem/monkeyking/build")
         self.assertIn("augments", got)
-        self.assertEqual(len(self.asked), 2)
+        self.assertEqual(len(self.asked), 3)
         self.opgg.builds("MonkeyKing", "2400")   # asked again soon: the saved copy
-        self.assertEqual(len(self.asked), 2)
+        self.assertEqual(len(self.asked), 3)
 
     def test_older_saved_format_is_fetched_again(self):
         self.storage.write_json(self.storage.path("opgg/aram-ahri.json"), {"fetched": time.time(), "core": []})
         self.assertIn("final", self.opgg.builds("Ahri", 450))
-        self.assertEqual(len(self.asked), 1)
+        self.assertEqual(len(self.asked), 2)
 
-    def test_aram_has_items_only(self):
+    def test_aram_has_items_and_skills_only(self):
         got = self.opgg.builds("Ahri", 450)
         self.assertNotIn("augments", got)
-        self.assertEqual(self.asked, ["https://op.gg/lol/modes/aram/ahri/items"])
+        self.assertEqual(got["skills"]["orders"][0]["max"], ["Q", "W", "E"])
+        self.assertEqual(self.asked, ["https://op.gg/lol/modes/aram/ahri/items", "https://op.gg/lol/modes/aram/ahri/skills"])
+
+    def test_builds_without_a_skill_order(self):
+        self.skills = page('{"nothing":"here"}')   # op.gg's skills page changed: the items still show
+        got = self.opgg.builds("Ahri", 450)
+        self.assertEqual(got["skills"], {"orders": [], "spells": {}})
+        self.assertTrue(got["core"])
 
     def test_other_modes(self):
         with self.assertRaises(DuoStatsError):

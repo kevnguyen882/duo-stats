@@ -2,8 +2,8 @@
 //   champion select  this browser's player's champion only (a hovered one shows as "considering"), and the ARAM
 //                    bench with both of your records on each champion and which ones would be new S Rank chances
 //   in game          that player's history on the champion ("Show" turns it off)
-//   champion select and in game, ARAM and ARAM Mayhem: op.gg's starting items, core builds and boots, final build items and
-//                    most-picked augments
+//   champion select and in game, ARAM and ARAM Mayhem: op.gg's starting items, core builds and boots, final build items,
+//                    skill order and most-picked augments
 //   between games    a recap of the last game: results, grades, scores and badges
 
 let live = null, itemData = null;
@@ -91,10 +91,20 @@ function opggPanel(det, queueId){
   const augChip = a=>{ const g = (augNames||{})[a.id] || {};
     return `<span class="augn" data-aug="${esc(a.id)}" tabindex="0"><img class="augic ${esc(g.rarity||'')}" src="/api/augicon/${encodeURIComponent(a.id)}" alt=""
       onerror="this.style.visibility='hidden'"><span>${esc((g.name||'').trim() || a.name || 'Augment #'+a.id)}</span><small>${a.pick.toFixed(1)}%</small></span>`; };
+  // skill order: which skill to max first
+  const spells = (d.skills && d.skills.spells) || {};
+  const skill = k => { const sp = spells[k] || {};
+    return `<span class="sk" data-k="${esc(k)}" title="${esc(sp.name ? `${k} · ${sp.name}` : k)}">${sp.image && ddVer
+      ? `<img src="https://ddragon.leagueoflegends.com/cdn/${ddVer}/img/spell/${encodeURIComponent(sp.image)}" alt="" onerror="this.remove()">` : ''}<b>${esc(k)}</b></span>`; };
+  const orders = (d.skills && d.skills.orders) || [];
+  const skills = `<h3>Skill order <small class="opnote">max first</small></h3>${orders.length ? orders.map(o=>`<div class="skmax">
+      ${o.max.map(skill).join('<span class="skgt">›</span>')}
+      <div class="opbs"><span class="${o.win>=50?'w':'lo'}">${o.win.toFixed(1)}% WR</span><span>${o.pick.toFixed(1)}% pick</span><span>${f0(o.games)} games</span></div></div>`).join('')
+    : '<div class="empty">op.gg has none yet.</div>'}`;
   const augs = d.augments ? `<h3>Most-picked augments <small class="opnote">% of games picked</small></h3>${['Prismatic','Gold','Silver'].map(tier=>`<div class="augtier">
       <span class="rar ${tier}">${tier}</span><div class="augrow1">${(d.augments[tier]||[]).map(augChip).join('') || '<span class="empty">None yet.</span>'}</div></div>`).join('')}` : '';
   return `<div class="opgg">${head(d)}${d.stale ? '<p class="note">Couldn\'t reach op.gg just now, so these are from the last time it could.</p>' : ''}
-    <div class="lpgrid"><div>${builds('Starting items', d.starter)}${builds('Core build', d.core, 'lpsub')}${boots}${final}</div><div>${augs}</div></div></div>`;
+    <div class="lpgrid"><div>${builds('Starting items', d.starter)}${builds('Core build', d.core, 'lpsub')}${boots}${final}</div><div>${skills}${augs ? `<div class="lpsub-gap"></div>${augs}` : ''}</div></div></div>`;
 }
 
 // ---- a player's card ----
