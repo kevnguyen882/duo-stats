@@ -204,6 +204,14 @@ class TrainingGroundsTests(unittest.TestCase):
         self.assertEqual(boss(self.champ())["name"], "Sergeant Honk")
         self.assertEqual(boss(self.champ(rank=7))["name"], "The Goose King")
 
+    def test_boss_fight_records_each_round_for_the_page(self):
+        f = boss_fight(self.champ(pentas=1), 5)
+        self.assertEqual([s["round"] for s in f["steps"]], list(range(1, f["rounds"] + 1)))
+        self.assertIn("ult", f["steps"][1]["moves"])
+        last = f["steps"][-1]
+        self.assertEqual((last["bossHp"], last["hp"]), (f["bossLeft"], f["hpLeft"]))
+        self.assertEqual("bite" in last, not f["win"])   # a beaten boss doesn't bite back
+
     def test_boss_fight_is_repeatable_and_fair(self):
         self.assertEqual(boss_fight(self.champ(), 5), boss_fight(self.champ(), 5))
         wins = lambda d: sum(boss_fight(d, i)["win"] for i in range(200))
@@ -383,6 +391,16 @@ class GameTests(TempStorageCase):
         self.assertEqual(p["squad"][0]["level"], before["level"] + (1 if fight["win"] else 0))
         with self.assertRaises(ValueError):
             challenge()
+
+    def test_a_test_fight_needs_no_challenge_and_changes_nothing(self):
+        before = self.game.state(viewer=False, now=1000)["players"][0]
+        out = self.game.act({"owner": "duo one#na1", "action": "spar", "champion": "Annie"}, viewer=False, now=1000)
+        fight, after = out["result"]["fight"], out["players"][0]
+        self.assertTrue(fight["practice"])
+        self.assertEqual((after["ranks"], after["bossFights"], after["challenges"], after["crumbs"]),
+                         (before["ranks"], [], [], before["crumbs"]))
+        with self.assertRaises(ValueError):   # not a champion played together
+            self.game.act({"owner": "duo one#na1", "action": "spar", "champion": "Teemo"}, viewer=False, now=1000)
 
     def test_a_loss_or_a_champion_off_the_squad_earns_no_challenge(self):
         self.game.state(viewer=False, now=1000)

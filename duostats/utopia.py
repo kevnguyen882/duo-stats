@@ -287,32 +287,44 @@ def boss_fight(d: dict, seed, max_rounds: int = 20) -> dict:
     rng = random.Random(f"boss-{seed}-{d['champion']}")
     b = boss(d)
     hp, bhp, a, cls = d["hp"], b["hp"], d["atk"], d["cls"]
-    log, used_ult = [], False
+    log, steps, used_ult = [], [], False   # steps: what happened each round, for the page to play back
     roll = lambda: rng.uniform(0.7, 1.3)
     rounds = 0
     for rounds in range(1, max_rounds + 1):
+        step = {"round": rounds, "moves": []}
+        steps.append(step)
         if d["pentas"] and not used_ult and rounds >= 2:
             used_ult, dmg = True, a * 3
+            step["moves"].append("ult")
             log.append(f"Round {rounds}: {d['champion']} used a pentakill ultimate!")
         else:
             dmg = a * {"tank": 0.9, "mage": 1.1, "marksman": 1.15, "support": 0.9, "fighter": 1.0, "assassin": 1.1}[cls]
             if cls == "assassin" and rounds == 1:
                 dmg *= 1.5
+                step["moves"].append("first")
                 log.append(f"Round 1: {d['champion']} struck first from the shadows.")
             if rng.random() < min(0.1 * d["triples"] + 0.15 * d["quadras"], 0.3):
                 dmg *= 2
+                step["moves"].append("double")
                 log.append(f"Round {rounds}: {d['champion']} landed a double hit.")
-        bhp -= dmg * roll() + (2 if d["star"] == 3 else 0)   # S+: a flame aura
+        hit = dmg * roll() + (2 if d["star"] == 3 else 0)   # S+: a flame aura
+        bhp -= hit
+        step["hit"] = round(hit)
         if cls in ("fighter", "support"):
-            hp = min(d["hp"], hp + a * (0.2 if cls == "fighter" else 0.4))
+            healed = min(d["hp"], hp + a * (0.2 if cls == "fighter" else 0.4)) - hp
+            hp += healed
+            step["heal"] = round(healed)
+        step.update(bossHp=max(0, round(bhp)), hp=max(0, round(hp)))
         if bhp <= 0:
             log.append(f"Round {rounds}: {b['name']} is beaten! {d['champion']} goes up a level.")
             break
         bite = b["atk"] * roll() * (0.75 if cls == "tank" else 1)
         if rounds % 3 == 0:
             bite *= 1.6
+            step["moves"].append("honk")
             log.append(f"Round {rounds}: {b['name']} let out a Honk of Doom.")
         hp -= bite
+        step.update(bite=round(bite), hp=max(0, round(hp)))
         if hp <= 0:
             log.append(f"Round {rounds}: {d['champion']} was knocked out.")
             break
@@ -321,7 +333,7 @@ def boss_fight(d: dict, seed, max_rounds: int = 20) -> dict:
     else:
         log.append(f"{b['name']} outlasted {d['champion']} and waddled off.")
     return {"win": bhp <= 0, "rounds": rounds, "champion": d["champion"], "cls": cls, "boss": b,
-            "hpLeft": max(0, round(hp)), "bossLeft": max(0, round(bhp)), "log": log[-12:]}
+            "hp": d["hp"], "hpLeft": max(0, round(hp)), "bossLeft": max(0, round(bhp)), "log": log[-12:], "steps": steps}
 
 
 # ---- goose raids ----
@@ -670,7 +682,7 @@ class DuckUtopia:
     # ---- what you can do ----
     def _do(self, s: dict, body: dict, player, now: int, data: dict) -> dict:
         action = body.get("action")
-        rows = self.stats.together([player]) if action in ("squad", "train", "practice", "hat", "challenge") else {}
+        rows = self.stats.together([player]) if action in ("squad", "train", "practice", "hat", "challenge", "spar") else {}
         recs = champion_records(rows.get(player.key, []))
         if action == "upgrade":
             b = body.get("building")
@@ -755,6 +767,14 @@ class DuckUtopia:
             rep = raid(squad, f"practice-{now}", data.get("raids", 0) + 6, s["levels"]["fence"])
             rep.update(practice=True, t=now)
             return {"raid": rep}
+        if action == "spar":   # a test fight in the Training Grounds: no challenge needed, nothing won or lost
+            c = body.get("champion")
+            if c not in recs:
+                raise ValueError("Only champions you've played together can fight here.")
+            d = defender(c, recs[c], self._classes().get(c, "fighter"), s["training"].get(c, 0), s["ranks"].get(c, 0))
+            rep = boss_fight(d, f"test-{now}")
+            rep.update(t=now, level=d["level"], practice=True)
+            return {"fight": rep}
         if action == "challenge":   # the Training Grounds: one defender against its boss
             c = body.get("champion")
             if c not in s["challenges"]:

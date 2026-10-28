@@ -301,15 +301,93 @@ function renderGrounds(){
     const state = d.maxRank ? 'beat every boss' : can ? `challenge ready: ${esc(b.name)} · ${b.hp} HP · ${b.atk} ATK` : 'win a game on it to earn a challenge';
     return `<div class="udef">${pic('duck-' + d.cls, 'duck pix')}${champIcon(d.champion)}
       <div class="t"><b>${esc(d.champion)}</b><span>Lv ${d.level}${d.rank ? ` (+${d.rank} from bosses)` : ''} · ${state}</span></div>
-      ${own && can ? `<button data-challenge="${esc(d.champion)}">Challenge</button>` : ''}</div>`;
+      ${own ? `<div class="ubtns">${can ? `<button data-challenge="${esc(d.champion)}">Challenge</button>` : ''}<button class="ghost" data-spar="${esc(d.champion)}" title="A practice fight against the same boss: nothing won or lost">Test fight</button></div>` : ''}</div>`;
   }).join('');
   const last = p.bossFights[0];
   $('#grounds').innerHTML = `<p class="unote" style="margin-top:0">Win a game together on one of your five defenders and it earns a challenge here (one waiting at a time).
       Each challenge is a one-on-one fight against a boss built for that defender's level: win and it goes up a level for good; win or lose, the challenge is used up.</p>
     ${p.squad.length ? rows : '<p class="uempty">No defenders yet: play a game together first.</p>'}
-    ${last ? `<h3 style="margin:14px 0 8px;font-size:14px">Latest boss fight</h3><div class="uraids">${fightReport(last, viewing)}</div>` : ''}`;
+    ${last ? `<h3 style="margin:14px 0 8px;font-size:14px">Latest boss fight</h3><div class="uraids">${fightReport(last, viewing)}</div>
+      ${last.steps ? '<div class="ubtns"><button class="ghost" data-replay>Watch it again</button></div>' : ''}` : ''}`;
 }
-$('#grounds').addEventListener('click', e=>{ const c = e.target.closest('[data-challenge]'); if(c) act({action: 'challenge', champion: c.dataset.challenge}); });
+$('#grounds').addEventListener('click', e=>{
+  const c = e.target.closest('[data-challenge]'), sp = e.target.closest('[data-spar]');
+  if(c) act({action: 'challenge', champion: c.dataset.challenge});
+  else if(sp) act({action: 'spar', champion: sp.dataset.spar});
+  else if(e.target.closest('[data-replay]')) playFight(U.players[viewing].bossFights[0]);
+});
+
+// ---- a boss fight, played back round by round (from the fight's steps) ----
+const MOVE_NOTE = {ult: 'Pentakill ultimate!', first: 'Strikes first from the shadows!', double: 'Double hit!'};
+const MOVE_POP = {ult: 'Penta ult!', first: 'Ambush!', double: 'Double!'};   // short, to fit over the duck
+let fightRun = 0;   // bumped to stop a playback (skip or close)
+function playFight(f){
+  if(!f || !f.steps) return;
+  const run = ++fightRun, box = $('#arena'), b = f.boss, calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const wait = ms => new Promise(r=>setTimeout(r, calm ? ms / 4 : ms));
+  box.innerHTML = `<div class="box uarena"><h2 id="arenaTitle">${esc(f.champion)} vs ${esc(b.name)}</h2>
+    <p>${f.practice ? 'Test fight: nothing won or lost' : 'Training Grounds challenge'} · boss level ${b.level}</p>
+    <div class="ustage">
+      <div class="ufighter" data-side="me"><b>${esc(f.champion)}</b><div class="ubar"><i></i></div><span class="hp"></span>${pic('duck-' + f.cls, 'pix spr')}</div>
+      <div class="uvs">VS</div>
+      <div class="ufighter" data-side="boss"><b>${esc(b.name)}</b><div class="ubar boss"><i></i></div><span class="hp"></span>${pic('goose-king', 'pix spr flip')}</div>
+    </div>
+    <div class="uround" aria-live="polite">Get ready…</div>
+    <ol class="ufeed"></ol>
+    <div class="uend"></div>
+    <button data-arena-skip>Skip</button></div>`;
+  box.classList.remove('hidden');
+  const side = s => box.querySelector(`[data-side="${s}"]`);
+  const setHp = (s, hp, max) => { side(s).querySelector('.ubar i').style.width = `${Math.max(0, hp / max * 100)}%`; side(s).querySelector('.hp').textContent = `${hp} / ${max} HP`; };
+  const pulse = (s, cls) => { const el = side(s); el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); };
+  const pop = (s, text, kind) => { const n = document.createElement('span'); n.className = 'upop ' + kind; n.textContent = text; side(s).appendChild(n); setTimeout(()=>n.remove(), 1000); };
+  setHp('me', f.hp, f.hp); setHp('boss', b.hp, b.hp);
+  const feed = box.querySelector('.ufeed'), round = box.querySelector('.uround');
+  const finish = () => {
+    if(run !== fightRun) return;
+    fightRun++;
+    const last = f.steps[f.steps.length - 1];
+    if(last){ setHp('me', last.hp, f.hp); setHp('boss', last.bossHp, b.hp); }
+    feed.innerHTML = f.steps.map(note).join(''); feed.scrollTop = feed.scrollHeight;
+    side(f.win ? 'boss' : 'me').classList.add('ko');
+    round.textContent = f.win ? `${b.name} is beaten!` : f.hpLeft > 0 ? `${b.name} outlasted ${f.champion}.` : `${f.champion} was knocked out.`;
+    box.querySelector('.uend').innerHTML = `<span class="${f.win ? 'won' : 'lost'}">${f.win ? (f.practice ? 'Win! (a real challenge would give a level)' : `Level up! ${esc(f.champion)} is now level ${f.level}.`)
+      : f.practice ? 'Lost. Nothing lost in a test fight.' : 'Beaten. Win another game on it to try again.'}</span>`;
+    const btn = box.querySelector('[data-arena-skip]'); btn.textContent = 'Close'; btn.dataset.arenaClose = ''; btn.focus();
+  };
+  function note(s){
+    const moves = s.moves.filter(m=>MOVE_NOTE[m]).map(m=>` <em>${MOVE_NOTE[m]}</em>`).join('');
+    return `<li><b>R${s.round}</b> ${esc(f.champion)} hits for ${s.hit}${s.heal ? `, heals ${s.heal}` : ''}${moves}${s.bite != null ? ` · ${esc(b.name)} ${s.moves.includes('honk') ? '<em>HONKS</em>' : 'bites'} for ${s.bite}` : ''}</li>`;
+  }
+  box.querySelector('[data-arena-skip]').focus();
+  (async ()=>{
+    await wait(500);
+    for(const s of f.steps){
+      if(run !== fightRun) return;
+      round.textContent = `Round ${s.round}`;
+      pulse('me', s.moves.includes('ult') ? 'ult' : 'lunge');
+      s.moves.filter(m=>MOVE_POP[m]).forEach(m=>pop('me', MOVE_POP[m], 'call'));
+      await wait(250); if(run !== fightRun) return;
+      pulse('boss', 'hurt'); pop('boss', `-${s.hit}`, 'dmg'); setHp('boss', s.bossHp, b.hp);
+      if(s.heal){ pop('me', `+${s.heal}`, 'heal'); setHp('me', s.bite != null ? Math.min(f.hp, s.hp + s.bite) : s.hp, f.hp); }
+      if(s.bite != null){
+        await wait(450); if(run !== fightRun) return;
+        const honk = s.moves.includes('honk');
+        pulse('boss', honk ? 'honk' : 'lunge'); if(honk) pop('boss', 'HONK!', 'call');
+        await wait(250); if(run !== fightRun) return;
+        pulse('me', 'hurt'); pop('me', `-${s.bite}`, 'dmg'); setHp('me', s.hp, f.hp);
+      }
+      feed.insertAdjacentHTML('beforeend', note(s)); feed.scrollTop = feed.scrollHeight;
+      await wait(650);
+    }
+    finish();
+  })();
+  box.onclick = e => {
+    if(e.target.closest('[data-arena-close]') || e.target === box){ fightRun++; box.classList.add('hidden'); box.innerHTML = ''; }
+    else if(e.target.closest('[data-arena-skip]')) finish();
+  };
+  box.onkeydown = e => { if(e.key === 'Escape'){ fightRun++; box.classList.add('hidden'); box.innerHTML = ''; } };
+}
 function renderLog(){
   const p = U.players[viewing];
   $('#log').innerHTML = p.log.length ? `<ul class="ulog">${p.log.map(l=>`<li><time>${new Date(l.t).toLocaleString(undefined, {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'})}</time><span>${esc(l.text)}</span></li>`).join('')}</ul>`
@@ -324,6 +402,7 @@ async function act(body, isPractice){
     const s = await api('/api/utopia', {...body, owner: U.players[U.me].riotId.toLowerCase()});
     if(isPractice && s.result && s.result.raid) practice = s.result.raid;
     accept(s);
+    if(s.result && s.result.fight) playFight(s.result.fight);
     if(isPractice) document.querySelector('#raids').scrollIntoView({behavior: 'smooth', block: 'start'});
   }catch(e){ $('#msg').className = 'msg err'; $('#msg').textContent = e.message; setTimeout(()=>{ $('#msg').textContent = ''; }, 5000); }
   finally{ busy = false; affordable(); }
