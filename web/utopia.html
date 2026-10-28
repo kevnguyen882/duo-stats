@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ducktopia · luggi duc</title>
+<title>Ductopia · luggi duc</title>
 <!-- pick the theme before anything draws (the same choice as the main page) -->
 <script>(function(){var t=null;try{t=localStorage.getItem('duo_theme')}catch(e){}
 if(t!=='light'&&t!=='dark')t=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';
@@ -14,31 +14,36 @@ document.documentElement.dataset.theme=t})()</script>
 <body>
 <div class="wrap">
   <a class="uback" href="/">← luggi duc</a>
-  <h1 class="utitle">Ducktopia <span>first version</span></h1>
+  <h1 class="utitle">Ductopia <span>first version</span></h1>
   <p class="sub">Build a duck city with the badges you earn together. Spawn ducks in the infirmary; your best games together earn the golden, champion and fire ducks.</p>
 
   <div class="msg" id="msg"></div>
   <div id="game" class="hidden">
     <div class="uscore" id="scoreboard"></div>
     <div class="srtools"><div class="seg" role="group" aria-label="Whose utopia" id="whose"></div></div>
-    <div class="uscene" id="town"><canvas id="scene" aria-label="Ducktopia (click the Duck Infirmary, Penta Plaza, the Champion Quarter or the Volcano Spa to visit them)" role="img"></canvas></div>
+    <div class="uscene" id="town"><canvas id="scene" aria-label="Ductopia (click the Duck Infirmary, the Spa, Penta Plaza, the Champion Quarter or the Volcano Spa to visit them)" role="img"></canvas></div>
     <!-- Penta Plaza takes the scene's place while you visit it -->
     <section class="panel uplaza hidden" id="plaza">
-      <div class="uplaza-top"><button class="ghost" data-back>← Back to Ducktopia</button><h2>Penta Plaza</h2></div>
+      <div class="uplaza-top"><button class="ghost" data-back>← Back to Ductopia</button><h2>Penta Plaza</h2></div>
       <div class="uplaza-scene"><canvas id="plazaScene" role="img"></canvas></div><p class="unote" id="plazaNote"></p></section>
     <!-- so does the Duck Infirmary -->
     <section class="panel uplaza ulab hidden" id="lab">
-      <div class="uplaza-top"><button class="ghost" data-back>← Back to Ducktopia</button><h2>Duck Infirmary</h2></div>
+      <div class="uplaza-top"><button class="ghost" data-back>← Back to Ductopia</button><h2>Duck Infirmary</h2></div>
       <div class="uplaza-scene"><canvas id="labScene" role="img"></canvas></div><p class="unote" id="labNote"></p>
       <div id="labBuild"></div></section>
     <!-- and the Champion Quarter, the defenders' lounge -->
     <section class="panel uplaza uquarter hidden" id="quarter">
-      <div class="uplaza-top"><button class="ghost" data-back>← Back to Ducktopia</button><h2>Champion Quarter</h2></div>
+      <div class="uplaza-top"><button class="ghost" data-back>← Back to Ductopia</button><h2>Champion Quarter</h2></div>
       <div class="uplaza-scene"><canvas id="quarterScene" role="img"></canvas></div><p class="unote" id="quarterNote"></p>
       <div id="quarterDetail"></div></section>
+    <!-- and the Spa, where defenders soak for perks -->
+    <section class="panel uplaza uspa hidden" id="spa">
+      <div class="uplaza-top"><button class="ghost" data-back>← Back to Ductopia</button><h2 id="spaTitle">Spa</h2></div>
+      <div class="uplaza-scene"><canvas id="spaScene" role="img"></canvas></div>
+      <div id="spaDetail"></div></section>
     <!-- and the Volcano Spa, where the fire ducks soak -->
     <section class="panel uplaza uvolcano hidden" id="volcano">
-      <div class="uplaza-top"><button class="ghost" data-back>← Back to Ducktopia</button><h2>Volcano Spa</h2></div>
+      <div class="uplaza-top"><button class="ghost" data-back>← Back to Ductopia</button><h2>Volcano Spa</h2></div>
       <div class="uplaza-scene"><canvas id="volcanoScene" role="img"></canvas></div><p class="unote" id="volcanoNote"></p>
       <div id="volcanoList"></div></section>
     <div class="ures" id="resources"></div>
@@ -47,10 +52,12 @@ document.documentElement.dataset.theme=t})()</script>
       <section class="panel"><h2>Defenders</h2><div id="squad"></div></section>
     </div>
     <section class="panel"><h2>Goose raids</h2><div id="raids"></div></section>
+    <section class="panel"><h2>Training Grounds</h2><div id="grounds"></div></section>
     <section class="panel"><h2>What's happened</h2><div id="log"></div></section>
   </div>
 </div>
 <div class="ufound hidden" id="founding" role="dialog" aria-modal="true" aria-labelledby="foundTitle"></div>
+<div class="ufound hidden" id="arena" role="dialog" aria-modal="true" aria-labelledby="arenaTitle"></div>   <!-- a boss fight, played back -->
 
 <script src="/js/utopia-art.js"></script>  <!-- placeholder pixel art (replaced by PNGs in img/utopia/) -->
 <script src="/js/utopia.js"></script>      <!-- the page -->

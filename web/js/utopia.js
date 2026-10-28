@@ -1,4 +1,4 @@
-// Ducktopia (utopia.html): the race head to head, each player's utopia as a little pixel scene, and what you can do
+// Ductopia (utopia.html): the race head to head, each player's utopia as a little pixel scene, and what you can do
 // in your own. All the rules live on the Mac running the app (duostats/utopia.py); this page shows the state, counts
 // breadcrumbs up between checks, and sends your choices. As with showcases, only your own utopia can be changed:
 // player 1 from the Mac running the app, player 2 from another computer.
@@ -22,7 +22,8 @@ const COLORS = ['var(--p1)', 'var(--p2)'];
 const BUILD_INFO = {   // building -> (art for its level, what it does)
   pond: [l=>`pond-${l >= 7 ? '3-lagoon' : l >= 4 ? '2-lake' : '1-pond'}`, (p)=>`Room for ${p.pondSpace} ducks; only ducks in the pond collect breadcrumbs`],
   bakery: [l=>`bakery-${Math.min(3, Math.max(1, Math.ceil(l / 3)))}`, (p)=>p.levels.bakery ? `+${p.levels.bakery * 25}% breadcrumbs (+25% a level)` : 'Makes breadcrumbs faster: +25% a level'],
-  spa: [l=>l >= 2 ? 'spa-2-hotsprings' : 'spa-1-spa', ()=>'Luxury and bragging rights: a big boost to your Ducktopia Score'],
+  spa: [l=>l >= 2 ? 'spa-2-hotsprings' : 'spa-1-spa', (p)=>p.levels.spa >= 2 ? 'Two pools for recovery soaks (see the Spa panel), and a big boost to your Ductopia Score'
+    : p.levels.spa ? 'A pool for recovery soaks (see the Spa panel); the Hot springs add a second' : 'Recovery soaks that refresh your defenders with perks, and a big boost to your Ductopia Score'],
   fence: [()=>'tile-mud', (p)=>p.levels.fence ? `Geese bite ${Math.round(Math.min(.06 * p.levels.fence, .5) * 100)}% softer in raids` : 'Goose defences: geese bite 6% softer a level in raids'],
 };
 const LAB = ['nests', 'incubation'];   // the Duck Infirmary's upgrades, shown in its lab rather than under Build
@@ -71,24 +72,24 @@ function accept(s){
   $('#msg').textContent = '';
   $('#game').classList.remove('hidden');
   renderPanels();
-  scene.reset(); plaza.reset(); lab.reset(); quarter.reset(); volcano.reset();
+  scene.reset(); plaza.reset(); lab.reset(); quarter.reset(); volcano.reset(); spaRoom.reset();
   founding(); checkFireDucks();
   // the main page's fire duck pop-up links here: #volcano=<player index> opens that player's Volcano Spa
   const link = !openedFromLink && /^#volcano(?:=(\d))?$/.exec(location.hash);
   if(link){
     openedFromLink = true;
-    if(link[1] && U.players[+link[1]] && +link[1] !== viewing){ viewing = +link[1]; renderPanels(); scene.reset(); plaza.reset(); lab.reset(); quarter.reset(); volcano.reset(); }
+    if(link[1] && U.players[+link[1]] && +link[1] !== viewing){ viewing = +link[1]; renderPanels(); scene.reset(); plaza.reset(); lab.reset(); quarter.reset(); volcano.reset(); spaRoom.reset(); }
     show('volcano');
   }
 }
 let openedFromLink = false;
 setInterval(load, 20000);
 // when the next duckling is due to grow, ask straight away rather than waiting for the next check
-setInterval(()=>{ if(U && U.players.some(p=>p.ducklings.length && p.ducklings[0] <= nowApp())) load(); }, 5000);
+setInterval(()=>{ if(U && U.players.some(p=>p.ducklings.length && p.ducklings[0] <= nowApp() || p.soaks.some(x=>x.until <= nowApp()))) load(); }, 5000);
 
 // ---- drawing the panels ----
 function renderPanels(){
-  renderScore(); renderWhose(); renderResources(); renderBuild(); renderLab(); renderQuarter(); renderVolcano(); renderSquad(); renderRaids(); renderLog();
+  renderScore(); renderWhose(); renderResources(); renderBuild(); renderLab(); renderQuarter(); renderVolcano(); renderSquad(); renderRaids(); renderGrounds(); renderSpa(); renderLog();
   if(tipEl && !tipEl.isConnected) showTip({target: document.body});   // what it was over has been redrawn
 }
 function renderScore(){
@@ -97,17 +98,17 @@ function renderScore(){
       <b>${esc(shortName(p.riotId))}${i === U.me ? ' (you)' : ''}</b>
       ${p.leading ? `<span class="crown">${pic('icon-crown')}Leading</span>` : ''}
       ${p.catchUp > 1 ? `<span class="boost" title="Catch-up boost: rewards from new games are multiplied while behind">${pic('icon-catchup')}×${p.catchUp}</span>` : ''}
-      <div class="n">${fmt(p.score)}</div><div class="d">Ducktopia Score · ${p.raidWins} raid${p.raidWins === 1 ? '' : 's'} won</div></div>`)
+      <div class="n">${fmt(p.score)}</div><div class="d">Ductopia Score · ${p.raidWins} raid${p.raidWins === 1 ? '' : 's'} won</div></div>`)
     .join(ps.length > 1 ? '<div class="uvs">VS</div>' : '');
   if(ps.length < 2) $('#scoreboard').style.gridTemplateColumns = '1fr';
 }
 function renderWhose(){
-  $('#whose').innerHTML = U.players.map((p, i)=>`<button data-view="${i}" class="${viewing === i ? 'on' : ''}" aria-pressed="${viewing === i}">${esc(shortName(p.riotId))}'s Ducktopia${i === U.me ? ' (you)' : ''}</button>`).join('');
+  $('#whose').innerHTML = U.players.map((p, i)=>`<button data-view="${i}" class="${viewing === i ? 'on' : ''}" aria-pressed="${viewing === i}">${esc(shortName(p.riotId))}'s Ductopia${i === U.me ? ' (you)' : ''}</button>`).join('');
 }
 $('#whose').addEventListener('click', e=>{
   const b = e.target.closest('[data-view]'); if(!b) return;
   viewing = +b.dataset.view; store.set('utopia_view', viewing); picking = false;
-  renderPanels(); scene.reset(); plaza.reset(); lab.reset(); quarter.reset(); volcano.reset();
+  renderPanels(); scene.reset(); plaza.reset(); lab.reset(); quarter.reset(); volcano.reset(); spaRoom.reset();
 });
 
 function growLeft(p){ return p.ducklings.length ? clock(p.ducklings[0] - nowApp()) : ''; }
@@ -151,7 +152,7 @@ function renderBuild(){
     const [img, what] = BUILD_INFO[b];
     return buildRow(b, x, p, own, img(Math.max(1, x.level)), what(p), x.next && x.level ? (x.next === x.name ? `level ${x.level + 1}` : x.next) : '');
   }).join('') + (own ? '' : `<p class="unote">Only ${esc(shortName(p.riotId))} can build here.</p>`)
-    + '<p class="unote">The nests and spawning ducklings are in the Duck Infirmary: click it in your Ducktopia.</p>';
+    + '<p class="unote">The nests and spawning ducklings are in the Duck Infirmary: click it in your Ductopia.</p>';
   affordable();
 }
 function renderLab(){
@@ -174,7 +175,7 @@ $('#labBuild').addEventListener('click', e=>{
 function affordable(){   // build buttons light up as breadcrumbs come in
   if(!mine()) return;
   const have = crumbsNow(U.players[viewing]);
-  document.querySelectorAll('[data-build], [data-spawn], [data-hatbuy]').forEach(b=>{ b.disabled = busy || have < +b.dataset.cost || !!b.dataset.full; });
+  document.querySelectorAll('[data-build], [data-spawn], [data-hatbuy], [data-soak]').forEach(b=>{ b.disabled = busy || have < +b.dataset.cost || !!b.dataset.full; });
 }
 $('#build').addEventListener('click', e=>{
   const b = e.target.closest('[data-build]'); if(b) act({action: 'upgrade', building: b.dataset.build});
@@ -196,11 +197,11 @@ function quarterPick(p){
 function renderQuarter(){
   const p = U.players[viewing], own = mine(), open = p.districts.includes('champion'), d = open && quarterPick(p);
   $('#quarterNote').textContent = open
-    ? 'Your five defenders rest here between goose raids. Click one to see its stats and buy it hats (just for looks). Choose who defends in the Defenders panel in your Ducktopia.'
+    ? 'Your five defenders rest here between goose raids. Click one to see its stats and buy it hats (just for looks). Choose who defends in the Defenders panel in your Ductopia.'
     : 'Opens with your first S-, S or S+ together. Your defenders will rest here between goose raids.';
   if(!d){ $('#quarterDetail').innerHTML = open ? '<p class="uempty">No defenders yet: play a game together first.</p>' : ''; return; }
   const mineHats = p.hats[d.champion] || {owned: [], on: null}, have = crumbsNow(p);
-  const rows = [['Class', CLASS_NAME[d.cls]], ['Level', `${d.level} (from ${plural(d.games, 'game')} together)`], ['Health', `${d.hp} HP`],
+  const rows = [['Class', CLASS_NAME[d.cls]], ['Level', `${d.level} (from ${plural(d.games, 'game')} together${d.rank ? `, +${d.rank} from bosses in the Training Grounds` : ''})`], ['Health', `${d.hp} HP`],
     ['Attack', `${d.atk} ATK`], ['Win rate', `${Math.round(d.winRate * 100)}%`], ['KDA', d.kda.toFixed(2)], ['Best grade', d.grade || 'none yet'],
     ['Training', d.training ? `${d.training} of 10 (+${d.training * 10}% health and attack)` : 'none yet'],
     ['Multikills', kills(d.triples, d.quadras) + (d.pentas ? `${d.triples || d.quadras ? ', ' : ''}${plural(d.pentas, 'penta')}` : '') || 'none yet'],
@@ -234,7 +235,7 @@ function renderSquad(){
   const p = U.players[viewing], own = mine();
   if(!p.squad.length){ $('#squad').innerHTML = '<p class="uempty">Defenders are champions you\'ve played together. Play a game first.</p>'; return; }
   const list = p.squad.map(d=>`<div class="udef">${pic('duck-' + d.cls, 'duck pix')}${champIcon(d.champion)}
-      <div class="t"><b>${esc(d.champion)} ${stars(d.star)}</b><span>${CLASS_NAME[d.cls]} · Lv ${d.level} · ${d.hp} HP · ${d.atk} ATK${d.training ? ` · trained ${d.training}` : ''}${d.pentas ? ' · ultimate' : ''}</span></div>
+      <div class="t"><b>${esc(d.champion)} ${stars(d.star)}</b><span>${CLASS_NAME[d.cls]} · Lv ${d.level} · ${d.hp} HP · ${d.atk} ATK${d.training ? ` · trained ${d.training}` : ''}${d.pentas ? ' · ultimate' : ''}${d.perk ? ` · <b class="uperk">♨ ${perkText(d.perk)}</b>` : ''}</span></div>
       ${own ? `<button class="ghost" data-train="${esc(d.champion)}" ${p.feathers < 2 + d.training || d.training >= 10 ? 'disabled' : ''} title="Training: +10% health and attack">Train ${pic('icon-feather')}${2 + d.training}</button>` : ''}
     </div>`).join('');
   const chosen = new Set(p.squad.map(d=>d.champion));
@@ -243,6 +244,7 @@ function renderSquad(){
       <div class="ubtns"><button data-squad-save>Save squad</button><button class="ghost" data-squad-cancel>Cancel</button></div>` : '';
   $('#squad').innerHTML = list + (own ? (picking ? picker : '<div class="ubtns"><button class="ghost" data-squad-open>Change squad</button></div>')
     : `<p class="unote">${esc(shortName(p.riotId))}'s squad. Stats come from their own games on each champion.</p>`)
+    + (p.soaks.length ? `<p class="unote">In the spa: ${p.soaks.map(x=>esc(x.champion)).join(', ')}. Fill-ins defend until they're out.</p>` : '')
     + '<p class="unote">Tanks soak up hits, mages hit groups, marksmen pierce armour, supports heal, assassins pick off flying geese. Each champion\'s stats come from your games on it: games played set its level, win rate its health, KDA its attack, S grades its stars.</p>';
 }
 $('#squad').addEventListener('click', e=>{
@@ -276,7 +278,7 @@ function report(rep, who, i){
 function renderRaids(){
   const ps = U.players, latest = ps.map(p=>p.raids[0]).filter(Boolean).sort((a, b)=>b.t - a.t)[0];
   const same = latest ? ps.map(p=>p.raids.find(r=>r.matchId === latest.matchId)) : [];
-  $('#raids').innerHTML = `<p class="unote" style="margin-top:0">After every game you play together, the same wave of geese raids both Ducktopias, and each squad of five fights it automatically.
+  $('#raids').innerHTML = `<p class="unote" style="margin-top:0">After every game you play together, the same wave of geese raids both Ductopias, and each squad of five fights it automatically.
       A win brings breadcrumbs and goose feathers; a loss lets the geese steal some breadcrumbs. Buildings are never damaged.</p>
     ${latest ? `<div class="uraids">${ps.map((p, i)=>report(same[i], shortName(p.riotId), i)).join('')}</div>`
       : '<p class="uempty">No raids yet: the first one comes after your next game together.</p>'}
@@ -284,6 +286,222 @@ function renderRaids(){
     ${U.players[U.me] && U.players[U.me].squad.length ? '<div class="ubtns"><button class="ghost" data-practice>Practice raid (nothing won or lost)</button></div>' : ''}`;
 }
 $('#raids').addEventListener('click', e=>{ if(e.target.closest('[data-practice]')) act({action: 'practice'}, true); });
+
+// ---- the Training Grounds: a win on a defender earns it a challenge; beat the boss for a level ----
+function fightReport(f, i){
+  return `<div class="urep ${f.win ? '' : 'lost'}" style="--c:${COLORS[i] || COLORS[0]}">
+    <h3><span class="who">${esc(f.champion)} vs ${esc(f.boss.name)}</span><span class="r">${f.win ? 'Level up!' : 'Beaten'}</span></h3>
+    <div class="ugeese">${pic('duck-' + f.cls)}<img class="pix ${f.win ? 'gone' : ''}" src="${artURL('goose-king')}" alt="${esc(f.boss.name)}"></div>
+    <div>${f.rounds} round${f.rounds === 1 ? '' : 's'} · boss level ${f.boss.level} · ${f.boss.hp} HP · ${f.boss.atk} ATK</div>
+    <div class="rw">${f.win ? `${esc(f.champion)} is now level ${f.level}.` : `${esc(f.boss.name)} had ${f.bossLeft} health left. Win another game on ${esc(f.champion)} to try again.`}</div>
+    <ol>${f.log.map(l=>`<li>${esc(l)}</li>`).join('')}</ol></div>`;
+}
+function renderGrounds(){
+  const p = U.players[viewing], own = mine(), waiting = c => p.challenges.filter(x=>x === c).length;
+  const rows = p.squad.map(d=>{
+    const b = d.boss, n = d.maxRank ? 0 : waiting(d.champion), can = n > 0;
+    const state = d.maxRank ? 'beat every boss' : can ? `${n > 1 ? `${n} challenges` : 'challenge'} ready: ${esc(b.name)} · ${b.hp} HP · ${b.atk} ATK` : 'win a game on it to earn a challenge';
+    return `<div class="udef">${pic('duck-' + d.cls, 'duck pix')}${champIcon(d.champion)}
+      <div class="t"><b>${esc(d.champion)}</b><span>Lv ${d.level}${d.rank ? ` (+${d.rank} from bosses)` : ''} · ${state}</span></div>
+      ${own ? `<div class="ubtns">${can ? `<button data-challenge="${esc(d.champion)}">Challenge${n > 1 ? ` (${n})` : ''}</button>` : ''}<button class="ghost" data-spar="${esc(d.champion)}" title="A practice fight against the same boss: nothing won or lost">Test fight</button></div>` : ''}</div>`;
+  }).join('');
+  const last = p.bossFights[0];
+  $('#grounds').innerHTML = `<p class="unote" style="margin-top:0">Win a game together on one of your five defenders and it earns a challenge here. Challenges add up, so two wins on the same defender mean two fights.
+      Each challenge is a one-on-one fight against a boss built for that defender's level: win and it goes up a level for good; win or lose, the challenge is used up.</p>
+    ${p.squad.length ? rows : '<p class="uempty">No defenders yet: play a game together first.</p>'}
+    ${last ? `<h3 style="margin:14px 0 8px;font-size:14px">Latest boss fight</h3><div class="uraids">${fightReport(last, viewing)}</div>
+      ${last.steps ? '<div class="ubtns"><button class="ghost" data-replay>Watch it again</button></div>' : ''}` : ''}`;
+}
+$('#grounds').addEventListener('click', e=>{
+  const c = e.target.closest('[data-challenge]'), sp = e.target.closest('[data-spar]');
+  if(c) act({action: 'challenge', champion: c.dataset.challenge});
+  else if(sp) act({action: 'spar', champion: sp.dataset.spar});
+  else if(e.target.closest('[data-replay]')) playFight(U.players[viewing].bossFights[0]);
+});
+
+// ---- the Spa: recovery soaks with bath salts at three temperatures; fire ducks heat the water ----
+const timeLeft = ms => ms >= 3600000 ? `${Math.floor(ms / 3600000)}h ${String(Math.floor(ms / 60000) % 60).padStart(2, '0')}m` : clock(ms);
+const PERK_WHAT = {eucalyptus: 'health', chili: 'attack', golden: 'raid rewards'};
+const perkText = k => `+${Math.round(k.power * 100)}% ${PERK_WHAT[k.salt]}`;
+const SALT_ART = {eucalyptus: 'duck-fighter', chili: 'duck-fire', golden: 'duck-golden'};
+let soakPick = {champion: null, salt: 'eucalyptus', temp: 'warm'};
+function renderSpa(){
+  const p = U.players[viewing], own = mine(), pools = p.levels.spa;
+  $('#spaTitle').textContent = pools >= 2 ? 'Hot springs' : 'Spa';
+  const heatNote = `${plural(p.fire, 'fire duck')} from the Volcano Spa heat the water: every perk ${p.heat ? `is <b>${Math.round(p.heat * 100)}%</b> stronger` : 'gets stronger with each one'} (+5% a fire duck, up to +50%).`;
+  if(!pools){
+    $('#spaDetail').innerHTML = `<p class="unote">Build the Spa (in Build, back in your Ductopia) to open recovery soaks: a defender soaks with bath salts, sits out raids while it does,
+      and comes out with a perk for its next goose raid or boss fight. Hotter water costs more and does more.</p><p class="unote">${heatNote}</p>`;
+    return;
+  }
+  const busyC = new Set([...p.soaks.map(x=>x.champion), ...Object.keys(p.perks)]);
+  const refreshed = Object.entries(p.perks);
+  let html = `<p class="unote">A soak takes a defender out of raids for a while; it comes out refreshed with its salt's perk, which is used up by its next goose raid or boss fight
+      (golden salts: its next raid). ${pools < 2 ? 'The Hot springs add a second pool.' : ''}</p>
+    ${p.soaks.length ? `<h3 class="uspah">Soaking</h3>${p.soaks.map(x=>`<div class="udef">${pic(SALT_ART[x.salt], 'duck pix')}${champIcon(x.champion)}<div class="t"><b>${esc(x.champion)}</b><span>${U.temps.find(t=>t.id === x.temp).name} · ${esc(U.salts.find(s=>s.id === x.salt).name.toLowerCase())} · ${perkText(x)} · out in <strong data-until="${x.until}">${timeLeft(x.until - nowApp())}</strong></span></div></div>`).join('')}` : ''}
+    ${refreshed.length ? `<h3 class="uspah">Refreshed</h3>${refreshed.map(([c, k])=>`<div class="udef">${pic(SALT_ART[k.salt], 'duck pix')}${champIcon(c)}<div class="t"><b>${esc(c)}</b><span>${perkText(k)} · for its next ${k.salt === 'golden' ? 'raid win' : 'raid or boss fight'}</span></div></div>`).join('')}` : ''}`;
+  if(own){
+    const squad = p.squad.map(d=>d.champion), others = p.champions.map(c=>c.champion).filter(c=>!squad.includes(c));
+    const free = [...squad, ...others].filter(c=>!busyC.has(c));
+    if(!free.includes(soakPick.champion)) soakPick.champion = free[0] || null;
+    const temp = U.temps.find(t=>t.id === soakPick.temp), full = p.soaks.length >= pools;
+    const power = (salt, t) => Math.round(t.power * (salt === 'golden' ? 2 : 1) * (1 + p.heat) * 100);
+    const next = Math.min(...p.soaks.map(x=>x.until));
+    html += `<h3 class="uspah">New soak</h3>${full ? `<p class="uempty">Every pool is taken: the next one is free in <b data-until="${next}">${timeLeft(next - nowApp())}</b>.</p>` : free.length ? `
+      <label class="usel">Defender <select data-soak-champ>${free.map(c=>`<option ${c === soakPick.champion ? 'selected' : ''} value="${esc(c)}">${esc(c)}${squad.includes(c) ? '' : ' (not defending)'}</option>`).join('')}</select></label>
+      <div class="uchoice" role="radiogroup" aria-label="Bath salts">${U.salts.map(s=>`<button class="ghost ${s.id === soakPick.salt ? 'on' : ''}" role="radio" aria-checked="${s.id === soakPick.salt}" data-salt="${s.id}">${pic(SALT_ART[s.id])}<b>${esc(s.name)}</b><span>${esc(s.does)}</span></button>`).join('')}</div>
+      <div class="uchoice temps" role="radiogroup" aria-label="Temperature">${U.temps.map(t=>`<button class="ghost ${t.id} ${t.id === soakPick.temp ? 'on' : ''}" role="radio" aria-checked="${t.id === soakPick.temp}" data-temp="${t.id}"><b>${esc(t.name)}</b><span>+${power(soakPick.salt, t)}% ${PERK_WHAT[soakPick.salt]}</span><span>${pic('icon-breadcrumb')}${fmt(t.cost)} · ${timeLeft(t.minutes * 60000)}</span></button>`).join('')}</div>
+      <div class="ubtns"><button data-soak data-cost="${temp.cost}">Start soak ${pic('icon-breadcrumb')}${fmt(temp.cost)}</button></div>`
+      : '<p class="uempty">Every defender is soaking or already refreshed.</p>'}`;
+  }
+  $('#spaDetail').innerHTML = html;
+  affordable();
+}
+$('#spaDetail').addEventListener('click', e=>{
+  const s = e.target.closest('[data-salt]'), t = e.target.closest('[data-temp]');
+  if(s){ soakPick.salt = s.dataset.salt; renderSpa(); }
+  else if(t){ soakPick.temp = t.dataset.temp; renderSpa(); }
+  else if(e.target.closest('[data-soak]')) act({action: 'soak', ...soakPick});
+});
+$('#spaDetail').addEventListener('change', e=>{ if(e.target.matches('[data-soak-champ]')) soakPick.champion = e.target.value; });
+
+// the Spa's scene: its pools, coloured by temperature, with the soaking ducks bobbing in the steam, and the fire ducks
+// from the Volcano Spa along the back, heating the water
+const SPW = 480, SPH = 200, POOL_WATER = {warm: ['#74c0fc', '#4dabf7'], hot: ['#ffc078', '#ff922b'], scalding: ['#ff8787', '#fa5252']};
+const spaRoom = (()=>{
+  const cv = $('#spaScene'), g = cv.getContext('2d');
+  function size(){   // (also called when the spa is shown)
+    const css = cv.clientWidth || SPW, dpr = window.devicePixelRatio || 1;
+    cv.width = Math.round(css * dpr); cv.height = Math.round(css * dpr * SPH / SPW);
+  }
+  function reset(){
+    if(!U) return;
+    const p = U.players[viewing];
+    cv.setAttribute('aria-label', !p.levels.spa ? 'The Spa: not built yet'
+      : `The Spa: ${p.soaks.length ? p.soaks.map(x=>`${x.champion} soaking`).join(', ') : 'empty pools'}`);
+  }
+  function label(text, x, y, color = '#fff'){
+    g.font = 'bold 9px ui-monospace, Menlo, monospace'; g.textAlign = 'center'; g.textBaseline = 'top';
+    g.lineWidth = 3; g.strokeStyle = 'rgba(16,24,32,.9)'; g.strokeText(text, x, y); g.fillStyle = color; g.fillText(text, x, y);
+  }
+  function draw(now){
+    requestAnimationFrame(draw);
+    if(!U || view !== 'spa') return;
+    const p = U.players[viewing], k = cv.width / SPW, pools = Math.max(1, p.levels.spa);
+    g.setTransform(k, 0, 0, k, 0, 0); g.imageSmoothingEnabled = false;
+    // stone floor, and a back wall where the fire ducks sit
+    for(let y = 0; y < SPH; y += 32) for(let x = 0; x < SPW; x += 32) g.drawImage(art('tile-plaza'), x, y, 32, 32);
+    g.fillStyle = '#5c4b3f'; g.fillRect(0, 0, SPW, 34); g.fillStyle = '#3d3029'; g.fillRect(0, 34, SPW, 4);
+    const fire = Math.min(p.fire, 12);
+    for(let i = 0; i < fire; i++) g.drawImage(art('duck-fire'), SPW / 2 - fire * 10 + i * 20 + 2, 12 + Math.round(Math.sin(now / 500 + i) * 1), 16, 16);
+    label(p.fire ? `${plural(p.fire, 'fire duck')} heating the water · perks +${Math.round(p.heat * 100)}%` : 'No fire ducks yet: an S+ brings one to heat the water', SPW / 2, 40, '#ffd8a8');
+    g.drawImage(art('lounge-plant'), 4, 132, 48, 48); g.drawImage(art('lounge-plant'), SPW - 52, 132, 48, 48);
+    // the pools
+    const pw = pools >= 2 ? 170 : 220, gap = 40, x0 = (SPW - pools * pw - (pools - 1) * gap) / 2;
+    for(let i = 0; i < pools; i++){
+      const x = x0 + i * (pw + gap), y = 70, ph = 100, soak = p.levels.spa ? p.soaks[i] : null;
+      const [hi, lo] = soak ? POOL_WATER[soak.temp] : ['#a5d8ff', '#74c0fc'];
+      g.fillStyle = '#868e96'; g.fillRect(x - 6, y - 6, pw + 12, ph + 12);   // the stone rim
+      g.fillStyle = '#ced4da'; g.fillRect(x - 6, y - 6, pw + 12, 3);
+      const w = g.createLinearGradient(0, y, 0, y + ph); w.addColorStop(0, hi); w.addColorStop(1, lo);
+      g.fillStyle = w; g.fillRect(x, y, pw, ph);
+      g.fillStyle = 'rgba(255,255,255,.35)';   // ripples
+      for(let r = 0; r < 4; r++){ const rx = x + ((now / 30 + r * 53) % (pw - 24)), ry = y + 14 + r * 22; g.fillRect(Math.round(rx), ry, 18, 2); }
+      if(!soak){ label(p.levels.spa ? 'Empty pool' : '', x + pw / 2, y + ph / 2 - 4, '#e7f5ff'); continue; }
+      // steam, more of it the hotter the water
+      const puffs = {warm: 3, hot: 6, scalding: 10}[soak.temp];
+      for(let s = 0; s < puffs; s++){
+        const t = (now / 2200 + s / puffs) % 1, sx = x + 16 + ((s * 37) % (pw - 32)) + Math.sin(now / 600 + s) * 4;
+        g.globalAlpha = .55 * (1 - t); g.fillStyle = '#fff'; g.fillRect(Math.round(sx), Math.round(y + 40 - t * 60), 6, 6); g.globalAlpha = 1;
+      }
+      const bob = Math.sin(now / 650 + i * 2) * 2;
+      duckWithHat(g, (p.squad.find(d=>d.champion === soak.champion) || {}).cls || (p.champions.find(c=>c.champion === soak.champion) || {}).cls || 'fighter',
+                  hatOf(p, soak.champion), x + pw / 2 - 16, y + 30 + bob, 32);
+      g.fillStyle = 'rgba(255,255,255,.5)'; g.fillRect(x + pw / 2 - 18, y + 58 + Math.round(bob), 36, 2);   // where the water meets the duck
+      label(`${soak.champion} · ${perkText(soak)}`, x + pw / 2, y + 68);
+      label(`${U.temps.find(t=>t.id === soak.temp).name} · out in ${timeLeft(soak.until - nowApp())}`, x + pw / 2, y + 80, '#fff3bf');
+    }
+    if(!p.levels.spa){
+      g.fillStyle = 'rgba(16,20,28,.55)'; g.fillRect(0, 0, SPW, SPH);
+      label('🔒', SPW / 2, 80); label('Build the Spa to open the pools', SPW / 2, 98, '#e7f5ff');
+    }
+  }
+  window.addEventListener('resize', size);
+  size(); requestAnimationFrame(draw);
+  return {reset, size};
+})();
+
+// ---- a boss fight, played back round by round (from the fight's steps) ----
+const MOVE_NOTE = {ult: 'Pentakill ultimate!', first: 'Strikes first from the shadows!', double: 'Double hit!'};
+const MOVE_POP = {ult: 'Penta ult!', first: 'Ambush!', double: 'Double!'};   // short, to fit over the duck
+let fightRun = 0;   // bumped to stop a playback (skip or close)
+function playFight(f){
+  if(!f || !f.steps) return;
+  const run = ++fightRun, box = $('#arena'), b = f.boss, calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const wait = ms => new Promise(r=>setTimeout(r, calm ? ms / 4 : ms));
+  box.innerHTML = `<div class="box uarena"><h2 id="arenaTitle">${esc(f.champion)} vs ${esc(b.name)}</h2>
+    <p>${f.practice ? 'Test fight: nothing won or lost' : 'Training Grounds challenge'} · boss level ${b.level}${f.perk && f.perk.salt !== 'golden' ? ` · ♨ ${perkText(f.perk)}` : ''}</p>
+    <div class="ustage">
+      <div class="ufighter" data-side="me"><b>${esc(f.champion)}</b><div class="ubar"><i></i></div><span class="hp"></span>${pic('duck-' + f.cls, 'pix spr')}</div>
+      <div class="uvs">VS</div>
+      <div class="ufighter" data-side="boss"><b>${esc(b.name)}</b><div class="ubar boss"><i></i></div><span class="hp"></span>${pic('goose-king', 'pix spr flip')}</div>
+    </div>
+    <div class="uround" aria-live="polite">Get ready…</div>
+    <ol class="ufeed"></ol>
+    <div class="uend"></div>
+    <button data-arena-skip>Skip</button></div>`;
+  box.classList.remove('hidden');
+  const side = s => box.querySelector(`[data-side="${s}"]`);
+  const setHp = (s, hp, max) => { side(s).querySelector('.ubar i').style.width = `${Math.max(0, hp / max * 100)}%`; side(s).querySelector('.hp').textContent = `${hp} / ${max} HP`; };
+  const pulse = (s, cls) => { const el = side(s); el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); };
+  const pop = (s, text, kind) => { const n = document.createElement('span'); n.className = 'upop ' + kind; n.textContent = text; side(s).appendChild(n); setTimeout(()=>n.remove(), 1000); };
+  setHp('me', f.hp, f.hp); setHp('boss', b.hp, b.hp);
+  const feed = box.querySelector('.ufeed'), round = box.querySelector('.uround');
+  const finish = () => {
+    if(run !== fightRun) return;
+    fightRun++;
+    const last = f.steps[f.steps.length - 1];
+    if(last){ setHp('me', last.hp, f.hp); setHp('boss', last.bossHp, b.hp); }
+    feed.innerHTML = f.steps.map(note).join(''); feed.scrollTop = feed.scrollHeight;
+    side(f.win ? 'boss' : 'me').classList.add('ko');
+    round.textContent = f.win ? `${b.name} is beaten!` : f.hpLeft > 0 ? `${b.name} outlasted ${f.champion}.` : `${f.champion} was knocked out.`;
+    box.querySelector('.uend').innerHTML = `<span class="${f.win ? 'won' : 'lost'}">${f.win ? (f.practice ? 'Win! (a real challenge would give a level)' : `Level up! ${esc(f.champion)} is now level ${f.level}.`)
+      : f.practice ? 'Lost. Nothing lost in a test fight.' : 'Beaten. Win another game on it to try again.'}</span>`;
+    const btn = box.querySelector('[data-arena-skip]'); btn.textContent = 'Close'; btn.dataset.arenaClose = ''; btn.focus();
+  };
+  function note(s){
+    const moves = s.moves.filter(m=>MOVE_NOTE[m]).map(m=>` <em>${MOVE_NOTE[m]}</em>`).join('');
+    return `<li><b>R${s.round}</b> ${esc(f.champion)} hits for ${s.hit}${s.heal ? `, heals ${s.heal}` : ''}${moves}${s.bite != null ? ` · ${esc(b.name)} ${s.moves.includes('honk') ? '<em>HONKS</em>' : 'bites'} for ${s.bite}` : ''}</li>`;
+  }
+  box.querySelector('[data-arena-skip]').focus();
+  (async ()=>{
+    await wait(500);
+    for(const s of f.steps){
+      if(run !== fightRun) return;
+      round.textContent = `Round ${s.round}`;
+      pulse('me', s.moves.includes('ult') ? 'ult' : 'lunge');
+      s.moves.filter(m=>MOVE_POP[m]).forEach(m=>pop('me', MOVE_POP[m], 'call'));
+      await wait(250); if(run !== fightRun) return;
+      pulse('boss', 'hurt'); pop('boss', `-${s.hit}`, 'dmg'); setHp('boss', s.bossHp, b.hp);
+      if(s.heal){ pop('me', `+${s.heal}`, 'heal'); setHp('me', s.bite != null ? Math.min(f.hp, s.hp + s.bite) : s.hp, f.hp); }
+      if(s.bite != null){
+        await wait(450); if(run !== fightRun) return;
+        const honk = s.moves.includes('honk');
+        pulse('boss', honk ? 'honk' : 'lunge'); if(honk) pop('boss', 'HONK!', 'call');
+        await wait(250); if(run !== fightRun) return;
+        pulse('me', 'hurt'); pop('me', `-${s.bite}`, 'dmg'); setHp('me', s.hp, f.hp);
+      }
+      feed.insertAdjacentHTML('beforeend', note(s)); feed.scrollTop = feed.scrollHeight;
+      await wait(650);
+    }
+    finish();
+  })();
+  box.onclick = e => {
+    if(e.target.closest('[data-arena-close]') || e.target === box){ fightRun++; box.classList.add('hidden'); box.innerHTML = ''; }
+    else if(e.target.closest('[data-arena-skip]')) finish();
+  };
+  box.onkeydown = e => { if(e.key === 'Escape'){ fightRun++; box.classList.add('hidden'); box.innerHTML = ''; } };
+}
 function renderLog(){
   const p = U.players[viewing];
   $('#log').innerHTML = p.log.length ? `<ul class="ulog">${p.log.map(l=>`<li><time>${new Date(l.t).toLocaleString(undefined, {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'})}</time><span>${esc(l.text)}</span></li>`).join('')}</ul>`
@@ -298,6 +516,7 @@ async function act(body, isPractice){
     const s = await api('/api/utopia', {...body, owner: U.players[U.me].riotId.toLowerCase()});
     if(isPractice && s.result && s.result.raid) practice = s.result.raid;
     accept(s);
+    if(s.result && s.result.fight) playFight(s.result.fight);
     if(isPractice) document.querySelector('#raids').scrollIntoView({behavior: 'smooth', block: 'start'});
   }catch(e){ $('#msg').className = 'msg err'; $('#msg').textContent = e.message; setTimeout(()=>{ $('#msg').textContent = ''; }, 5000); }
   finally{ busy = false; affordable(); }
@@ -327,6 +546,7 @@ setInterval(()=>{
   const p = U.players[viewing], c = $('#crumbs'), g = $('#grow');
   if(c) c.textContent = fmt(crumbsNow(p));
   if(g) g.textContent = growLeft(p);
+  document.querySelectorAll('[data-until]').forEach(el=>{ el.textContent = timeLeft(+el.dataset.until - nowApp()); });
   affordable();
 }, 250);
 
@@ -416,7 +636,7 @@ const scene = (()=>{
     // bakery and spa (an empty plot until built)
     if(p.levels.bakery) { sprite(BUILD_INFO.bakery[0](p.levels.bakery), 404, 6, 64); label(`Bakery ${p.levels.bakery}`, 436, 70); }
     else lot(404, 6, 'Bakery plot');
-    if(p.levels.spa) { sprite(BUILD_INFO.spa[0](p.levels.spa), 404, 90, 64); label(p.levels.spa >= 2 ? 'Hot springs' : 'Spa', 436, 154); }
+    if(p.levels.spa) { sprite(BUILD_INFO.spa[0](p.levels.spa), 404, 90, 64); label(`${p.levels.spa >= 2 ? 'Hot springs' : 'Spa'}${p.soaks.length ? ` ♨${p.soaks.length}` : ''}`, 436, 154); }
     else lot(404, 90, 'Spa plot');
     // districts: unlocked by real achievements only
     const D = [['penta', 'district-penta-plaza', 'Plaza', 'a penta', p.golden, 'duck-golden'],   // short: they sit close together
@@ -429,8 +649,8 @@ const scene = (()=>{
       else { label('🔒', x + 24, y + 16); label(`needs ${need}`, x + 24, y + 50, 'center', '#dee2e6'); }
     });
   }
-  // clicking the Duck Infirmary or a district visits it
-  const SPOTS = [{view: 'lab', x: 8, y: 6, w: 64, h: 76}, {view: 'plaza', x: 322, y: 196, w: 48, h: 66}, {view: 'quarter', x: 376, y: 196, w: 48, h: 66},
+  // clicking the Duck Infirmary, the Spa or a district visits it
+  const SPOTS = [{view: 'lab', x: 8, y: 6, w: 64, h: 76}, {view: 'spa', x: 404, y: 90, w: 64, h: 74}, {view: 'plaza', x: 322, y: 196, w: 48, h: 66}, {view: 'quarter', x: 376, y: 196, w: 48, h: 66},
                  {view: 'volcano', x: 430, y: 196, w: 48, h: 66}];
   const spotAt = e => {
     const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * W / r.width, y = (e.clientY - r.top) * H / r.height;
@@ -870,7 +1090,7 @@ function renderVolcano(){
 
 // ---- a pop-up when a new fire duck arrives (either of you). The main page shows the same one; whichever page sees it
 // first marks it seen in this browser, so it only pops up once.
-const FIRE_SEEN = 'ducktopia_fire_seen';
+const FIRE_SEEN = 'ducktopia_fire_seen';   // its name from before Ductopia was renamed, so seen ones stay seen
 function checkFireDucks(){
   let seen; try{ seen = JSON.parse(store.get(FIRE_SEEN) || '{}') || {}; }catch(e){ seen = {}; }
   const gained = [];
@@ -893,14 +1113,14 @@ function checkFireDucks(){
     if(e.target.closest('.toastx')) return close();
     const v = e.target.closest('[data-visit-volcano]'); if(!v) return;
     viewing = +v.dataset.visitVolcano; store.set('utopia_view', viewing);
-    renderPanels(); scene.reset(); plaza.reset(); lab.reset(); quarter.reset(); volcano.reset();
+    renderPanels(); scene.reset(); plaza.reset(); lab.reset(); quarter.reset(); volcano.reset(); spaRoom.reset();
     show('volcano'); close(); $('#volcano').scrollIntoView({behavior: 'smooth', block: 'start'});
   });
 }
 
 // Penta Plaza, the Duck Infirmary, the Champion Quarter and the Volcano Spa take the place of the utopia scene,
 // each with a button back
-const VIEWS = {town: () => scene, plaza: () => plaza, lab: () => lab, quarter: () => quarter, volcano: () => volcano};
+const VIEWS = {town: () => scene, plaza: () => plaza, lab: () => lab, quarter: () => quarter, volcano: () => volcano, spa: () => spaRoom};
 let view = 'town';
 function show(v){
   view = v;
@@ -925,10 +1145,10 @@ function founding(){
                 ['duck-fire', f.fire, 'S+ grades lit up the Volcano Spa']].filter(r=>r[1] > 0);
   const box = $('#founding');
   box.innerHTML = `<div class="box"><canvas></canvas><h2 id="foundTitle">Founding Day</h2>
-    <p>${f.games} games together, replayed. Your Ducktopia starts from your history.</p>
+    <p>${f.games} games together, replayed. Your Ductopia starts from your history.</p>
     <ul>${rows.map(([img, n, text], i)=>`<li style="animation-delay:${300 + i * 450}ms">${pic(img)}<b>${n}</b><span>${text}</span></li>`).join('')}</ul>
     <p>New ducks are spawned in the Duck Infirmary and grow in its nests, then move to the pond to collect breadcrumbs.</p>
-    <button data-found-close>Enter your Ducktopia</button></div>`;
+    <button data-found-close>Enter your Ductopia</button></div>`;
   box.classList.remove('hidden');
   box.querySelector('button').focus();
   // ducks raining down behind the list

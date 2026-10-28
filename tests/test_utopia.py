@@ -2,7 +2,8 @@ import unittest
 
 from duostats import utopia
 from duostats.games import Player
-from duostats.utopia import (DuckUtopia, advance, apply_badges, boost_breakdown, catch_up, crumb_rate, goose_wave,
+from duostats.utopia import (DuckUtopia, advance, apply_badges, boost_breakdown, boss, boss_fight, catch_up, crumb_rate,
+                             defender, goose_wave, heat, perk_power, with_perk,
                              grow_minutes, migrate, new_utopia, penta_plaza, raid, score, spawn_cost, upgrade_cost,
                              first_graded, late_grades, volcano_spa)
 from tests.helpers import TempStorageCase
@@ -190,6 +191,54 @@ class RaidTests(unittest.TestCase):
         self.assertTrue(any("ultimate" in line for line in rep["log"]))
 
 
+class TrainingGroundsTests(unittest.TestCase):
+    def champ(self, games=10, wins=5, cls="fighter", rank=0, **over):
+        rec = {"games": games, "wins": wins, "kills": 9, "deaths": 3, "assists": 0, "triples": 0, "quadras": 0,
+               "pentas": 0, "grade": ""}
+        rec.update(over)
+        return defender("Garen", rec, cls, 0, rank)
+
+    def test_levels_won_add_to_the_level_and_bosses_get_tougher(self):
+        self.assertEqual(self.champ(rank=3)["level"], self.champ()["level"] + 3)
+        self.assertGreater(boss(self.champ(rank=3))["hp"], boss(self.champ())["hp"])
+        self.assertEqual(boss(self.champ())["name"], "Sergeant Honk")
+        self.assertEqual(boss(self.champ(rank=7))["name"], "The Goose King")
+
+    def test_boss_fight_records_each_round_for_the_page(self):
+        f = boss_fight(self.champ(pentas=1), 5)
+        self.assertEqual([s["round"] for s in f["steps"]], list(range(1, f["rounds"] + 1)))
+        self.assertIn("ult", f["steps"][1]["moves"])
+        last = f["steps"][-1]
+        self.assertEqual((last["bossHp"], last["hp"]), (f["bossLeft"], f["hpLeft"]))
+        self.assertEqual("bite" in last, not f["win"])   # a beaten boss doesn't bite back
+
+    def test_boss_fight_is_repeatable_and_fair(self):
+        self.assertEqual(boss_fight(self.champ(), 5), boss_fight(self.champ(), 5))
+        wins = lambda d: sum(boss_fight(d, i)["win"] for i in range(200))
+        self.assertGreater(wins(self.champ()), 100)            # an average champion usually beats its first boss ...
+        self.assertLess(wins(self.champ(rank=6)), 100)         # ... but the bosses higher up are a real test
+        self.assertGreater(wins(self.champ(wins=8, grade="S")), wins(self.champ()))   # better games, better odds
+
+
+class SpaTests(unittest.TestCase):
+    def test_hotter_is_stronger_and_fire_ducks_heat_it_up_to_a_limit(self):
+        s = new_utopia("A#1", 0)
+        self.assertEqual([perk_power(s, "chili", k) for k in ("warm", "hot", "scalding")], [0.15, 0.3, 0.5])
+        self.assertEqual(perk_power(s, "golden", "warm"), 0.3)   # golden salts: twice as much, in raid rewards
+        s["fire"] = 4
+        self.assertEqual((heat(s), perk_power(s, "chili", "hot")), (0.2, 0.36))
+        s["fire"] = 50
+        self.assertEqual(heat(s), utopia.MAX_HEAT)
+
+    def test_perks_make_the_defender_stronger_not_its_boss(self):
+        rec = {"games": 10, "wins": 5, "kills": 9, "deaths": 3, "assists": 0, "triples": 0, "quadras": 0, "pentas": 0, "grade": ""}
+        d = defender("Garen", rec, "fighter", 0)
+        strong = with_perk(d, {"salt": "eucalyptus", "temp": "hot", "power": 0.3})
+        self.assertEqual(strong["hp"], round(d["hp"] * 1.3))
+        self.assertEqual(with_perk(d, {"salt": "chili", "temp": "warm", "power": 0.15})["atk"], round(d["atk"] * 1.15, 1))
+        self.assertEqual(boss(strong), boss(d))
+
+
 class FakeTracker:
     def __init__(self, players):
         self._players = players
@@ -343,6 +392,110 @@ class GameTests(TempStorageCase):
         self.assertTrue(out["result"]["raid"]["practice"])
         after = out["players"][0]
         self.assertEqual((after["crumbs"], after["feathers"], after["raids"]), (before["crumbs"], before["feathers"], []))
+
+    def test_each_win_on_a_defender_earns_a_boss_challenge(self):
+        self.game.state(viewer=False, now=1000)
+        self.assertEqual(self.game.state(viewer=False, now=1000)["players"][0]["challenges"], [])   # history doesn't count
+        challenge = lambda: self.game.act({"owner": "duo one#na1", "action": "challenge", "champion": "Annie"}, viewer=False, now=5000)
+        with self.assertRaises(ValueError):   # no win yet
+            challenge()
+        self.rows["duo one#na1"][:0] = [row("4", 4), row("3", 3)]   # two wins on Annie: two challenges
+        self.assertEqual(self.game.state(viewer=False, now=2000)["players"][0]["challenges"], ["Annie", "Annie"])
+        before = self.game.state(viewer=False, now=5000)["players"][0]["squad"][0]
+        out = challenge()
+        fight, p = out["result"]["fight"], out["players"][0]
+        self.assertEqual(p["challenges"], ["Annie"])   # one used up, win or lose; the other still waits
+        self.assertEqual(p["bossFights"][0]["boss"]["name"], fight["boss"]["name"])
+        self.assertEqual(p["ranks"].get("Annie", 0), 1 if fight["win"] else 0)
+        self.assertEqual(p["squad"][0]["level"], before["level"] + (1 if fight["win"] else 0))
+        self.assertEqual(challenge()["players"][0]["challenges"], [])   # the second fight
+        with self.assertRaises(ValueError):   # and no third
+            challenge()
+
+    def test_no_challenges_once_every_boss_is_beaten(self):
+        self.game.state(viewer=False, now=1000)
+        data = self.game._load()
+        data["players"]["duo one#na1"]["ranks"]["Annie"] = utopia.MAX_RANK
+        self.storage.write_json(self.game.path, data)
+        self.rows["duo one#na1"].insert(0, row("3", 3))
+        self.assertEqual(self.game.state(viewer=False, now=2000)["players"][0]["challenges"], [])
+
+    def test_a_test_fight_needs_no_challenge_and_changes_nothing(self):
+        before = self.game.state(viewer=False, now=1000)["players"][0]
+        out = self.game.act({"owner": "duo one#na1", "action": "spar", "champion": "Annie"}, viewer=False, now=1000)
+        fight, after = out["result"]["fight"], out["players"][0]
+        self.assertTrue(fight["practice"])
+        self.assertEqual((after["ranks"], after["bossFights"], after["challenges"], after["crumbs"]),
+                         (before["ranks"], [], [], before["crumbs"]))
+        with self.assertRaises(ValueError):   # not a champion played together
+            self.game.act({"owner": "duo one#na1", "action": "spar", "champion": "Teemo"}, viewer=False, now=1000)
+
+    def test_a_loss_or_a_champion_off_the_squad_earns_no_challenge(self):
+        self.game.state(viewer=False, now=1000)
+        # five defenders: Annie, then the most played; Zed, played once, is left out
+        self.rows["duo one#na1"][:0] = [row(f"{c}{i}", 10, win=False, champion=c) for c in "BCDE" for i in range(3)]
+        self.rows["duo one#na1"][:0] = [row("Z", 20, champion="Zed"), row("A", 20, win=False)]
+        p = self.game.state(viewer=False, now=2000)["players"][0]
+        self.assertNotIn("Zed", [d["champion"] for d in p["squad"]])
+        self.assertEqual(p["challenges"], [])
+
+    def spa(self, level=1, crumbs=10000):
+        self.game.state(viewer=False, now=1000)
+        data = self.game._load()
+        s = data["players"]["duo one#na1"]
+        s["levels"]["spa"], s["crumbs"] = level, crumbs
+        self.storage.write_json(self.game.path, data)
+
+    def soak(self, champion="Annie", salt="chili", temp="hot", now=1000):
+        return self.game.act({"owner": "duo one#na1", "action": "soak", "champion": champion, "salt": salt, "temp": temp},
+                             viewer=False, now=now)
+
+    def test_a_soak_costs_breadcrumbs_and_takes_the_defender_out_of_the_squad(self):
+        with self.assertRaises(ValueError):   # no spa yet
+            self.soak()
+        self.spa()
+        p = self.soak()["players"][0]
+        self.assertAlmostEqual(p["crumbs"], 10000 - utopia.TEMPS["hot"][1])
+        self.assertEqual([x["champion"] for x in p["soaks"]], ["Annie"])
+        self.assertNotIn("Annie", [d["champion"] for d in p["squad"]])
+        with self.assertRaises(ValueError):   # one pool, and it's taken
+            self.soak(champion="Garen")
+        with self.assertRaises(ValueError):   # can't fight while soaking
+            self.game.act({"owner": "duo one#na1", "action": "spar", "champion": "Annie"}, viewer=False, now=1000)
+        p = self.game.state(viewer=False, now=1000 + 120 * MIN)["players"][0]
+        self.assertEqual((p["soaks"], p["perks"]["Annie"]["salt"]), ([], "chili"))
+        annie = next(d for d in p["squad"] if d["champion"] == "Annie")   # back, and stronger
+        self.assertEqual(annie["atk"], round(annie["baseAtk"] * 1.3, 1))
+        with self.assertRaises(ValueError):   # already refreshed
+            self.soak(now=1000 + 120 * MIN)
+
+    def test_the_hot_springs_have_two_pools(self):
+        self.rows["duo one#na1"].append(row("0", 0, champion="Garen"))
+        self.spa(level=2)
+        self.soak()
+        self.assertEqual(len(self.soak(champion="Garen")["players"][0]["soaks"]), 2)
+
+    def test_the_next_raid_uses_up_perks_and_golden_salts_pay_more(self):
+        self.spa()
+        self.soak(salt="golden")
+        self.game.state(viewer=False, now=1000 + 120 * MIN)
+        self.rows["duo one#na1"].insert(0, row("3", 3))
+        p = self.game.state(viewer=False, now=1000 + 121 * MIN)["players"][0]
+        self.assertEqual(p["perks"], {})
+        rep = p["raids"][0]
+        if rep["win"]:
+            self.assertEqual(rep["reward"]["crumbs"], round(30 * rep["total"] * 1.6))
+
+    def test_a_boss_challenge_uses_up_a_health_or_attack_perk(self):
+        self.spa()
+        self.rows["duo one#na1"].insert(0, row("3", 3))   # a win: a challenge for Annie
+        self.game.state(viewer=False, now=1000)
+        data = self.game._load()   # then a soak (after that game's raid)
+        data["players"]["duo one#na1"]["perks"]["Annie"] = {"salt": "chili", "temp": "hot", "power": 0.3}
+        self.storage.write_json(self.game.path, data)
+        out = self.game.act({"owner": "duo one#na1", "action": "challenge", "champion": "Annie"}, viewer=False, now=2000)
+        self.assertEqual(out["result"]["fight"]["perk"]["salt"], "chili")
+        self.assertEqual(out["players"][0]["perks"], {})
 
     def test_score_counts_districts(self):
         s = new_utopia("A#1", 0)

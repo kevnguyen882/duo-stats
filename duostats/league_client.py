@@ -42,7 +42,7 @@ class ChampionCatalog:
         self.display = {}    # alias -> display name
         self.by_name = {}    # lowercase display name -> alias
         self.variants = {}   # id of a game mode's copy of a champion -> the real champion's alias
-        self.roles = {}      # alias -> League classes, e.g. ["mage", "support"] (Ducktopia's defenders)
+        self.roles = {}      # alias -> League classes, e.g. ["mage", "support"] (Ductopia's defenders)
 
     # Real champions have ids below 1000. Some game modes add copies with their own ids and aliases
     # ("Jade_Leona", 60089); those aren't separate champions and have no Data Dragon picture.

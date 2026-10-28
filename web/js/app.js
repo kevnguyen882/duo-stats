@@ -113,8 +113,8 @@ function gameStartNotice(s){
       if(!document.hidden){ document.title = title; document.removeEventListener('visibilitychange', back); } });
   }
 }
-// ---- a new fire duck in Ducktopia (an S+ together): a notification with a button to the Volcano Spa ----
-// Ducktopia's page shows the same one; whichever page sees it first marks it seen in this browser (utopia.js).
+// ---- a new fire duck in Ductopia (an S+ together): a notification with a button to the Volcano Spa ----
+// Ductopia's page shows the same one; whichever page sees it first marks it seen in this browser (utopia.js).
 async function fireDuckNotice(){
   if(document.hidden) return;
   let u; try{ u = await api('/api/utopia'); }catch(e){ return; }
@@ -136,7 +136,7 @@ async function fireDuckNotice(){
 }
 setTimeout(fireDuckNotice, 4000);
 setInterval(fireDuckNotice, 30000);
-document.addEventListener('click', e=>{ const b = e.target.closest('[data-open-volcano]'); if(b) location.href = '/ducktopia#volcano=' + b.dataset.openVolcano; });
+document.addEventListener('click', e=>{ const b = e.target.closest('[data-open-volcano]'); if(b) location.href = '/ductopia#volcano=' + b.dataset.openVolcano; });
 
 document.addEventListener('click', e=>{
   const b = e.target.closest('[data-open-live]'); if(!b) return;

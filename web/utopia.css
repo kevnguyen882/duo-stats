@@ -1,4 +1,4 @@
-/* Ducktopia page (utopia.html). Colours come from style.css; pixel art is never smoothed. */
+/* Ductopia page (utopia.html). Colours come from style.css; pixel art is never smoothed. */
 
 .uback{color:var(--muted);text-decoration:none;font-size:14px}
 .uback:hover{color:var(--gold)}
@@ -38,6 +38,7 @@
 .uquarter .uplaza-scene canvas.over{cursor:pointer}
 /* the Volcano Spa: the scene, and every fire duck listed under it */
 .uvolcano .uplaza-scene{background:#3b3236}
+.uspa .uplaza-scene{background:#5c4b3f}
 .uvlist{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px;margin-top:12px}
 .uvduck{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:10px;background:var(--panel2);border:1px solid var(--line);outline:none}
 .uvduck:focus-visible{outline:2px solid var(--gold);outline-offset:1px}
@@ -167,5 +168,61 @@ section.panel{margin-bottom:14px}
 .ufound li b{font:800 18px ui-monospace,Menlo,monospace;min-width:44px;text-align:right}
 @keyframes found-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 .ufound button{position:relative}
-@media (prefers-reduced-motion: reduce){ .ufound li,.ugeese img{animation:none;opacity:1} }
+/* the Spa */
+.uspah{margin:14px 0 6px;font-size:14px}
+.uperk{color:#e8590c;font-weight:700}
+.usel{display:flex;align-items:center;gap:8px;font-size:13px;margin:4px 0 10px}
+.usel select{font:inherit;padding:5px 8px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:inherit;max-width:100%}
+.uchoice{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 0 10px}
+@media(max-width:560px){.uchoice:not(.temps){grid-template-columns:1fr}}
+.uchoice button{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 6px;text-align:center;font-size:12px;line-height:1.3;white-space:normal}
+.uchoice button b{font-size:13px}
+.uchoice button img{width:24px;height:24px}
+.uchoice button span img{width:12px;height:12px;vertical-align:-1px;margin-right:2px}
+.uchoice button.on{border-color:var(--gold);background:color-mix(in srgb, var(--gold) 16%, transparent)}
+.uchoice.temps .warm b{color:#1c7ed6}
+.uchoice.temps .hot b{color:#e8590c}
+.uchoice.temps .scalding b{color:#c92a2a}
+#spa [data-soak] img{width:12px;height:12px;vertical-align:-1px}
+
+/* a boss fight, played back */
+.uarena{text-align:center}
+.ustage{display:grid;grid-template-columns:1fr auto 1fr;align-items:end;gap:8px;margin:14px 0 6px}
+.ufighter{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0}
+.ufighter b{font-size:13px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ufighter .hp{font:600 11.5px ui-monospace,Menlo,monospace;color:var(--muted)}
+.ufighter .spr{width:72px;height:72px;margin-top:6px}
+.ufighter .spr.flip{transform:scaleX(-1)}
+.ubar{width:100%;max-width:140px;height:8px;border-radius:4px;background:rgba(127,127,127,.25);overflow:hidden}
+.ubar i{display:block;height:100%;width:100%;background:#2f9e44;transition:width .3s}
+.ubar.boss i{background:#c92a2a}
+.uvs{font:800 14px ui-monospace,Menlo,monospace;color:var(--gold);padding-bottom:30px}
+.ufighter.lunge .spr{animation:lunge-r .3s}
+.ufighter[data-side="boss"].lunge .spr{animation:lunge-l .3s}
+.ufighter.honk .spr{animation:honk .45s}
+.ufighter.ult .spr{animation:ult .5s}
+.ufighter.hurt .spr{animation:hurt .3s}
+.ufighter.ko .spr{filter:grayscale(1);opacity:.45;transition:opacity .4s}
+@keyframes lunge-r{50%{transform:translateX(18px)}}
+@keyframes lunge-l{50%{transform:scaleX(-1) translateX(18px)}}
+@keyframes honk{30%,60%{transform:scaleX(-1) scale(1.25)}}
+@keyframes ult{40%{transform:translateX(18px) scale(1.2);filter:drop-shadow(0 0 6px gold)}}
+@keyframes hurt{25%{translate:-4px 0;filter:brightness(2)}75%{translate:4px 0}}
+.upop{position:absolute;top:52%;left:50%;font:800 18px ui-monospace,Menlo,monospace;pointer-events:none;white-space:nowrap;animation:pop 1s forwards;
+  text-shadow:0 1px 0 #fff,0 0 4px rgba(0,0,0,.35)}
+.upop.dmg{color:#e03131}
+.upop.heal{color:#2f9e44}
+.upop.call{color:var(--gold);font-size:13px;top:30%}
+@keyframes pop{from{transform:translate(-50%,0);opacity:1}to{transform:translate(-50%,-34px);opacity:0}}
+.uround{font:800 15px ui-monospace,Menlo,monospace;margin:4px 0 8px;min-height:20px}
+.ufeed{list-style:none;padding:8px 10px;margin:0 0 10px;max-height:150px;overflow-y:auto;text-align:left;font-size:12.5px;line-height:1.55;
+  background:rgba(127,127,127,.1);border-radius:8px}
+.ufeed:empty{display:none}
+.ufound .ufeed li{display:block;opacity:1;animation:none;padding:2px 0;font-size:12.5px}   /* not the Founding Day list */
+.ufound .ufeed b{font:800 12.5px ui-monospace,Menlo,monospace;min-width:0;margin-right:4px}
+.ufeed em{font-style:normal;font-weight:700;color:var(--gold)}
+.uend{min-height:22px;margin-bottom:10px;font-weight:800}
+.uend .won{color:#2f9e44}
+.uend .lost{color:#e03131}
+@media (prefers-reduced-motion: reduce){ .ufound li,.ugeese img{animation:none;opacity:1} .ufighter .spr,.upop{animation:none!important} .upop{opacity:0} }
 @media(max-width:600px){.usd .n{font-size:26px}.uscore{gap:6px}.usd{padding:10px}}
