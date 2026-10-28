@@ -23,9 +23,12 @@ def items_page() -> str:
     starter = [{"ids": [2003, 2003, 3802], "pick_rate": 65.29, "play": "1,851", "win_rate": 54.99}] + \
               [{"ids": [1001], "pick_rate": 1, "play": "5", "win_rate": 50}] * 5
     boots = [{"ids": [3020], "pick_rate": 85.88, "play": "2,245", "win_rate": 55.1}]
-    return page(f'["$","h3",null,{{"children":"Core builds"}}],["$","$L62",null,{{"data":{json.dumps(core)}}}],'
+    final = [{"ids": [4645 + i], "pick_rate": 60 - i, "play": "100", "win_rate": 50} for i in range(8)]
+    return page('["$","li","items",{"children":"Items"}],'   # the Items tab, not the table
+                f'["$","h3",null,{{"children":"Core builds"}}],["$","$L62",null,{{"data":{json.dumps(core)}}}],'
                 f'["$","h3",null,{{"children":"Boots"}}],["$","$L6a",null,{{"data":{json.dumps(boots)}}}],'
-                f'["$","h3",null,{{"children":"Starter items"}}],["$","$L6b",null,{{"data":{json.dumps(starter)}}}]')
+                f'["$","h3",null,{{"children":"Starter items"}}],["$","$L6b",null,{{"data":{json.dumps(starter)}}}],'
+                f'["$","h3",null,{{"children":"Items"}}],["$","$L6a",null,{{"data":{json.dumps(final)}}}]')
 
 
 def augments_page() -> str:
@@ -46,6 +49,8 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(len(got["core"]), 2)
         self.assertEqual(got["starter"][0]["items"], [2003, 2003, 3802])   # boots aren't mistaken for starters
         self.assertEqual(len(got["starter"]), 3)                           # the top 3 only
+        self.assertEqual([b["items"] for b in got["final"]], [[4645 + i] for i in range(6)])   # the top 6 items
+        self.assertEqual(got["final"][0]["pick"], 60.0)
 
     def test_items_layout_changed(self):
         with self.assertRaises(DuoStatsError):
@@ -78,6 +83,11 @@ class BuildsTest(TempStorageCase):
         self.assertEqual(len(self.asked), 2)
         self.opgg.builds("MonkeyKing", "2400")   # asked again soon: the saved copy
         self.assertEqual(len(self.asked), 2)
+
+    def test_older_saved_format_is_fetched_again(self):
+        self.storage.write_json(self.storage.path("opgg/aram-ahri.json"), {"fetched": time.time(), "core": []})
+        self.assertIn("final", self.opgg.builds("Ahri", 450))
+        self.assertEqual(len(self.asked), 1)
 
     def test_aram_has_items_only(self):
         got = self.opgg.builds("Ahri", 450)

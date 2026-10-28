@@ -25,7 +25,6 @@ How the code is organised (duostats/):
     chat.py           reading S grades from the post-game chat
     live.py           which champion you're on right now
     augments.py       augment names, icons and descriptions
-    ugg.py            opening u.gg build pages
     utopia.py         Duck Utopia, the idle game
     storage.py        everything saved on this Mac
     keychain.py       the Riot API key in the macOS Keychain
