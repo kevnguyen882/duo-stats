@@ -21,7 +21,7 @@ python3 duo_stats.py --lan --pin 1234
 ```
 
 Terminal prints the address to give them (like `http://your-mac.local:8765`). They enter the PIN once in their
-browser. From another computer the page is view only: settings, the Riot key and u.gg auto-opening can only be
+browser. From another computer the page is view only: settings and the Riot key can only be
 changed on the Mac running the app. `--pin` is optional but recommended. If macOS asks whether Python may accept
 incoming connections, choose Allow. Your Mac needs to be awake with the app running for them to reach it.
 
@@ -62,7 +62,7 @@ the tests use small made-up games (`tests/helpers.py`) and a pretend League clie
 | `duostats/chat.py` | Reading S grades from the post-game chat |
 | `duostats/live.py` | Which champion you're on right now |
 | `duostats/augments.py` | Augment names, icons and descriptions |
-| `duostats/ugg.py` | Opening u.gg build pages |
+| `duostats/opgg.py` | op.gg's starting items, core builds, final build items and top augments for the Live tab (ARAM and ARAM Mayhem) |
 | `duostats/utopia.py` | Ducktopia, the idle game: its rules, raids and saved state (`data/utopia.json`) |
 | `duostats/storage.py` | Everything saved on this Mac |
 | `duostats/keychain.py` | The Riot API key in the macOS Keychain |

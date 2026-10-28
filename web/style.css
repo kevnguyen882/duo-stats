@@ -568,7 +568,7 @@ body.scdragging,body.scdragging *{cursor:grabbing !important}
 @media (prefers-reduced-motion: reduce){ .med,.sci:hover .med{transition:none;transform:none} }
 .bdg em{font-style:normal;font-weight:800;font-size:10.5px;opacity:.85;margin-left:-1px}
 
-/* another computer on the network: a viewing note, and no settings, key or u.gg controls in Options */
+/* another computer on the network: a viewing note, and no settings or key controls in Options */
 .viewing{font-size:13px;color:var(--muted);margin:-12px 0 16px}
 body.viewer #settings .form,body.viewer #settings .optsec,body.viewer #settings > .note{display:none}
 
@@ -603,11 +603,9 @@ body.viewer #settings .form,body.viewer #settings .optsec,body.viewer #settings 
 .rcp .ic{width:40px;height:40px;margin:0;box-shadow:0 0 0 2px var(--c)}
 .rcpm .d{font-size:12.5px;color:var(--muted)}
 .rcp .score{display:flex;flex-direction:column;align-items:flex-end;padding-right:14px}
-/* Live: the u.gg button for this browser's player, at the right of the phase line */
+/* Live: the phase line */
 .phase{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px}
-.phase .uggmain{margin-left:auto;padding:7px 14px;font-weight:700}
-.phase > .d{margin-left:auto;font-size:12.5px;color:var(--muted)}
-/* Live: augments in your wins, one row per tier */
+/* Live: augments, one row per tier */
 .augtier{display:grid;grid-template-columns:72px 1fr;gap:8px;align-items:start;margin-bottom:4px}
 .augtier .rar{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;padding-top:7px}
 .augtier .rar.Silver{color:#9aa4b2}.augtier .rar.Gold{color:#e0b245}.augtier .rar.Prismatic{color:#c084fc}
@@ -720,3 +718,19 @@ h1.logo .lg-light{display:none}
 :root[data-theme="light"] h1.logo .lg-light{display:block}
 :root[data-theme="light"] h1.logo .lg-dark{display:none}
 @media(max-width:600px){h1.logo img{height:77px}}
+
+/* op.gg's builds on the Live card */
+.opgg{margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.opgg h3.opggh{font-size:13px;color:var(--text);margin:0;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
+.opggh a{font-size:12px;font-weight:600;color:var(--gold);text-decoration:none}
+.opggh a:hover{text-decoration:underline}
+.opgg .opnote{font-size:10.5px;text-transform:none;letter-spacing:0;color:var(--muted);font-weight:500}
+.opb{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin-bottom:8px}
+.opb .items{gap:4px}
+.opb .item{width:40px}
+.opb .item img,.opb .item span.ph{width:34px;height:34px;margin-bottom:1px}
+.opbs{display:flex;flex-wrap:wrap;gap:2px 10px;font-size:12px;color:var(--muted)}
+.opbs .w,.opbs .lo{font-weight:700}
+.opfinal .item{width:48px;line-height:1.35}
+.opgg h4.opsub{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin:10px 0 6px}
+.opfinal .item .w,.opfinal .item .lo{font-weight:700}

@@ -17,13 +17,13 @@ from .grades import now_ms
 from .keychain import Keychain
 from .league_client import LeagueClient
 from .live import LiveView
+from .opgg import OpggBuilds
 from .players import PlayerDirectory
 from .riot_api import RiotApi, clean_key, KEY_FORMAT
 from .season import SeasonGrades
 from .stats import StatsService
 from .storage import Storage
 from .tracker import GameTracker
-from .ugg import UggOpener
 from .utopia import DuckUtopia
 
 
@@ -39,10 +39,10 @@ class App:
         self.season = SeasonGrades(self.storage, self.client, self.riot)
         self.chat = PostGameChatReader(self.storage, self.client, self.season)
         self.live = LiveView(self.client)
-        self.ugg = UggOpener()
         self.tracker = GameTracker(self.storage, self.client, self.season, self.chat, self.live)
         self.stats = StatsService(self.storage, self.client, self.riot, self.directory, self.tracker)
         self.augments = AugmentCatalog(self.storage, self.client)
+        self.opgg = OpggBuilds(self.storage, lambda: {k: v["rarity"] for k, v in self.augments.info().items()})
         self.utopia = DuckUtopia(self.storage, self.stats, self.tracker, self.client)
 
     # ---- the Riot API key ----

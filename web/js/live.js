@@ -2,8 +2,9 @@
 //   champion select  this browser's player's champion only (a hovered one shows as "considering"), and the ARAM
 //                    bench with both of your records on each champion and which ones would be new S Rank chances
 //   in game          that player's history on the champion ("Show" turns it off)
+//   champion select and in game, ARAM and ARAM Mayhem: op.gg's starting items, core builds and boots, final build items and
+//                    most-picked augments
 //   between games    a recap of the last game: results, grades, scores and badges
-// The gold u.gg button at the top opens the build page for the champion this browser's player has locked in.
 
 let live = null, itemData = null;
 const PHASES = {ChampSelect:'Champion select', GameStart:'Game loading', InProgress:'In game', Reconnect:'Reconnecting',
@@ -11,37 +12,21 @@ const PHASES = {ChampSelect:'Champion select', GameStart:'Game loading', InProgr
   PreEndOfGame:'Game over', None:'Not in a game', NoClient:'League client not open', Error:'Something went wrong'};
 const LIVE_PHASES = ['ChampSelect','GameStart','InProgress','Reconnect'];
 
-function uggUrl(alias, queueId){
-  const slug = ({MonkeyKing:'wukong'}[alias] || alias).toLowerCase().replace(/[^a-z0-9]/g,'');
-  if(queueId===2400) return `https://u.gg/lol/champions/aram-mayhem/${slug}-aram-mayhem`;
-  if(queueId===450) return `https://u.gg/lol/champions/aram/${slug}-aram`;
-  return `https://u.gg/lol/champions/${slug}/build`;
-}
-// on this Mac the app opens u.gg (in your default browser); on another computer it opens right here
-onClick('[data-ugg]', el=>viewer ? window.open(el.dataset.ugg, '_blank', 'noopener') : api('/api/open', {url: el.dataset.ugg}).catch(()=>{}));
-
 async function loadItemData(){
   if(itemData || !ddVer) return;
   try{ itemData = (await (await fetch(`https://ddragon.leagueoflegends.com/cdn/${ddVer}/data/en_US/item.json`)).json()).data; }catch(e){}
 }
-function finishedItem(id){
-  const it = itemData && itemData[id];
-  if(!it) return true;   // unknown (e.g. a Mayhem-only item): keep it
-  const tags = it.tags || [];
-  if(tags.includes('Consumable') || tags.includes('Trinket') || it.consumed) return false;
-  return !(it.into && it.into.length) && ((it.gold||{}).total||0) >= 900;
-}
-function itemIcon(id, n){
+function itemIcon(id, below=''){   // below: what's shown under the picture
   const it = itemData && itemData[id], name = it ? it.name : 'Item '+id;
   const img = ddVer ? `<img src="https://ddragon.leagueoflegends.com/cdn/${ddVer}/img/item/${id}.png" alt="" onerror="this.outerHTML='<span class=ph></span>'">` : '<span class="ph"></span>';
-  return `<div class="item" title="${esc(name)}">${img}${n}×</div>`;
+  return `<div class="item" title="${esc(name)}">${img}${below}</div>`;
 }
 
 // ---- who this browser is, and what to show ----
-const LIVE_SHOW = [['history','History & items']];
+const LIVE_SHOW = [['history','History'], ['opgg','op.gg builds']];
 let liveMe = store.get('duo_live_me') || '';   // riot id (lowercase) of who's playing on this browser; '' = work it out
-let liveShow = (()=>{ try{ return {history:true, partner:true, ...JSON.parse(store.get('duo_live_show') || '{}')}; }
-                       catch(e){ return {history:true, partner:true}; } })();
+let liveShow = (()=>{ try{ return {history:true, partner:true, opgg:true, ...JSON.parse(store.get('duo_live_show') || '{}')}; }
+                       catch(e){ return {history:true, partner:true, opgg:true}; } })();
 function liveMeIndex(){
   const ps = lastData ? lastData.players : [], ids = ps.map(p=>p.riotId.toLowerCase());
   if(liveMe && ids.includes(liveMe)) return ids.indexOf(liveMe);
@@ -77,52 +62,58 @@ function srankStatus(det, player, color){
     ${other ? `<span class="lpsrother">${esc(shortName(other.riotId))}: ${theirs ? badge(theirs, COLORS[j]) : 'no S yet'}</span>` : ''}</div>`;
 }
 
+// ---- op.gg's builds for the champion: asked for once per champion and mode, the app keeps them for a few hours ----
+const opgg = {};   // "alias|queue" -> {data} or {error}; missing while loading
+function opggPanel(det, queueId){
+  if(![450, 2400].includes(queueId)) return '';
+  const key = det.alias+'|'+queueId, got = opgg[key];
+  if(!got){
+    opgg[key] = {loading: true};
+    api(`/api/opgg?champ=${encodeURIComponent(det.alias)}&queue=${queueId}`)
+      .then(d=>{ opgg[key] = {data: d}; }, e=>{ opgg[key] = {error: e.message}; }).then(()=>renderLive(true));
+  }
+  const champ = esc(det.name||det.alias), mode = esc(QUEUES[queueId]||'');
+  const head = d => `<h3 class="opggh">op.gg · ${champ} in ${mode}${d && d.url ? ` <a href="${esc(d.url)}" target="_blank" rel="noopener">open op.gg ↗</a>` : ''}</h3>`;
+  if(!got || got.loading) return `<div class="opgg">${head()}<p class="empty"><span class="spin"></span>Loading op.gg's builds…</p></div>`;
+  if(got.error) return `<div class="opgg">${head()}<p class="empty">${esc(got.error)}</p></div>`;
+  const d = got.data;
+  // a set of items, repeats shown once with a count (2 Health Potions), then how often it's picked and won
+  const build = b=>{ const n = {}; b.items.forEach(id=>n[id] = (n[id]||0)+1);
+    return `<div class="opb"><div class="items">${Object.entries(n).map(([id,c])=>itemIcon(id, c>1 ? c+'×' : '')).join('')}</div>
+      <div class="opbs"><span class="${b.win>=50?'w':'lo'}">${b.win.toFixed(1)}% WR</span><span>${b.pick.toFixed(1)}% pick</span><span>${f0(b.games)} games</span></div></div>`; };
+  const builds = (label, list, cls='') => `<h3 class="${cls}">${label}</h3>${list && list.length ? list.map(build).join('') : '<div class="empty">op.gg has none yet.</div>'}`;
+  // single items (boots, the items most often in finished builds), each with its win rate and the % of games it was built in
+  const finalItem = b=>itemIcon(b.items[0], `<span class="${b.win>=50?'w':'lo'}">${b.win.toFixed(1)}%</span><span>${b.pick.toFixed(1)}%</span>`);
+  const boots = d.boots && d.boots.length ? `<h4 class="opsub">Boots <small class="opnote">win rate · % of games built</small></h4>
+    <div class="items opfinal">${d.boots.map(finalItem).join('')}</div>` : '';
+  const final = `<h3 class="lpsub">Final build items <small class="opnote">win rate · % of games built</small></h3>${d.final && d.final.length
+    ? `<div class="items opfinal">${d.final.map(finalItem).join('')}</div>` : '<div class="empty">op.gg has none yet.</div>'}`;
+  const augChip = a=>{ const g = (augNames||{})[a.id] || {};
+    return `<span class="augn" data-aug="${esc(a.id)}" tabindex="0"><img class="augic ${esc(g.rarity||'')}" src="/api/augicon/${encodeURIComponent(a.id)}" alt=""
+      onerror="this.style.visibility='hidden'"><span>${esc((g.name||'').trim() || a.name || 'Augment #'+a.id)}</span><small>${a.pick.toFixed(1)}%</small></span>`; };
+  const augs = d.augments ? `<h3>Most-picked augments <small class="opnote">% of games picked</small></h3>${['Prismatic','Gold','Silver'].map(tier=>`<div class="augtier">
+      <span class="rar ${tier}">${tier}</span><div class="augrow1">${(d.augments[tier]||[]).map(augChip).join('') || '<span class="empty">None yet.</span>'}</div></div>`).join('')}` : '';
+  return `<div class="opgg">${head(d)}${d.stale ? '<p class="note">Couldn\'t reach op.gg just now, so these are from the last time it could.</p>' : ''}
+    <div class="lpgrid"><div>${builds('Starting items', d.starter)}${builds('Core build', d.core, 'lpsub')}${boots}${final}</div><div>${augs}</div></div></div>`;
+}
+
 // ---- a player's card ----
-const AUG_TIERS = ['Silver', 'Gold', 'Prismatic'];
 function liveCard(det, player, color, queueId, isMe){
   const mine = player ? player.games.filter(g=>String(g.champion).toLowerCase()===det.alias.toLowerCase()) : [];
   const inMode = mine.filter(g=>g.queueId===queueId);
-  const wins = (inMode.length ? inMode : mine).filter(g=>g.win && !g.remake);
-  const count = (list, key, keep) => { const c = {};
-    list.forEach(g=>(g[key]||[]).filter(keep||(()=>true)).forEach(v=>c[v] = (c[v]||0)+1));
-    return Object.entries(c).sort((a,b)=>b[1]-a[1]); };
-  const items = count(wins, 'items', finishedItem).slice(0,6);
-  // augments by tier (Silver, then Gold, then Prismatic), the most-picked 4 of each
-  const augTiers = AUG_TIERS.map(tier=>[tier, count(wins, 'augments').filter(([id])=>((augNames||{})[id]||{}).rarity === tier).slice(0,4)])
-    .filter(([, list])=>list.length);
   const line = (label, a) => a ? `<div class="tts"><b style="color:var(--text)">${label}:</b> ${a.n} game${a.n>1?'s':''} ·
       <span class="${a.wr>=.5?'w':'lo'}">${pct(a.wr)} WR</span> · ${f2(a.kda)} KDA (${f1(a.k)}/${f1(a.d)}/${f1(a.a)}) · ${pct(a.kp)} KP</div>` : '';
-  const whose = isMe ? 'your' : 'their';
-  // an augment: icon, name and how many wins it was in; hover for its description
-  const augChip = ([id,n])=>{ const a = (augNames||{})[id] || {};
-    return `<span class="augn" data-aug="${esc(id)}" tabindex="0"><img class="augic ${esc(a.rarity||'')}" src="/api/augicon/${encodeURIComponent(id)}" alt=""
-      onerror="this.style.visibility='hidden'"><span>${esc(a.name||'Augment #'+id)}</span><small>${n}×</small></span>`; };
-  // the other player's wins on the same champion, for their items
-  const other = lastData && lastData.players.length > 1 ? lastData.players.find(p=>p !== player) : null;
-  const theirs = other ? other.games.filter(g=>String(g.champion).toLowerCase()===det.alias.toLowerCase()) : [];
-  const theirInMode = theirs.filter(g=>g.queueId===queueId);
-  const theirWins = (theirInMode.length ? theirInMode : theirs).filter(g=>g.win && !g.remake);
-  const theirItems = count(theirWins, 'items', finishedItem).slice(0,6);
-  const champName = esc(det.name||det.alias), otherName = other ? esc(shortName(other.riotId)) : '';
-  const theirBlock = !other ? '' : `<h3 class="lpsub">Items in ${otherName}'s wins${theirs.length && !theirInMode.length ? ' (all modes)' : ''}</h3>
-    ${theirItems.length ? `<div class="items">${theirItems.map(([id,n])=>itemIcon(id,n)).join('')}</div>`
-      : `<div class="empty">${!theirs.length ? `${otherName} hasn't played ${champName} yet.` : theirWins.length ? 'No items recorded for these wins.' : `${otherName} hasn't won on ${champName} yet.`}</div>`}`;
-  // hidden with Show → "History & items": say so on the card, with a way to bring it back
-  const history = !liveShow.history ? `<div class="lphidden">Your history, items and augments on ${esc(det.name||det.alias)} are hidden.
-      <button class="ghost" data-live-show="history">Show them</button></div>` : `${mine.length ? line(QUEUES[queueId] || 'This mode', agg(inMode)) + line('All modes', agg(mine))
-      : `<div class="tts">No saved games on ${champName} yet.</div>`}
-    ${mine.length || theirs.length ? `<div class="lpgrid">
-      <div><h3>Items in ${whose} wins${inMode.length || !mine.length ? '' : ' (all modes)'}</h3>${items.length ? `<div class="items">${items.map(([id,n])=>itemIcon(id,n)).join('')}</div>`
-        : `<div class="empty">${!mine.length ? `No games on ${champName} yet.` : wins.length ? 'No items recorded for these wins.' : 'No wins on this champion yet.'}</div>`}
-        ${theirBlock}</div>
-      <div><h3>Augments in ${whose} wins</h3>${augTiers.length ? augTiers.map(([tier, list])=>`<div class="augtier">
-          <span class="rar ${tier}">${tier}</span><div class="augrow1">${list.map(augChip).join('')}</div></div>`).join('')
-        : '<div class="empty">No augments recorded for these wins.</div>'}</div></div>` : ''}`;
+  const champName = esc(det.name||det.alias);
+  // hidden with Show → "History": say so on the card, with a way to bring it back
+  const history = !liveShow.history ? `<div class="lphidden">Your history on ${champName} is hidden.
+      <button class="ghost" data-live-show="history">Show it</button></div>` : mine.length
+    ? line(QUEUES[queueId] || 'This mode', agg(inMode)) + line('All modes', agg(mine))
+    : `<div class="tts">No saved games on ${champName} yet.</div>`;
   return `<div class="lp ${det.hover?'hovering':''}" style="--c:${color}">
     <div class="lphead">${icon(det.alias)}<div><div class="who">${isMe ? 'You' : esc(shortName(det.riotId))}${det.hover ? ' <span class="tag">considering…</span>' : ''}</div>
-      <div class="champ">${esc(det.name||det.alias)}</div>${srankStatus(det, player, color)}</div>
-      ${det.hover ? '' : `<button class="ghost" data-ugg="${esc(uggUrl(det.alias, queueId))}">u.gg build</button>`}</div>
+      <div class="champ">${champName}</div>${srankStatus(det, player, color)}</div></div>
     ${history}
+    ${liveShow.opgg ? opggPanel(det, queueId) : ''}
   </div>`;
 }
 
@@ -183,11 +174,7 @@ function renderLive(force){
   const s = live || {phase:'None', players:[]};
   noteGame(s);
   const on = LIVE_PHASES.includes(s.phase), me = liveMeIndex();
-  const mine = on && s.players.find(p=>lastData.players.findIndex(x=>x.riotId.toLowerCase()===p.riotId.toLowerCase()) === me);
-  const uggBtn = mine && !mine.hover
-    ? `<button class="uggmain" data-ugg="${esc(uggUrl(mine.alias, s.queueId))}">Open u.gg · ${esc(mine.name || mine.alias)}</button>`
-    : mine ? '<span class="d">Lock in to open u.gg</span>' : '';
-  let h = `<div class="phase"><span class="dot ${on?'on':''}"></span>${esc(PHASES[s.phase] || s.phase)}${s.queueId&&on ? ' · '+esc(QUEUES[s.queueId]||'Queue '+s.queueId) : ''}${uggBtn}</div>`;
+  let h = `<div class="phase"><span class="dot ${on?'on':''}"></span>${esc(PHASES[s.phase] || s.phase)}${s.queueId&&on ? ' · '+esc(QUEUES[s.queueId]||'Queue '+s.queueId) : ''}</div>`;
   // only this browser's player: on your screen your champion, on Steph's hers
   const cards = s.players.map(det=>({det, i: lastData.players.findIndex(p=>p.riotId.toLowerCase()===det.riotId.toLowerCase())}))
     .filter(c=>c.i === me);
@@ -205,5 +192,6 @@ function renderLive(force){
 function liveTab(){
   return `<div class="livebar" id="livebar"></div>
     <div class="panel" id="livebox"></div>
-    <p class="note">Your history on a champion comes from your own saved games. "Open u.gg build" opens the champion's page on u.gg.</p>`;
+    <p class="note">Your history on a champion comes from your own saved games. op.gg builds are op.gg's numbers for everyone
+      playing the champion in ARAM or ARAM Mayhem.</p>`;
 }

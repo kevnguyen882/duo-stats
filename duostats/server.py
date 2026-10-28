@@ -17,7 +17,7 @@ from .errors import DuoStatsError
 
 STATIC_TYPES = {".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8",
                 ".js": "text/javascript; charset=utf-8", ".png": "image/png"}
-HOST_ONLY = ("/api/key", "/api/forget", "/api/settings", "/api/open")   # changes things: only from this Mac
+HOST_ONLY = ("/api/key", "/api/forget", "/api/settings")   # changes things: only from this Mac
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -100,6 +100,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, app.utopia.state(self.viewer))
             if url.path == "/api/augments":
                 return self.send(200, app.augments.for_page())
+            if url.path == "/api/opgg":   # op.gg's builds for the champion on the Live tab
+                return self.send(200, app.opgg.builds((query.get("champ") or [""])[0], (query.get("queue") or [""])[0]))
             if url.path.startswith("/api/augicon/"):
                 data = app.augments.icon(url.path.rsplit("/", 1)[-1])
                 return self.send(200, data, "image/png", "max-age=86400") if data else self.send(404, {"error": "No icon"})
@@ -129,7 +131,6 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/srank": lambda: app.s_rank(body),
                 "/api/showcase": lambda: app.save_showcase(body, self.viewer),
                 "/api/utopia": lambda: app.utopia.act(body, self.viewer),
-                "/api/open": lambda: {"ok": True, "result": app.ugg.open(str(body.get("url", "")))},
             }
             if self.path not in routes:
                 return self.send(404, {"error": "Not found"})
