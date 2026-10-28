@@ -24,7 +24,6 @@ from .season import SeasonGrades
 from .stats import StatsService
 from .storage import Storage
 from .tracker import GameTracker
-from .ugg import UggOpener
 from .utopia import DuckUtopia
 
 
@@ -40,7 +39,6 @@ class App:
         self.season = SeasonGrades(self.storage, self.client, self.riot)
         self.chat = PostGameChatReader(self.storage, self.client, self.season)
         self.live = LiveView(self.client)
-        self.ugg = UggOpener()
         self.tracker = GameTracker(self.storage, self.client, self.season, self.chat, self.live)
         self.stats = StatsService(self.storage, self.client, self.riot, self.directory, self.tracker)
         self.augments = AugmentCatalog(self.storage, self.client)

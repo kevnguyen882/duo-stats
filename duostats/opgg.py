@@ -1,5 +1,5 @@
-"""op.gg's builds for a champion in ARAM and ARAM Mayhem: starting items, core builds, and the most-picked
-Prismatic, Gold and Silver augments. Read from op.gg's normal public pages and kept on this Mac for a few hours."""
+"""op.gg's builds for a champion in ARAM and ARAM Mayhem: starting items, core builds, the items most often in
+finished builds, and the most-picked Prismatic, Gold and Silver augments. Read from op.gg's normal public pages and kept on this Mac for a few hours."""
 
 from __future__ import annotations
 
@@ -15,9 +15,10 @@ from .storage import Storage
 MODES = {2400: "aram-mayhem", 450: "aram"}   # queue id -> op.gg's name for the mode
 PAGE = "https://op.gg/lol/modes/{mode}/{slug}/{page}"
 REFRESH_HOURS = 12   # op.gg updates its numbers daily
+FORMAT = 2           # bumped when what's saved changes, so older copies are fetched again
 BROWSER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Safari/605.1.15"
 RARITY = {1: "Silver", 4: "Gold", 8: "Prismatic"}
-SHOW_BUILDS, SHOW_AUGMENTS = 3, 6   # starting item sets and core builds; augments of each rarity
+SHOW_BUILDS, SHOW_FINAL, SHOW_AUGMENTS = 3, 6, 6   # starting item sets and core builds; final items; augments of each rarity
 
 
 def slug(alias: str) -> str:
@@ -39,16 +40,19 @@ def page_data(page_html: str) -> str:
 
 
 def _list_after(data: str, label: str) -> list:
-    """The list of rows shown under a heading on the items page ("Core builds", "Starter items")."""
-    at = data.find(f'"children":"{label}"')
-    at = data.find('"data":[', at) if at >= 0 else -1
-    if at < 0:
-        return []
-    try:
-        rows = json.JSONDecoder().raw_decode(data, at + len('"data":'))[0]
-    except ValueError:
-        return []
-    return rows if isinstance(rows, list) else []
+    """The list of rows in the table under a heading on the items page ("Core builds", "Starter items", "Items").
+    The same words can be a heading elsewhere too (the "Items" tab), so only a table right after the heading counts."""
+    for heading in re.finditer(re.escape(f'"children":"{label}"'), data):
+        at = data.find('"data":[', heading.end(), heading.end() + 400)
+        if at < 0 or '"children":"' in data[heading.end():at]:   # another heading first: not this one's table
+            continue
+        try:
+            rows = json.JSONDecoder().raw_decode(data, at + len('"data":'))[0]
+        except ValueError:
+            continue
+        if isinstance(rows, list):
+            return rows
+    return []
 
 
 def _number(v) -> float:
@@ -64,10 +68,12 @@ def _build(row: dict) -> dict:
 
 
 def parse_items(page_html: str) -> dict:
-    """{"starter": [...], "core": [...]} from a champion's items page, each {items, pick, win, games}, most picked first."""
+    """{"starter": [...], "core": [...], "final": [...]} from a champion's items page, each {items, pick, win, games},
+    most picked first. final: single finished items, pick being the % of games they were built in."""
     data = page_data(page_html)
-    found = {key: [_build(r) for r in _list_after(data, label) if isinstance(r, dict) and r.get("ids")][:SHOW_BUILDS]
-             for key, label in (("starter", "Starter items"), ("core", "Core builds"))}
+    found = {key: [_build(r) for r in _list_after(data, label) if isinstance(r, dict) and r.get("ids")][:show]
+             for key, label, show in (("starter", "Starter items", SHOW_BUILDS), ("core", "Core builds", SHOW_BUILDS),
+                                      ("final", "Items", SHOW_FINAL))}
     if not found["core"]:
         raise DuoStatsError("Couldn't read the builds on op.gg's page (its layout may have changed).")
     return found
@@ -119,7 +125,7 @@ class OpggBuilds:
             lock = self._locks.setdefault(path, threading.Lock())
         with lock:   # the page asks again every few seconds: fetch once
             cached = self.storage.read_json(path) or {}
-            if cached.get("fetched", 0) > time.time() - REFRESH_HOURS * 3600:
+            if cached.get("format") == FORMAT and cached.get("fetched", 0) > time.time() - REFRESH_HOURS * 3600:
                 return cached
             try:
                 fresh = self._from_opgg(mode, name)
@@ -132,7 +138,7 @@ class OpggBuilds:
 
     def _from_opgg(self, mode: str, name: str) -> dict:
         url = PAGE.format(mode=mode, slug=name, page="build")
-        out = {"mode": mode, "url": url, "fetched": time.time(),
+        out = {"mode": mode, "url": url, "fetched": time.time(), "format": FORMAT,
                **parse_items(self.fetch(PAGE.format(mode=mode, slug=name, page="items")))}
         if mode == "aram-mayhem":   # augments are only in Mayhem
             rarity = {}
