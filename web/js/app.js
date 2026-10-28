@@ -113,6 +113,31 @@ function gameStartNotice(s){
       if(!document.hidden){ document.title = title; document.removeEventListener('visibilitychange', back); } });
   }
 }
+// ---- a new fire duck in Ducktopia (an S+ together): a notification with a button to the Volcano Spa ----
+// Ducktopia's page shows the same one; whichever page sees it first marks it seen in this browser (utopia.js).
+async function fireDuckNotice(){
+  if(document.hidden) return;
+  let u; try{ u = await api('/api/utopia'); }catch(e){ return; }
+  let seen; try{ seen = JSON.parse(store.get('ducktopia_fire_seen') || '{}') || {}; }catch(e){ seen = {}; }
+  const gained = [];
+  (u.players || []).forEach((p, i)=>{
+    const k = p.riotId.toLowerCase();
+    if(seen[k] != null && p.fire > seen[k]) gained.push({p, i, n: p.fire - seen[k]});
+    seen[k] = p.fire;
+  });
+  store.set('ducktopia_fire_seen', JSON.stringify(seen));
+  if(!gained.length) return;
+  toast('🔥 New fire duck!', gained.map(({p, i, n})=>{
+    const games = (p.volcano || []).slice(-n), last = games[games.length - 1];
+    const img = last && ddVer ? `<img src="${champImage(last.champion)}" alt="" onerror="this.style.visibility='hidden'">` : '';
+    return `<div class="srtoast p${i+1}"><span class="face">${img}</span><span><b>${i === u.me ? 'You' : esc(shortName(p.riotId))}</b> earned
+      ${n > 1 ? `${n} fire ducks` : 'a fire duck'}${games.length ? ` with an S+ on ${esc(games.map(x=>x.champion).join(', '))}` : ''}</span></div>`;
+  }).join('') + `<button class="toastbtn" data-open-volcano="${gained[0].i}">Visit the Volcano Spa</button>`, 20000, 'firetoast');
+}
+setTimeout(fireDuckNotice, 4000);
+setInterval(fireDuckNotice, 30000);
+document.addEventListener('click', e=>{ const b = e.target.closest('[data-open-volcano]'); if(b) location.href = '/ducktopia#volcano=' + b.dataset.openVolcano; });
+
 document.addEventListener('click', e=>{
   const b = e.target.closest('[data-open-live]'); if(!b) return;
   const tab = document.querySelector('[data-tab="live"]'); if(tab){ tab.click(); window.scrollTo({top: 0, behavior: 'smooth'}); }

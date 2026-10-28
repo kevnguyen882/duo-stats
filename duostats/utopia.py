@@ -18,6 +18,10 @@ the pond collect breadcrumbs (golden, champion and fire ducks collect wherever t
 more nests, and a shorter incubation time. Wins used to give ducklings; any still in the old lost and found box move
 to nests.
 
+The Champion Quarter is a lounge where your five defenders rest; there you can see each one's stats and buy it hats
+(just for looks: HATS). Hats belong to the champion, so they stay if it leaves the squad and comes back.
+The Volcano Spa is where the fire ducks soak, one for each game with an S+ (volcano_spa()).
+
 First version: the numbers below are guesses to see how it plays, and are meant to be tuned.
 """
 
@@ -45,6 +49,13 @@ SPAWN_COST = 100             # breadcrumbs for the first duckling spawned ...
 SPAWN_GROWTH = 1.05          # ... and 5% more for each one after (slow at first, then steep)
 WIN_CRUMBS = 100              # bonus breadcrumbs for a new win (catch-up boost applies)
 MAX_REPORTS, MAX_LOG = 10, 30
+
+# hat -> (name, breadcrumbs), cheapest first
+HATS = {
+    "cap": ("Baseball cap", 200), "beanie": ("Beanie", 300), "party": ("Party hat", 500), "flowers": ("Flower crown", 700),
+    "cowboy": ("Cowboy hat", 1000), "tophat": ("Top hat", 1500), "chef": ("Chef's hat", 2000), "viking": ("Viking helmet", 3000),
+    "wizard": ("Wizard hat", 4500), "crown": ("Royal crown", 8000),
+}
 
 # building -> (first cost, cost growth per level, highest level, names by level)
 BUILDINGS = {
@@ -163,6 +174,7 @@ def migrate(s: dict):
     s["lost"] += s.pop("held", 0)
     s.pop("nextSpawn", None)
     s.setdefault("spawned", 0)
+    s.setdefault("hats", {})
 
 
 def _fill_pond(s: dict):
@@ -204,6 +216,15 @@ def penta_plaza(s: dict, rows: list) -> list:
             for r in sorted(games, key=lambda r: r.get("start") or 0)]
 
 
+def volcano_spa(s: dict, rows: list) -> list:
+    """The Volcano Spa's residents: one fire duck for each game with an S+, oldest first."""
+    counted = set(s["games"])
+    games = [r for r in rows if r["matchId"] in counted and not r.get("remake") and (r.get("grade") or "").upper() == "S+"]
+    return [{"matchId": r["matchId"], "champion": r["champion"], "start": r.get("start"), "win": bool(r.get("win")),
+             "kills": r.get("kills") or 0, "deaths": r.get("deaths") or 0, "assists": r.get("assists") or 0}
+            for r in sorted(games, key=lambda r: r.get("start") or 0)]
+
+
 # ---- defenders ----
 CLASSES = ("tank", "mage", "marksman", "support", "fighter", "assassin")
 STAR = {"S-": 1, "S": 2, "S+": 3}
@@ -236,7 +257,7 @@ def defender(champion: str, rec: dict, cls: str, training: int) -> dict:
     boost = 1 + 0.12 * star + 0.1 * training
     hp = round((60 + 6 * level) * (0.7 + 0.6 * wr) * boost)
     return {"champion": champion, "cls": cls, "level": level, "hp": hp, "atk": round((6 + 1.2 * min(kda, 8) + 0.4 * level) * boost, 1),
-            "star": star, "training": training, "triples": rec["triples"], "quadras": rec["quadras"],
+            "star": star, "grade": rec["grade"], "training": training, "triples": rec["triples"], "quadras": rec["quadras"],
             "pentas": rec["pentas"], "games": rec["games"], "winRate": round(wr, 3), "kda": round(kda, 2)}
 
 
@@ -350,8 +371,8 @@ def raid(defenders: list, seed, wave: int, fence: int, max_rounds: int = 15) -> 
 # ---- the game ----
 def new_utopia(riot_id: str, now: int) -> dict:
     return {"riotId": riot_id, "founded": now, "tick": now, "crumbs": float(FOUNDING_GIFT), "feathers": 0,
-            "levels": dict(START_LEVELS), "ducklings": [], "lost": 0, "spawned": 0, "pond": STARTING_DUCKS, "edge": 0,
-            "golden": 0, "boost": 0.0, "champs": {}, "fire": 0, "games": [], "raids": [], "raidWins": 0,
+            "levels": dict(START_LEVELS), "ducklings": [], "lost": 0, "spawned": 0, "hats": {}, "pond": STARTING_DUCKS, "edge": 0,
+            "golden": 0, "boost": 0.0, "champs": {}, "fire": 0, "graded": {}, "games": [], "raids": [], "raidWins": 0,
             "squad": [], "training": {}, "log": [], "founding": None}
 
 
@@ -361,6 +382,10 @@ def fresh_start(s: dict, now: int) -> dict:
     new = new_utopia(s["riotId"], now)
     for k in ("golden", "champs", "fire", "boost", "games", "founded", "founding"):
         new[k] = s[k]
+    if "graded" in s:
+        new["graded"] = s["graded"]
+    else:
+        new.pop("graded")   # worked out from the ducks later (first_graded)
     new["log"] = [{"t": now, "text": f"Fresh start: {STARTING_DUCKS} ducks in the pond and {FOUNDING_GIFT} breadcrumbs. "
                                      "Golden, champion and fire ducks and the multikill boost stay."}]
     return new
@@ -377,14 +402,56 @@ def apply_badges(s: dict, r: dict) -> list:
         got.append(f"{r['pentas']} golden duck{'s' if r['pentas'] > 1 else ''}")
     g = (r.get("grade") or "").upper()
     if g in STAR:
-        cur = s["champs"].get(r["champion"], "")
-        if not cur or grade_rank(g) < grade_rank(cur):
-            s["champs"][r["champion"]] = g
-            got.append(f"a {r['champion']} champion duck ({g})")
-        if g == "S+":
-            s["fire"] += 1
-            got.append("a fire duck")
+        got += grade_rewards(s, r["champion"], g)
+        s.setdefault("graded", {})[r["matchId"]] = g
     return got
+
+
+def grade_rewards(s: dict, champion: str, g: str, before: str = "") -> list:
+    """A game's S grade: a champion duck if it's that champion's best yet, and a fire duck for an S+. before: the grade
+    this game was already rewarded for, when a better one arrives later (so an S+ never gives two fire ducks)."""
+    got = []
+    cur = s["champs"].get(champion, "")
+    if not cur or grade_rank(g) < grade_rank(cur):
+        s["champs"][champion] = g
+        got.append(f"a {champion} champion duck ({g})")
+    if g == "S+" and before != "S+":
+        s["fire"] += 1
+        got.append("a fire duck")
+    return got
+
+
+def late_grades(s: dict, rows: list) -> list:
+    """Grades that arrived after their game was counted (the post-game chat can be slow, or a grade is added by hand):
+    they still earn their ducks. Returns [(row, what it earned)]."""
+    if "graded" not in s:
+        s["graded"] = first_graded(s, rows)
+    counted, out = set(s["games"]), []
+    for r in sorted(rows, key=lambda r: r.get("start") or 0):
+        g, before = (r.get("grade") or "").upper(), s["graded"].get(r["matchId"], "")
+        if r["matchId"] not in counted or r.get("remake") or g not in STAR or (before and grade_rank(g) >= grade_rank(before)):
+            continue
+        got = grade_rewards(s, r["champion"], g, before)
+        s["graded"][r["matchId"]] = g
+        out.append((r, got))
+    return out
+
+
+def first_graded(s: dict, rows: list) -> dict:
+    """For utopias from before grades were remembered per game: which counted games' grades were rewarded, as far as
+    the ducks show. A champion without its duck, or fewer fire ducks than S+ games, means a grade came too late."""
+    counted = set(s["games"])
+    games = sorted((r for r in rows if r["matchId"] in counted and not r.get("remake") and (r.get("grade") or "").upper() in STAR),
+                   key=lambda r: r.get("start") or 0)
+    graded = {}
+    for r in games:
+        g, cur = r["grade"].upper(), s["champs"].get(r["champion"], "")
+        if cur and grade_rank(cur) <= grade_rank(g):
+            graded[r["matchId"]] = g
+    fire = [r["matchId"] for r in games if r["matchId"] in graded and graded[r["matchId"]] == "S+"]
+    for mid in fire[s["fire"]:] if len(fire) > s["fire"] else []:   # the newest S+ games are the ones missing a fire duck
+        graded.pop(mid)
+    return graded
 
 
 class DuckUtopia:
@@ -442,6 +509,8 @@ class DuckUtopia:
         for p in players:
             migrate(data["players"][p.key])
             advance(data["players"][p.key], now)
+            if "graded" not in data["players"][p.key]:   # before any new game is counted, so no grade pays twice
+                data["players"][p.key]["graded"] = first_graded(data["players"][p.key], rows.get(p.key, []))
         # new games together since Founding Day, oldest first: rewards, then the same goose wave for both
         seen = set().union(*(set(data["players"][p.key]["games"]) for p in players)) if players else set()
         fresh = {}
@@ -477,6 +546,11 @@ class DuckUtopia:
                                                          if rep["win"] else f"lost. The geese took {rep['stolen']} breadcrumbs."))
                 _fill_nests(s, now)
                 scores[key] = score(s)
+        for p in players:   # grades that came in after their game was counted still earn their ducks
+            s = data["players"][p.key]
+            for r, got in late_grades(s, rows.get(p.key, [])):
+                if got:
+                    self._note(s, now, f"Late {r['grade'].upper()} on {r['champion']}: {', '.join(got)}.")
         for p in players:
             data["players"][p.key]["riotId"] = p.riot_id
         self.storage.write_json(self.path, data)
@@ -530,7 +604,7 @@ class DuckUtopia:
     # ---- what you can do ----
     def _do(self, s: dict, body: dict, player, now: int, data: dict) -> dict:
         action = body.get("action")
-        rows = self.stats.together([player]) if action in ("squad", "train", "practice") else {}
+        rows = self.stats.together([player]) if action in ("squad", "train", "practice", "hat") else {}
         recs = champion_records(rows.get(player.key, []))
         if action == "upgrade":
             b = body.get("building")
@@ -565,6 +639,29 @@ class DuckUtopia:
             s["spawned"] += 1
             s["ducklings"].append(now + round(grow_minutes(s["levels"]["incubation"]) * 60000))
             return {"spawned": s["spawned"]}
+        if action == "hat":   # buy a hat for a champion, put one on, or take it off
+            c, hat, op = body.get("champion"), body.get("hat"), body.get("op")
+            if c not in recs:
+                raise ValueError("Only champions you've played together live in the Champion Quarter.")
+            mine = s["hats"].setdefault(c, {"owned": [], "on": None})
+            if op == "off":
+                mine["on"] = None
+                return {"hat": None}
+            if hat not in HATS:
+                raise ValueError("There's no such hat.")
+            if op == "buy":
+                if hat in mine["owned"]:
+                    raise ValueError(f"{c} already has that hat.")
+                name, cost = HATS[hat]
+                if s["crumbs"] < cost:
+                    raise ValueError(f"Not enough breadcrumbs: {cost:,} needed.")
+                s["crumbs"] -= cost
+                mine["owned"].append(hat)
+                self._note(s, now, f"Bought {c} a {name.lower()}.")
+            elif op != "wear" or hat not in mine["owned"]:
+                raise ValueError(f"{c} doesn't have that hat yet.")
+            mine["on"] = hat
+            return {"hat": hat}
         if action == "squad":
             squad = [c for c in body.get("squad") or [] if isinstance(c, str) and c in recs]
             if len(set(squad)) != len(squad) or not 1 <= len(squad) <= 5:
@@ -609,13 +706,13 @@ class DuckUtopia:
             recs = champion_records(rows.get(p.key, []))
             lv = s["levels"]
             out.append({
-                **{k: s[k] for k in ("riotId", "feathers", "levels", "lost", "spawned", "pond", "edge", "golden", "boost",
+                **{k: s[k] for k in ("riotId", "feathers", "levels", "lost", "spawned", "hats", "pond", "edge", "golden", "boost",
                                      "champs", "fire", "raids", "raidWins", "training", "log", "founding", "founded")},
                 "crumbs": round(s["crumbs"], 2), "ducklings": sorted(s["ducklings"]),
                 "score": scores[i], "catchUp": catch_up(scores[i], best), "leading": len(scores) > 1 and scores[i] == best and scores.count(best) == 1,
                 "rate": round(crumb_rate(s), 3), "nestSpace": nest_space(lv["nests"]), "pondSpace": pond_space(lv["pond"]),
                 "districts": districts(s), "boostFrom": boost_breakdown(s, rows.get(p.key, [])),
-                "plaza": penta_plaza(s, rows.get(p.key, [])),
+                "plaza": penta_plaza(s, rows.get(p.key, [])), "volcano": volcano_spa(s, rows.get(p.key, [])),
                 "lab": {"spawnCost": spawn_cost(s["spawned"]), "grow": grow_minutes(lv["incubation"]),
                         "growNext": grow_minutes(lv["incubation"] + 1) if upgrade_cost("incubation", lv["incubation"]) is not None else None,
                         "nestSpaceNext": nest_space(lv["nests"] + 1)},
@@ -626,4 +723,5 @@ class DuckUtopia:
                 "champions": sorted(({"champion": c, "cls": classes.get(c, "fighter"), "games": r["games"]}
                                      for c, r in recs.items()), key=lambda x: (-x["games"], x["champion"])),
             })
-        return {"now": now, "me": 1 if viewer else 0, "players": out, "goldenRate": GOLDEN_RATE}
+        return {"now": now, "me": 1 if viewer else 0, "players": out, "goldenRate": GOLDEN_RATE, "fireRate": FIRE_RATE,
+                "hatShop": [{"id": h, "name": n, "cost": c} for h, (n, c) in HATS.items()]}

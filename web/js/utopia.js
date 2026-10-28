@@ -71,16 +71,24 @@ function accept(s){
   $('#msg').textContent = '';
   $('#game').classList.remove('hidden');
   renderPanels();
-  scene.reset(); plaza.reset(); lab.reset();
-  founding();
+  scene.reset(); plaza.reset(); lab.reset(); quarter.reset(); volcano.reset();
+  founding(); checkFireDucks();
+  // the main page's fire duck pop-up links here: #volcano=<player index> opens that player's Volcano Spa
+  const link = !openedFromLink && /^#volcano(?:=(\d))?$/.exec(location.hash);
+  if(link){
+    openedFromLink = true;
+    if(link[1] && U.players[+link[1]] && +link[1] !== viewing){ viewing = +link[1]; renderPanels(); scene.reset(); plaza.reset(); lab.reset(); quarter.reset(); volcano.reset(); }
+    show('volcano');
+  }
 }
+let openedFromLink = false;
 setInterval(load, 20000);
 // when the next duckling is due to grow, ask straight away rather than waiting for the next check
 setInterval(()=>{ if(U && U.players.some(p=>p.ducklings.length && p.ducklings[0] <= nowApp())) load(); }, 5000);
 
 // ---- drawing the panels ----
 function renderPanels(){
-  renderScore(); renderWhose(); renderResources(); renderBuild(); renderLab(); renderSquad(); renderRaids(); renderLog();
+  renderScore(); renderWhose(); renderResources(); renderBuild(); renderLab(); renderQuarter(); renderVolcano(); renderSquad(); renderRaids(); renderLog();
   if(tipEl && !tipEl.isConnected) showTip({target: document.body});   // what it was over has been redrawn
 }
 function renderScore(){
@@ -99,7 +107,7 @@ function renderWhose(){
 $('#whose').addEventListener('click', e=>{
   const b = e.target.closest('[data-view]'); if(!b) return;
   viewing = +b.dataset.view; store.set('utopia_view', viewing); picking = false;
-  renderPanels(); scene.reset(); plaza.reset(); lab.reset();
+  renderPanels(); scene.reset(); plaza.reset(); lab.reset(); quarter.reset(); volcano.reset();
 });
 
 function growLeft(p){ return p.ducklings.length ? clock(p.ducklings[0] - nowApp()) : ''; }
@@ -166,10 +174,59 @@ $('#labBuild').addEventListener('click', e=>{
 function affordable(){   // build buttons light up as breadcrumbs come in
   if(!mine()) return;
   const have = crumbsNow(U.players[viewing]);
-  document.querySelectorAll('[data-build], [data-spawn]').forEach(b=>{ b.disabled = busy || have < +b.dataset.cost || !!b.dataset.full; });
+  document.querySelectorAll('[data-build], [data-spawn], [data-hatbuy]').forEach(b=>{ b.disabled = busy || have < +b.dataset.cost || !!b.dataset.full; });
 }
 $('#build').addEventListener('click', e=>{
   const b = e.target.closest('[data-build]'); if(b) act({action: 'upgrade', building: b.dataset.build});
+});
+
+// ---- the Champion Quarter: each defender's stats and hats ----
+let qSel = null;   // the defender picked in the lounge
+const hatOf = (p, c) => (p.hats[c] || {}).on || null;
+// a duck, wearing its hat if it has one (hats are 10x6 maps whose bottom row sits on a 16x16 duck's head)
+function duckWithHat(g, cls, hat, x, y, size){
+  g.drawImage(art('duck-' + cls), Math.round(x), Math.round(y), size, size);
+  if(hat) g.drawImage(art('hat-' + hat), Math.round(x + size * 6 / 16), Math.round(y - size * 3 / 16), Math.round(size * 10 / 16), Math.round(size * 6 / 16));
+}
+function quarterPick(p){
+  if(!p.squad.length) return null;
+  if(!p.squad.some(d=>d.champion === qSel)) qSel = p.squad[0].champion;
+  return p.squad.find(d=>d.champion === qSel);
+}
+function renderQuarter(){
+  const p = U.players[viewing], own = mine(), open = p.districts.includes('champion'), d = open && quarterPick(p);
+  $('#quarterNote').textContent = open
+    ? 'Your five defenders rest here between goose raids. Click one to see its stats and buy it hats (just for looks). Choose who defends in the Defenders panel in your Ducktopia.'
+    : 'Opens with your first S-, S or S+ together. Your defenders will rest here between goose raids.';
+  if(!d){ $('#quarterDetail').innerHTML = open ? '<p class="uempty">No defenders yet: play a game together first.</p>' : ''; return; }
+  const mineHats = p.hats[d.champion] || {owned: [], on: null}, have = crumbsNow(p);
+  const rows = [['Class', CLASS_NAME[d.cls]], ['Level', `${d.level} (from ${plural(d.games, 'game')} together)`], ['Health', `${d.hp} HP`],
+    ['Attack', `${d.atk} ATK`], ['Win rate', `${Math.round(d.winRate * 100)}%`], ['KDA', d.kda.toFixed(2)], ['Best grade', d.grade || 'none yet'],
+    ['Training', d.training ? `${d.training} of 10 (+${d.training * 10}% health and attack)` : 'none yet'],
+    ['Multikills', kills(d.triples, d.quadras) + (d.pentas ? `${d.triples || d.quadras ? ', ' : ''}${plural(d.pentas, 'penta')}` : '') || 'none yet'],
+    ['Pentakill ultimate', d.pentas ? 'yes: hits the whole wave in a raid' : 'no (needs a pentakill on it)']];
+  $('#quarterDetail').innerHTML = `<div class="uqpick" role="group" aria-label="Defenders">${p.squad.map(x=>`<button class="ghost ${x.champion === d.champion ? 'on' : ''}" data-qsel="${esc(x.champion)}" aria-pressed="${x.champion === d.champion}">${champIcon(x.champion)}${esc(x.champion)}</button>`).join('')}</div>
+    <div class="uqd"><div>
+      <div class="uqd-head"><canvas id="qPreview" width="48" height="48"></canvas>${champIcon(d.champion)}<div><b>${esc(d.champion)} ${stars(d.star)}</b><span>${CLASS_NAME[d.cls]} · Lv ${d.level}${hatOf(p, d.champion) ? ` · wearing a ${esc(U.hatShop.find(h=>h.id === hatOf(p, d.champion)).name.toLowerCase())}` : ''}</span></div></div>
+      <h3>Stats</h3><table class="uqstats">${rows.map(([k, v])=>`<tr><td>${k}</td><td>${esc(v)}</td></tr>`).join('')}</table>
+      <p class="unote">Stats come from ${esc(shortName(p.riotId))}'s own games on ${esc(d.champion)}: games set its level, win rate its health, KDA its attack, S grades its stars.</p>
+    </div><div><h3>Hats</h3><div class="uhats">${U.hatShop.map(h=>{
+      const owned = mineHats.owned.includes(h.id), on = mineHats.on === h.id;
+      const btn = on ? `<button class="ghost" data-hat="${h.id}" data-op="off" ${own ? '' : 'disabled'}>Take off</button>`
+        : owned ? `<button class="ghost" data-hat="${h.id}" data-op="wear" ${own ? '' : 'disabled'}>Wear</button>`
+        : `<button data-hat="${h.id}" data-op="buy" data-hatbuy data-cost="${h.cost}" ${own && have >= h.cost ? '' : 'disabled'}>${pic('icon-breadcrumb')}${fmt(h.cost)}</button>`;
+      return `<div class="uhat ${on ? 'on' : ''}">${pic('hat-' + h.id, 'pix', h.name)}<span>${esc(h.name)}</span>${btn}</div>`;
+    }).join('')}</div>${own ? '<p class="unote">Hats belong to the champion: it keeps them even if it leaves the squad.</p>' : `<p class="unote">Only ${esc(shortName(p.riotId))} can buy hats here.</p>`}</div></div>`;
+  const g = $('#qPreview').getContext('2d'); g.imageSmoothingEnabled = false;
+  for(let y = 0; y < 48; y += 32) for(let x = 0; x < 48; x += 32) g.drawImage(art('tile-wood'), x, y, 32, 32);
+  duckWithHat(g, d.cls, hatOf(p, d.champion), 8, 12, 32);
+  affordable();
+}
+$('#quarterDetail').addEventListener('click', e=>{
+  const pickBtn = e.target.closest('[data-qsel]');
+  if(pickBtn){ qSel = pickBtn.dataset.qsel; renderQuarter(); return; }
+  const h = e.target.closest('[data-hat]');
+  if(h) act({action: 'hat', champion: qSel, hat: h.dataset.hat, op: h.dataset.op});
 });
 
 function stars(n){ return n ? `<span class="star" title="${['', 'S-', 'S', 'S+'][n]} this season">${'★'.repeat(n)}</span>` : ''; }
@@ -372,8 +429,9 @@ const scene = (()=>{
       else { label('🔒', x + 24, y + 16); label(`needs ${need}`, x + 24, y + 50, 'center', '#dee2e6'); }
     });
   }
-  // clicking the Duck Infirmary or the Penta Plaza district visits it
-  const SPOTS = [{view: 'lab', x: 8, y: 6, w: 64, h: 76}, {view: 'plaza', x: 322, y: 196, w: 48, h: 66}];
+  // clicking the Duck Infirmary or a district visits it
+  const SPOTS = [{view: 'lab', x: 8, y: 6, w: 64, h: 76}, {view: 'plaza', x: 322, y: 196, w: 48, h: 66}, {view: 'quarter', x: 376, y: 196, w: 48, h: 66},
+                 {view: 'volcano', x: 430, y: 196, w: 48, h: 66}];
   const spotAt = e => {
     const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * W / r.width, y = (e.clientY - r.top) * H / r.height;
     return SPOTS.find(o=>x >= o.x && x < o.x + o.w && y >= o.y && y < o.y + o.h);
@@ -599,8 +657,247 @@ const lab = (()=>{
   return {reset, size};
 })();
 
-// Penta Plaza and the Duck Infirmary take the place of the utopia scene, each with a button back
-const VIEWS = {town: () => scene, plaza: () => plaza, lab: () => lab};
+// ---- the Champion Quarter: a lounge where the defenders rest ----
+const QW = 480, QH = 220;
+const SEATS = [   // where each defender rests: the duck's top-left at 32px, and how
+  {x: 44, y: 86, how: 'sofa'}, {x: 92, y: 86, how: 'sofa'}, {x: 346, y: 100, how: 'armchair'},
+  {x: 76, y: 150, how: 'beanbag'}, {x: 236, y: 124, how: 'asleep'},
+];
+const quarter = (()=>{
+  const cv = $('#quarterScene'), g = cv.getContext('2d');
+  let hover = -1;
+  function size(){   // (also called when the lounge is shown)
+    hover = -1;
+    const css = cv.clientWidth || QW, dpr = window.devicePixelRatio || 1;
+    cv.width = Math.round(css * dpr); cv.height = Math.round(css * dpr * QH / QW);
+  }
+  function reset(){
+    if(!U) return;
+    const p = U.players[viewing];
+    cv.setAttribute('aria-label', `Champion Quarter: ${p.squad.map(d=>d.champion).join(', ') || 'no defenders yet'}, resting in the lounge`);
+  }
+  function label(text, x, y, color = '#fff'){
+    g.font = 'bold 9px ui-monospace, Menlo, monospace'; g.textAlign = 'center'; g.textBaseline = 'top';
+    g.lineWidth = 3; g.strokeStyle = 'rgba(30,16,10,.9)'; g.strokeText(text, x, y); g.fillStyle = color; g.fillText(text, x, y);
+  }
+  function draw(now){
+    requestAnimationFrame(draw);
+    if(!U || view !== 'quarter') return;
+    const p = U.players[viewing], k = cv.width / QW;
+    g.setTransform(k, 0, 0, k, 0, 0); g.imageSmoothingEnabled = false;
+    // the room: wallpaper, a skirting board, a wooden floor and a rug
+    for(let y = 0; y < 84; y += 32) for(let x = 0; x < QW; x += 32) g.drawImage(art('tile-wallpaper'), x, y, 32, 32);
+    for(let y = 84; y < QH; y += 32) for(let x = 0; x < QW; x += 32) g.drawImage(art('tile-wood'), x, y, 32, 32);
+    g.fillStyle = '#4a2a1a'; g.fillRect(0, 80, QW, 5);
+    g.fillStyle = '#9c2f3f'; g.fillRect(160, 138, 170, 58); g.fillStyle = '#c8aa6e'; g.fillRect(164, 142, 162, 2); g.fillRect(164, 190, 162, 2);
+    // furniture
+    g.drawImage(art('lounge-window'), 380, 8, 64, 64);
+    g.drawImage(art('lounge-fireplace'), 196, -4, 96, 96);
+    const flick = Math.sin(now / 90) + Math.sin(now / 37);
+    [['#e8590c', 0, 14], ['#ff922b', 3, 10], ['#ffd43b', 6, 5]].forEach(([c, inset, h])=>{
+      g.fillStyle = c; g.fillRect(228 + inset, 78 - h - Math.round(flick), 32 - inset * 2, h + Math.round(flick));
+    });
+    const glow = g.createRadialGradient(244, 80, 4, 244, 80, 120);
+    glow.addColorStop(0, 'rgba(255,170,70,.22)'); glow.addColorStop(1, 'rgba(255,170,70,0)');
+    g.fillStyle = glow; g.fillRect(124, 0, 240, 200);
+    g.drawImage(art('lounge-plant'), 150, 40, 48, 48);
+    g.drawImage(art('lounge-plant'), 432, 108, 48, 48);
+    g.drawImage(art('lounge-sofa'), 24, 58, 96, 96);
+    g.drawImage(art('lounge-armchair'), 330, 72, 64, 64);
+    g.drawImage(art('lounge-beanbag'), 68, 146, 48, 48);
+    g.drawImage(art('lounge-table'), 212, 150, 64, 64);
+    if(!p.districts.includes('champion')){
+      g.fillStyle = 'rgba(20,12,8,.55)'; g.fillRect(0, 0, QW, QH);
+      label('🔒', QW / 2, 96); label('Opens with your first S grade together', QW / 2, 114, '#ffe8cc');
+      return;
+    }
+    // the defenders, resting
+    const sel = quarterPick(p);
+    p.squad.slice(0, SEATS.length).forEach((d, i)=>{
+      const st = SEATS[i], asleep = st.how === 'asleep', bob = asleep ? Math.sin(now / 900 + i) * .8 : Math.sin(now / 700 + i * 1.3) * 1.2;
+      if(i === hover || d === sel){ g.fillStyle = d === sel ? 'rgba(255,212,59,.35)' : 'rgba(255,255,255,.25)'; g.fillRect(st.x + 2, st.y + 28, 28, 4); }
+      duckWithHat(g, d.cls, hatOf(p, d.champion), st.x, st.y + bob, 32);
+      if(asleep) [0, 1, 2].forEach(z=>{   // z z z, drifting up
+        const t = (now / 1400 + z / 3) % 1;
+        g.globalAlpha = 1 - t; label('z', st.x + 30 + t * 10 + z * 2, st.y - 4 - t * 18, '#e7f5ff'); g.globalAlpha = 1;
+      });
+      if(d === sel){ g.fillStyle = '#ffd43b'; const ay = st.y - 14 + Math.round(Math.abs(Math.sin(now / 250)) * -3); g.fillRect(st.x + 13, ay, 6, 2); g.fillRect(st.x + 14, ay + 2, 4, 2); g.fillRect(st.x + 15, ay + 4, 2, 2); }
+      label(d.champion, st.x + 16, st.y + 33, d === sel ? '#ffe066' : '#fff3e0');
+    });
+  }
+  const seatAt = e => {
+    const p = U && U.players[viewing]; if(!p || !p.districts.includes('champion')) return -1;
+    const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * QW / r.width, y = (e.clientY - r.top) * QH / r.height;
+    return p.squad.slice(0, SEATS.length).findIndex((d, i)=>x >= SEATS[i].x && x < SEATS[i].x + 32 && y >= SEATS[i].y - 6 && y < SEATS[i].y + 44);
+  };
+  cv.addEventListener('mousemove', e=>{ hover = seatAt(e); cv.classList.toggle('over', hover >= 0); });
+  cv.addEventListener('mouseleave', ()=>{ hover = -1; });
+  cv.addEventListener('click', e=>{
+    const i = seatAt(e); if(i < 0) return;
+    qSel = U.players[viewing].squad[i].champion; renderQuarter();
+  });
+  window.addEventListener('resize', size);
+  size(); requestAnimationFrame(draw);
+  return {reset, size};
+})();
+
+// ---- the Volcano Spa: one fire duck for each game with an S+, soaking in hot springs under a smoking volcano ----
+const VW = 480, VH = 220, MAX_SPA = 45;
+const POOLS = [{cx: 100, cy: 170, rx: 72, ry: 25}, {cx: 246, cy: 190, rx: 84, ry: 22}, {cx: 392, cy: 168, rx: 70, ry: 25}];
+const volcano = (()=>{
+  const cv = $('#volcanoScene'), g = cv.getContext('2d');
+  let ducks = [], key = null, hover = null, t0 = performance.now();
+  function size(){
+    hover = null;
+    const css = cv.clientWidth || VW, dpr = window.devicePixelRatio || 1;
+    cv.width = Math.round(css * dpr); cv.height = Math.round(css * dpr * VH / VW);
+  }
+  function reset(){
+    if(!U) return;
+    const p = U.players[viewing], games = p.volcano || [];
+    const k = viewing + ':' + games.map(x=>x.matchId).join(',');
+    if(k === key) return;   // the same residents: let them keep soaking
+    key = k; hover = null;
+    ducks = games.slice(-MAX_SPA).map((game, i)=>{
+      const pool = POOLS[i % POOLS.length], a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * .6;
+      return {game, pool, x: pool.cx + Math.cos(a) * pool.rx * r - 12, y: pool.cy + Math.sin(a) * pool.ry * r - 12,
+              vx: (Math.random() < .5 ? -1 : 1) * (2 + Math.random() * 3), phase: Math.random() * 6};
+    });
+    cv.setAttribute('aria-label', games.length ? `Volcano Spa: ${plural(games.length, 'fire duck')}, from S+ games on ${games.map(x=>x.champion).join(', ')}` : 'Volcano Spa, locked');
+  }
+  function label(text, x, y, color = '#fff'){
+    g.font = 'bold 9px ui-monospace, Menlo, monospace'; g.textAlign = 'center'; g.textBaseline = 'top';
+    g.lineWidth = 3; g.strokeStyle = 'rgba(24,10,8,.9)'; g.strokeText(text, x, y); g.fillStyle = color; g.fillText(text, x, y);
+  }
+  function draw(now){
+    requestAnimationFrame(draw);
+    if(!U || view !== 'volcano') return;
+    const dt = Math.min((now - t0) / 1000, .1); t0 = now;
+    const k = cv.width / VW;
+    g.setTransform(k, 0, 0, k, 0, 0); g.imageSmoothingEnabled = false;
+    // a smoky evening sky, and the volcano's glow
+    const sky = g.createLinearGradient(0, 0, 0, 120);
+    sky.addColorStop(0, '#24152b'); sky.addColorStop(1, '#7a2e1f'); g.fillStyle = sky; g.fillRect(0, 0, VW, 120);
+    const glow = g.createRadialGradient(240, 34, 4, 240, 34, 150);
+    glow.addColorStop(0, `rgba(255,120,40,${.38 + Math.sin(now / 700) * .06})`); glow.addColorStop(1, 'rgba(255,120,40,0)');
+    g.fillStyle = glow; g.fillRect(80, 0, 320, 140);
+    g.drawImage(art('volcano-peak'), 160, -26, 160, 160);
+    // smoke rising from the crater
+    for(let i = 0; i < 6; i++){
+      const t = (now / 5200 + i / 6) % 1, x = 240 + Math.sin(t * 5 + i) * 10 + t * 30, y = 34 - t * 60, r = 4 + t * 14;
+      g.fillStyle = `rgba(120,108,112,${.5 * (1 - t)})`; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+    }
+    // sparks flying out
+    for(let i = 0; i < 8; i++){
+      const t = (now / 1300 + i * .37) % 1, dir = i % 2 ? 1 : -1;
+      g.fillStyle = i % 3 ? '#ffd43b' : '#ff6b1a';
+      g.fillRect(Math.round(240 + dir * (8 + i * 3) * t), Math.round(36 - 34 * t + 50 * t * t), 2, 2);
+    }
+    // volcanic ground, and the hot springs
+    for(let y = 112; y < VH; y += 32) for(let x = 0; x < VW; x += 32) g.drawImage(art('tile-volcanic'), x, y, 32, 32);
+    g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(0, 112, VW, 3);
+    POOLS.forEach((o, i)=>{
+      g.fillStyle = '#2b2326'; g.beginPath(); g.ellipse(o.cx, o.cy, o.rx + 6, o.ry + 5, 0, 0, Math.PI * 2); g.fill();
+      const w = g.createRadialGradient(o.cx, o.cy - 4, 4, o.cx, o.cy, o.rx);
+      w.addColorStop(0, '#9be7e2'); w.addColorStop(.6, '#4fb3bf'); w.addColorStop(1, '#2b8a99');
+      g.fillStyle = w; g.beginPath(); g.ellipse(o.cx, o.cy, o.rx, o.ry, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = 'rgba(255,140,60,.18)'; g.beginPath(); g.ellipse(o.cx, o.cy - o.ry * .45, o.rx * .7, o.ry * .25, 0, 0, Math.PI * 2); g.fill();   // the lava's glow on the water
+      for(let s = 0; s < 4; s++){   // steam
+        const t = (now / 3000 + s / 4 + i * .2) % 1, x = o.cx - o.rx * .6 + s * o.rx * .4 + Math.sin(t * 6 + s) * 4;
+        g.fillStyle = `rgba(255,255,255,${.3 * (1 - t)})`; g.fillRect(Math.round(x), Math.round(o.cy - 6 - t * 30), 3, 3);
+      }
+    });
+    if(!ducks.length){
+      g.fillStyle = 'rgba(20,10,8,.5)'; g.fillRect(0, 0, VW, VH);
+      label('🔒', VW / 2, 92); label('Opens with your first S+ together', VW / 2, 110, '#ffe8cc');
+      return;
+    }
+    // the fire ducks, soaking (the hovered one stays put)
+    ducks.forEach(d=>{
+      if(d === hover) return;
+      d.x += d.vx * dt;
+      const o = d.pool, ex = (d.x + 12 - o.cx) / (o.rx * .78), ey = (d.y + 12 - o.cy) / (o.ry * .62);
+      if(ex * ex + ey * ey > 1){ d.vx = -d.vx; d.x += d.vx * dt * 2; }
+      if(Math.random() < .002) d.vx = -d.vx;
+    });
+    [...ducks].sort((a, b)=>a.y - b.y).forEach(d=>{
+      const bob = Math.sin(now / 500 + d.phase) * 1.2, x = Math.round(d.x), y = Math.round(d.y + bob);
+      if(d === hover){ g.fillStyle = 'rgba(255,255,255,.4)'; g.beginPath(); g.ellipse(x + 12, y + 18, 14, 4, 0, 0, Math.PI * 2); g.fill(); }
+      g.save();
+      if(d.vx < 0){ g.translate(x + 12, 0); g.scale(-1, 1); g.translate(-x - 12, 0); }
+      g.drawImage(art('duck-fire'), 0, 0, 32, 24, x, y, 24, 18);   // soaking: no feet
+      g.restore();
+      if(Math.sin(now / 160 + d.phase * 3) > .6){ g.fillStyle = '#ffd43b'; g.fillRect(x + 12 + Math.round(Math.sin(d.phase) * 3), y - 3, 2, 2); }   // an ember
+    });
+    const extra = (U.players[viewing].volcano || []).length - ducks.length;
+    if(extra > 0) label(`+${extra} more`, VW - 30, VH - 14, '#ffe8cc');
+  }
+  // hover cards for the ducks (drawn here, not by showTip, since they move)
+  function hideCard(){ if(hover){ hover = null; tip.classList.remove('on'); cv.classList.remove('over'); } }
+  cv.addEventListener('mousemove', e=>{
+    const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * VW / r.width, y = (e.clientY - r.top) * VH / r.height;
+    const hit = [...ducks].sort((a, b)=>b.y - a.y).find(d=>x >= d.x - 2 && x < d.x + 26 && y >= d.y - 4 && y < d.y + 20);
+    if(!hit){ hideCard(); return; }
+    if(hit !== hover){ hover = hit; tip.innerHTML = fireCard(hit.game); tip.classList.add('on'); cv.classList.add('over'); }
+    const w = tip.offsetWidth, h = tip.offsetHeight;
+    let ty = e.clientY - h - 16; if(ty < 8) ty = e.clientY + 20;
+    tip.style.left = Math.min(Math.max(8, e.clientX - w / 2), innerWidth - w - 8) + 'px'; tip.style.top = ty + 'px';
+  });
+  cv.addEventListener('mouseleave', hideCard);
+  addEventListener('scroll', hideCard, {passive: true, capture: true});
+  window.addEventListener('resize', size);
+  size(); requestAnimationFrame(draw);
+  return {reset, size};
+})();
+const fireDay = ts => ts ? new Date(ts).toLocaleDateString(undefined, {month: 'short', day: 'numeric', year: 'numeric'}) : 'an earlier game';
+function fireCard(game){
+  return `<b class="ufire">S+ on ${esc(game.champion)}</b>
+    <p>${fireDay(game.start)} · ${game.win ? 'Win' : 'Loss'} · ${game.kills}/${game.deaths}/${game.assists}</p>
+    <p>A fire duck: collects ${U.fireRate} breadcrumbs a minute, no pond needed.</p>`;
+}
+// every fire duck, newest first, under the scene
+function renderVolcano(){
+  const p = U.players[viewing], games = p.volcano || [];
+  $('#volcanoNote').textContent = games.length
+    ? `${plural(games.length, 'fire duck')}, one for each game with an S+. Each collects ${U.fireRate} breadcrumbs a minute, wherever it is. Hover a duck to see its game.`
+    : 'Opens with your first S+ together. Every game with an S+ sends a fire duck here to soak in the hot springs.';
+  $('#volcanoList').innerHTML = games.length ? `<div class="uvlist">${games.slice().reverse().map(x=>`<div class="uvduck" tabindex="0" data-tip-html="${esc(fireCard(x))}">
+      ${pic('duck-fire')}${champIcon(x.champion)}<div><b>${esc(x.champion)}</b><span>${fireDay(x.start)} · ${x.win ? 'Win' : 'Loss'} · ${x.kills}/${x.deaths}/${x.assists}</span></div></div>`).join('')}</div>` : '';
+}
+
+// ---- a pop-up when a new fire duck arrives (either of you). The main page shows the same one; whichever page sees it
+// first marks it seen in this browser, so it only pops up once.
+const FIRE_SEEN = 'ducktopia_fire_seen';
+function checkFireDucks(){
+  let seen; try{ seen = JSON.parse(store.get(FIRE_SEEN) || '{}') || {}; }catch(e){ seen = {}; }
+  const gained = [];
+  U.players.forEach((p, i)=>{
+    const k = p.riotId.toLowerCase();
+    if(seen[k] != null && p.fire > seen[k]) gained.push({p, i, n: p.fire - seen[k]});
+    seen[k] = p.fire;
+  });
+  store.set(FIRE_SEEN, JSON.stringify(seen));
+  if(!gained.length) return;
+  const t = document.createElement('div'); t.className = 'toast firetoast'; t.setAttribute('role', 'status');
+  t.innerHTML = `<button class="toastx" aria-label="Dismiss" title="Dismiss">×</button><b>🔥 New fire duck!</b>${gained.map(({p, i, n})=>{
+      const champs = (p.volcano || []).slice(-n).map(x=>x.champion);
+      return `<div class="uvtoast">${pic('duck-fire')}<span><b>${i === U.me ? 'You' : esc(shortName(p.riotId))}</b> earned ${n > 1 ? `${n} fire ducks` : 'a fire duck'}${champs.length ? ` with an S+ on ${esc(champs.join(', '))}` : ''}</span></div>`;
+    }).join('')}<button class="toastbtn" data-visit-volcano="${gained[0].i}">Visit the Volcano Spa</button>`;
+  document.body.appendChild(t); requestAnimationFrame(()=>t.classList.add('on'));
+  const close = () => { t.classList.remove('on'); setTimeout(()=>t.remove(), 400); };
+  setTimeout(close, 15000);
+  t.addEventListener('click', e=>{
+    if(e.target.closest('.toastx')) return close();
+    const v = e.target.closest('[data-visit-volcano]'); if(!v) return;
+    viewing = +v.dataset.visitVolcano; store.set('utopia_view', viewing);
+    renderPanels(); scene.reset(); plaza.reset(); lab.reset(); quarter.reset(); volcano.reset();
+    show('volcano'); close(); $('#volcano').scrollIntoView({behavior: 'smooth', block: 'start'});
+  });
+}
+
+// Penta Plaza, the Duck Infirmary, the Champion Quarter and the Volcano Spa take the place of the utopia scene,
+// each with a button back
+const VIEWS = {town: () => scene, plaza: () => plaza, lab: () => lab, quarter: () => quarter, volcano: () => volcano};
 let view = 'town';
 function show(v){
   view = v;

@@ -21,7 +21,7 @@ document.documentElement.dataset.theme=t})()</script>
   <div id="game" class="hidden">
     <div class="uscore" id="scoreboard"></div>
     <div class="srtools"><div class="seg" role="group" aria-label="Whose utopia" id="whose"></div></div>
-    <div class="uscene" id="town"><canvas id="scene" aria-label="Ducktopia (click the Duck Infirmary or Penta Plaza to visit them)" role="img"></canvas></div>
+    <div class="uscene" id="town"><canvas id="scene" aria-label="Ducktopia (click the Duck Infirmary, Penta Plaza, the Champion Quarter or the Volcano Spa to visit them)" role="img"></canvas></div>
     <!-- Penta Plaza takes the scene's place while you visit it -->
     <section class="panel uplaza hidden" id="plaza">
       <div class="uplaza-top"><button class="ghost" data-back>← Back to Ducktopia</button><h2>Penta Plaza</h2></div>
@@ -31,6 +31,16 @@ document.documentElement.dataset.theme=t})()</script>
       <div class="uplaza-top"><button class="ghost" data-back>← Back to Ducktopia</button><h2>Duck Infirmary</h2></div>
       <div class="uplaza-scene"><canvas id="labScene" role="img"></canvas></div><p class="unote" id="labNote"></p>
       <div id="labBuild"></div></section>
+    <!-- and the Champion Quarter, the defenders' lounge -->
+    <section class="panel uplaza uquarter hidden" id="quarter">
+      <div class="uplaza-top"><button class="ghost" data-back>← Back to Ducktopia</button><h2>Champion Quarter</h2></div>
+      <div class="uplaza-scene"><canvas id="quarterScene" role="img"></canvas></div><p class="unote" id="quarterNote"></p>
+      <div id="quarterDetail"></div></section>
+    <!-- and the Volcano Spa, where the fire ducks soak -->
+    <section class="panel uplaza uvolcano hidden" id="volcano">
+      <div class="uplaza-top"><button class="ghost" data-back>← Back to Ducktopia</button><h2>Volcano Spa</h2></div>
+      <div class="uplaza-scene"><canvas id="volcanoScene" role="img"></canvas></div><p class="unote" id="volcanoNote"></p>
+      <div id="volcanoList"></div></section>
     <div class="ures" id="resources"></div>
     <div class="ugrid" id="townPanels">   <!-- the main utopia only -->
       <section class="panel"><h2>Build</h2><div id="build"></div></section>

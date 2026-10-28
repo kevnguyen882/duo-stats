@@ -667,6 +667,12 @@ body.viewer #settings .form,body.viewer #settings .optsec,body.viewer #settings 
 .toast.gamestart{border-left-color:var(--win)}
 .toast.gamestart b{color:var(--win);font-size:15px}
 .toastbtn{display:block;margin-top:10px;padding:6px 14px;font-weight:700}
+/* a new fire duck (Ducktopia's Volcano Spa): shown on the main page and in Ducktopia */
+.toast.firetoast{border-left-color:#f76707}
+.toast.firetoast > b{color:#f76707;font-size:15px}
+.uvtoast{display:flex;align-items:center;gap:10px;margin-top:8px}
+.uvtoast img{width:36px;height:36px;flex:none;image-rendering:pixelated}
+.toast .uvtoast b{display:inline;margin:0;color:var(--text)}
 /* Live card: S Rank status on the champion */
 .lpsr{display:flex;flex-wrap:wrap;align-items:center;gap:4px 14px;margin-top:4px;font-size:13px}
 .lpsr .rgflame{margin:-10px 2px -6px}

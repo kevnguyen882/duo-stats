@@ -3,7 +3,8 @@ import unittest
 from duostats import utopia
 from duostats.games import Player
 from duostats.utopia import (DuckUtopia, advance, apply_badges, boost_breakdown, catch_up, crumb_rate, goose_wave,
-                             grow_minutes, migrate, new_utopia, penta_plaza, raid, score, spawn_cost, upgrade_cost)
+                             grow_minutes, migrate, new_utopia, penta_plaza, raid, score, spawn_cost, upgrade_cost,
+                             first_graded, late_grades, volcano_spa)
 from tests.helpers import TempStorageCase
 
 MIN = 60000
@@ -109,6 +110,48 @@ class RewardTests(unittest.TestCase):
         plaza = penta_plaza(s, rows)
         self.assertEqual([(d["champion"], d["pentas"]) for d in plaza], [("Draven", 1), ("Vi", 2)])   # oldest first
         self.assertEqual(plaza[1]["start"], 30)
+
+    def test_a_late_grade_still_earns_its_ducks_once(self):
+        s = new_utopia("A#1", 0)
+        r = row("1", 10, champion="Lux")
+        s["games"] = ["1"]
+        apply_badges(s, r)                       # counted before its grade arrived
+        self.assertEqual((s["champs"], s["fire"]), ({}, 0))
+        r["grade"] = "S"                         # the grade comes in
+        self.assertEqual([got for _, got in late_grades(s, [r])], [["a Lux champion duck (S)"]])
+        self.assertEqual(late_grades(s, [r]), [])   # and only pays once
+        r["grade"] = "S+"                        # a better one later: the upgrade and a fire duck
+        late_grades(s, [r]); late_grades(s, [r])
+        self.assertEqual((s["champs"], s["fire"]), ({"Lux": "S+"}, 1))
+
+    def test_late_grades_skip_games_not_counted_yet_and_remakes(self):
+        s = new_utopia("A#1", 0)
+        s["games"] = ["1"]
+        self.assertEqual(late_grades(s, [row("2", 20, grade="S+"), row("1", 10, grade="S+", remake=True)]), [])
+        self.assertEqual(s["fire"], 0)
+
+    def test_older_utopias_find_the_grades_that_missed_their_ducks(self):
+        # rewarded: Sona S+ (champion and fire duck) and Annie S; never rewarded: Lux S (no duck) and Nilah S+ (one fire duck short)
+        s = new_utopia("A#1", 0)
+        s.pop("graded")
+        s.update(games=["1", "2", "3", "4"], champs={"Sona": "S+", "Annie": "S", "Nilah": "S+"}, fire=1)
+        rows = [row("1", 10, champion="Sona", grade="S+"), row("2", 20, champion="Annie", grade="S"),
+                row("3", 30, champion="Lux", grade="S"), row("4", 40, champion="Nilah", grade="S+")]
+        self.assertEqual(first_graded(s, rows), {"1": "S+", "2": "S"})
+        got = [(r["champion"], g) for r, g in late_grades(s, rows)]
+        self.assertEqual(got, [("Lux", ["a Lux champion duck (S)"]), ("Nilah", ["a fire duck"])])
+        self.assertEqual((s["fire"], s["champs"]["Lux"]), (2, "S"))
+        self.assertEqual(late_grades(s, rows), [])
+
+    def test_volcano_spa_has_a_fire_duck_per_s_plus_game(self):
+        s = new_utopia("A#1", 0)
+        rows = [row("3", 30, champion="Lux", grade="S+"), row("1", 10, champion="Nilah", grade="S+"),
+                row("2", 20, champion="Sona", grade="S"), row("4", 40, champion="Jinx", grade="S+", remake=True),
+                row("5", 50, champion="Kayn", grade="S+")]   # game 5 isn't counted in the utopia yet
+        s["games"] = ["1", "2", "3", "4"]
+        spa = volcano_spa(s, rows)
+        self.assertEqual([d["champion"] for d in spa], ["Nilah", "Lux"])   # oldest first; an S isn't a fire duck
+        self.assertEqual(spa[1]["start"], 30)
 
     def test_catch_up_curve(self):
         self.assertEqual(catch_up(1000, 1000), 1.0)
@@ -269,6 +312,24 @@ class GameTests(TempStorageCase):
         self.assertEqual(self.storage.read_json(self.storage.path("utopia-before-fresh-start.json"))["players"]["duo one#na1"]["crumbs"], 99999)
         again = self.game.state(viewer=False, now=60 * MIN)["players"][0]
         self.assertGreater(again["crumbs"], utopia.FOUNDING_GIFT)   # only once: it carries on from there
+
+    def test_hats_for_a_defender(self):
+        self.game.state(viewer=False, now=1)
+        self.give(1000)
+        hat = lambda **kw: self.game.act({"owner": "duo one#na1", "action": "hat", "champion": "Annie", **kw}, viewer=False, now=1)
+        p = hat(hat="cap", op="buy")["players"][0]
+        self.assertEqual(p["hats"]["Annie"], {"owned": ["cap"], "on": "cap"})   # bought hats go straight on
+        self.assertEqual(p["crumbs"], 1000 - utopia.HATS["cap"][1])
+        with self.assertRaises(ValueError):   # already has it
+            hat(hat="cap", op="buy")
+        with self.assertRaises(ValueError):   # not bought yet
+            hat(hat="crown", op="wear")
+        with self.assertRaises(ValueError):   # can't afford it
+            hat(hat="crown", op="buy")
+        self.assertIsNone(hat(op="off")["players"][0]["hats"]["Annie"]["on"])
+        self.assertEqual(hat(hat="cap", op="wear")["players"][0]["hats"]["Annie"]["on"], "cap")
+        with self.assertRaises(ValueError):   # not a champion played together
+            self.game.act({"owner": "duo one#na1", "action": "hat", "champion": "Teemo", "hat": "cap", "op": "buy"}, viewer=False, now=1)
 
     def test_only_your_own_utopia(self):
         with self.assertRaises(PermissionError):

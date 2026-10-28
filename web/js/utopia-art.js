@@ -194,6 +194,20 @@ function district(kind){
   });
 }
 
+// hats for the Champion Quarter's defenders: 10x6 maps whose bottom row sits on the duck's head (see wearHat in utopia.js)
+const HAT_ART = {
+  cap: [['..........', '..........', '..........', '..RRRR....', '.RRRRRR...', '.RRRRRRRR.'], {R: '#e03131'}],
+  beanie: [['...W......', '..BBB.....', '.BBBBB....', '.BBBBB....', 'BBBBBBB...', 'WWWWWWW...'], {B: '#1c7ed6', W: '#e7f5ff'}],
+  party: [['...Y......', '...P......', '..PYP.....', '..YPY.....', '.PYPYP....', '.YPYPY....'], {P: '#f06595', Y: '#ffe066'}],
+  flowers: [['..........', '..........', '..........', '..........', '.RGYGPG...', '.GGGGGG...'], {R: '#ff6b6b', G: '#40c057', Y: '#ffd43b', P: '#cc5de8'}],
+  cowboy: [['..........', '..........', '..TTTT....', '..TBBT....', '..TTTT....', 'TTTTTTTT..'], {T: '#a0522d', B: '#5c3317'}],
+  tophat: [['..KKKK....', '..KKKK....', '..KKKK....', '..RRRR....', '..KKKK....', 'KKKKKKKK..'], {K: '#212529', R: '#c92a2a'}],
+  chef: [['.WWWWW....', 'WWWWWWW...', 'WWWWWWW...', '.WWWWW....', '.WWWWW....', '.SSSSS....'], {W: '#ffffff', S: '#ced4da'}],
+  viking: [['W......W..', 'W.MMMM.W..', '.WMMMMMW..', '..MMMMM...', '.MMMMMMM..', '.YYYYYYY..'], {W: '#f8f0e3', M: '#adb5bd', Y: '#e8a33d'}],
+  wizard: [['....P.....', '...PP.....', '...PYP....', '..PPPP....', '.PPPPPP...', 'PPPPPPPPP.'], {P: '#5f3dc4', Y: '#ffe066'}],
+  crown: [['..........', '..........', '.Y.Y.Y....', '.YYYYY....', '.YRYCY....', '.YYYYY....'], {Y: '#fcc419', R: '#e03131', C: '#38bdf8'}],
+};
+
 // ---- icons and tiles ----
 const ICONS = {
   'icon-breadcrumb': [['..........', '..XXXXX...', '.XYYYYYX..', 'XYYZYYYYX.', 'XYYYYYZYX.', '.XYYYYYX..', '..XXXXX...'], {X: '#8d5524', Y: '#e0a96d', Z: '#c68642'}],
@@ -248,6 +262,29 @@ function buildArt(){
     px(3, 10, 2, 86, 'rgba(220,240,255,.55)'); px(35, 10, 2, 86, 'rgba(220,240,255,.55)'); px(8, 14, 2, 70, 'rgba(255,255,255,.35)');
   });
   ART['egg'] = fromMap(['..WWW...', '.WWWWW..', 'WWWSWWW.', 'WWWWWWW.', 'WWWWWSW.', 'WSWWWWW.', '.WWWWW..', '..WWW...'], {W: '#fff8e1', S: '#e9d8a6'}, 2);
+  Object.entries(HAT_ART).forEach(([name, [rows, pal]])=>{ ART['hat-' + name] = fromMap(rows, pal, 2); });
+  // the Champion Quarter: a lounge for the defenders
+  ART['tile-wood'] = canvasOf(32, 32, (g, px)=>{
+    px(0, 0, 32, 32, '#8a5a34');
+    [0, 8, 16, 24].forEach((y, i)=>{ px(0, y, 32, 1, '#6b4423'); px((i * 11) % 32, y, 1, 8, '#6b4423'); px(((i * 11) + 4) % 32, y + 3, 6, 1, '#9c6a3f'); });
+  });
+  ART['tile-wallpaper'] = canvasOf(32, 32, (g, px)=>{
+    px(0, 0, 32, 32, '#7b3f4f');
+    [4, 20].forEach(x=>px(x, 0, 2, 32, '#8f4e5f')); [[10, 8], [26, 24]].forEach(([x, y])=>{ px(x, y, 3, 3, '#c8aa6e'); px(x + 1, y - 1, 1, 5, '#c8aa6e'); px(x - 1, y + 1, 5, 1, '#c8aa6e'); });
+  });
+  ART['lounge-sofa'] = chunky(96, px=>{ px(2, 6, 44, 12, '#2f6f8f'); px(0, 10, 6, 16, '#255a75'); px(42, 10, 6, 16, '#255a75');
+    px(6, 18, 18, 7, '#3d8bb0'); px(24, 18, 18, 7, '#3d8bb0'); px(23, 18, 2, 7, '#2f6f8f'); px(4, 25, 40, 4, '#255a75'); px(5, 29, 3, 3, '#3b2a1a'); px(40, 29, 3, 3, '#3b2a1a'); });
+  ART['lounge-armchair'] = chunky(64, px=>{ px(4, 4, 24, 14, '#a8462f'); px(1, 10, 6, 14, '#8a3624'); px(25, 10, 6, 14, '#8a3624');
+    px(7, 17, 18, 7, '#c4573c'); px(4, 24, 24, 4, '#8a3624'); px(5, 28, 3, 3, '#3b2a1a'); px(24, 28, 3, 3, '#3b2a1a'); });
+  ART['lounge-fireplace'] = chunky(96, px=>{ px(4, 4, 40, 4, '#5c4a42'); px(6, 8, 36, 36, '#9a8478'); px(6, 8, 36, 2, '#b8a397');
+    px(14, 20, 20, 24, '#2b1d18'); px(12, 18, 24, 2, '#5c4a42'); px(16, 40, 16, 3, '#6b4423'); });
+  ART['lounge-beanbag'] = chunky(48, px=>{ px(4, 10, 16, 12, '#e8a33d'); px(2, 14, 20, 8, '#d18b26'); px(6, 8, 10, 4, '#f2bb5c'); });
+  ART['lounge-table'] = chunky(64, px=>{ px(2, 12, 28, 4, '#6b4423'); px(2, 12, 28, 1, '#8a5a34'); px(4, 16, 2, 10, '#5c3317'); px(26, 16, 2, 10, '#5c3317');
+    px(8, 9, 4, 3, '#f8f9fa'); px(12, 10, 1, 1, '#f8f9fa'); px(18, 9, 6, 3, '#e8590c'); });
+  ART['lounge-plant'] = chunky(48, px=>{ px(8, 16, 8, 8, '#a0522d'); px(7, 15, 10, 2, '#8b4513');
+    [[11, 2, 2, 14], [6, 6, 5, 3], [13, 4, 5, 3], [4, 10, 7, 3], [13, 9, 7, 3]].forEach(([x, y, w, h])=>px(x, y, w, h, '#2f9e44')); });
+  ART['lounge-window'] = chunky(64, px=>{ px(2, 2, 28, 24, '#c8aa6e'); px(4, 4, 24, 20, '#1e2a4a'); px(15, 4, 2, 20, '#c8aa6e'); px(4, 13, 24, 2, '#c8aa6e');
+    px(20, 6, 4, 4, '#fff3bf'); [[7, 7], [11, 17], [24, 18], [8, 20]].forEach(([x, y])=>px(x, y, 1, 1, '#ffffff')); });
   ART['tile-plaza'] = canvasOf(32, 32, (g, px)=>{   // pale paving stones, so the golden ducks stand out
     px(0, 0, 32, 32, '#a39a8c');
     [[0, 0, 15, 7], [16, 0, 16, 7], [0, 8, 9, 7], [10, 8, 13, 7], [24, 8, 8, 7], [0, 16, 15, 7], [16, 16, 16, 7], [0, 24, 6, 8], [7, 24, 14, 8], [22, 24, 10, 8]]
@@ -258,6 +295,18 @@ function buildArt(){
     px(13, 10, 6, 12, '#d4a73a'); px(12, 9, 8, 2, '#f2d27f');
     px(12, 4, 7, 5, '#f7c948'); px(16, 2, 3, 3, '#f7c948'); px(19, 3, 2, 1, '#f29a2e'); px(17, 3, 1, 1, '#1b1b1b');
     [[9, 6], [22, 5], [8, 13], [23, 12]].forEach(([x, y])=>px(x, y, 1, 3, '#a5d8ff'));
+  });
+  ART['tile-volcanic'] = canvasOf(32, 32, (g, px)=>{   // dark basalt with glowing cracks, for the Volcano Spa
+    px(0, 0, 32, 32, '#3b3236');
+    [[2, 3, 9, 6], [14, 1, 12, 7], [4, 13, 11, 7], [19, 12, 10, 8], [1, 23, 8, 7], [12, 23, 14, 7]].forEach(([x, y, w, h], i)=>{
+      px(x, y, w, h, i % 2 ? '#4a3f43' : '#433a3e'); px(x, y, w, 1, '#5a4e52'); });
+    [[11, 9, 1, 4], [12, 12, 4, 1], [27, 20, 1, 3], [9, 21, 3, 1]].forEach(([x, y, w, h])=>px(x, y, w, h, '#e8590c'));
+  });
+  ART['volcano-peak'] = chunky(160, px=>{   // the volcano behind the springs (80x80 half-size grid)
+    for(let i = 0; i < 46; i++){ const w = 20 + i * 1.32; px(Math.round(40 - w / 2), 34 + i, Math.round(w), 1, i < 3 ? '#5c3d2e' : i % 7 ? '#5a4740' : '#4d3c36'); }
+    px(29, 30, 22, 5, '#3a2a25'); px(31, 31, 18, 3, '#ff6b1a'); px(34, 31, 12, 1, '#ffd43b');   // the crater, glowing
+    [[33, 35, 2, 14], [35, 48, 2, 10], [45, 35, 2, 9], [43, 43, 2, 12], [41, 54, 2, 8]].forEach(([x, y, w, h])=>px(x, y, w, h, '#e8590c'));   // lava runs
+    [[34, 36], [44, 38], [36, 52], [42, 50]].forEach(([x, y])=>px(x, y, 1, 2, '#ffd43b'));
   });
   ART['tile-grass'] = tile('grass'); ART['tile-water'] = tile('water'); ART['tile-mud'] = tile('mud');
   ART['ui-raid-board'] = canvasOf(128, 96, (g, px)=>{ px(0, 0, 128, 96, '#6b4423'); px(4, 4, 120, 88, '#a47148'); });
