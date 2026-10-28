@@ -91,16 +91,15 @@ function opggPanel(det, queueId){
   const augChip = a=>{ const g = (augNames||{})[a.id] || {};
     return `<span class="augn" data-aug="${esc(a.id)}" tabindex="0"><img class="augic ${esc(g.rarity||'')}" src="/api/augicon/${encodeURIComponent(a.id)}" alt=""
       onerror="this.style.visibility='hidden'"><span>${esc((g.name||'').trim() || a.name || 'Augment #'+a.id)}</span><small>${a.pick.toFixed(1)}%</small></span>`; };
-  // skill order: which skill to max first, then the most picked level-by-level path for it
+  // skill order: which skill to max first
   const spells = (d.skills && d.skills.spells) || {};
-  const skill = (k, big) => { const sp = spells[k] || {};   // big: with the skill's picture; small: its letter only
-    return `<span class="sk ${big?'big':''}" data-k="${esc(k)}" title="${esc(sp.name ? `${k} · ${sp.name}` : k)}">${big && sp.image && ddVer
+  const skill = k => { const sp = spells[k] || {};
+    return `<span class="sk" data-k="${esc(k)}" title="${esc(sp.name ? `${k} · ${sp.name}` : k)}">${sp.image && ddVer
       ? `<img src="https://ddragon.leagueoflegends.com/cdn/${ddVer}/img/spell/${encodeURIComponent(sp.image)}" alt="" onerror="this.remove()">` : ''}<b>${esc(k)}</b></span>`; };
   const orders = (d.skills && d.skills.orders) || [];
-  const skills = `<h3>Skill order <small class="opnote">max first · then level by level</small></h3>${orders.length ? orders.map(o=>`<div class="sko">
-      <div class="skmax">${o.max.map(k=>skill(k, true)).join('<span class="skgt">›</span>')}
-        <div class="opbs"><span class="${o.win>=50?'w':'lo'}">${o.win.toFixed(1)}% WR</span><span>${o.pick.toFixed(1)}% pick</span><span>${f0(o.games)} games</span></div></div>
-      <div class="sklv">${o.order.map((k,i)=>`<span><small>${i+1}</small>${skill(k)}</span>`).join('')}</div></div>`).join('')
+  const skills = `<h3>Skill order <small class="opnote">max first</small></h3>${orders.length ? orders.map(o=>`<div class="skmax">
+      ${o.max.map(skill).join('<span class="skgt">›</span>')}
+      <div class="opbs"><span class="${o.win>=50?'w':'lo'}">${o.win.toFixed(1)}% WR</span><span>${o.pick.toFixed(1)}% pick</span><span>${f0(o.games)} games</span></div></div>`).join('')
     : '<div class="empty">op.gg has none yet.</div>'}`;
   const augs = d.augments ? `<h3>Most-picked augments <small class="opnote">% of games picked</small></h3>${['Prismatic','Gold','Silver'].map(tier=>`<div class="augtier">
       <span class="rar ${tier}">${tier}</span><div class="augrow1">${(d.augments[tier]||[]).map(augChip).join('') || '<span class="empty">None yet.</span>'}</div></div>`).join('')}` : '';

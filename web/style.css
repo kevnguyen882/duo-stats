@@ -733,21 +733,14 @@ h1.logo .lg-light{display:none}
 .opbs .w,.opbs .lo{font-weight:700}
 .opfinal .item{width:48px;line-height:1.35}
 .lpsub-gap{height:16px}
-.sk{--sk:var(--muted);position:relative;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;
-  border-radius:5px;background:var(--panel2,rgba(0,0,0,.25));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--sk) 55%,transparent);overflow:hidden}
+.sk{--sk:var(--muted);position:relative;display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;
+  border-radius:7px;background:var(--panel2);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--sk) 55%,transparent);overflow:hidden}
 .sk[data-k="Q"]{--sk:#4ea4ff}.sk[data-k="W"]{--sk:#2fd2b6}.sk[data-k="E"]{--sk:#ff9a3c}.sk[data-k="R"]{--sk:#ff5b6e}
 .sk img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.sk b{position:relative;font-size:11px;font-weight:800;color:var(--sk);line-height:1}
-.sk:not(.big){background:color-mix(in srgb,var(--sk) 14%,var(--panel2))}
-.sk img+b{position:absolute;right:0;bottom:0;font-size:9px;padding:1px 2px;border-radius:3px 0 0 0;background:rgba(10,12,20,.85)}
-.sk.big{width:34px;height:34px;border-radius:7px}
-.sk.big img+b{font-size:10px}
-.sko{margin-bottom:12px}
-.skmax{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;margin-bottom:6px}
+.sk b{position:relative;font-size:13px;font-weight:800;color:var(--sk);line-height:1}
+.sk img+b{position:absolute;right:0;bottom:0;font-size:10px;padding:1px 2px;border-radius:3px 0 0 0;background:rgba(10,12,20,.85)}
+.skmax{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;margin-bottom:10px}
 .skmax .opbs{margin-left:6px}
 .skgt{color:var(--muted);font-weight:800}
-.sklv{display:flex;flex-wrap:wrap;gap:3px}
-.sklv>span{display:inline-flex;flex-direction:column;align-items:center;gap:1px}
-.sklv small{font-size:9px;color:var(--muted);line-height:1}
 .opgg h4.opsub{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin:10px 0 6px}
 .opfinal .item .w,.opfinal .item .lo{font-weight:700}
