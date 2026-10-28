@@ -2,7 +2,8 @@ import unittest
 
 from duostats import utopia
 from duostats.games import Player
-from duostats.utopia import (DuckUtopia, advance, apply_badges, boost_breakdown, catch_up, crumb_rate, goose_wave,
+from duostats.utopia import (DuckUtopia, advance, apply_badges, boost_breakdown, boss, boss_fight, catch_up, crumb_rate,
+                             defender, goose_wave,
                              grow_minutes, migrate, new_utopia, penta_plaza, raid, score, spawn_cost, upgrade_cost,
                              first_graded, late_grades, volcano_spa)
 from tests.helpers import TempStorageCase
@@ -190,6 +191,27 @@ class RaidTests(unittest.TestCase):
         self.assertTrue(any("ultimate" in line for line in rep["log"]))
 
 
+class TrainingGroundsTests(unittest.TestCase):
+    def champ(self, games=10, wins=5, cls="fighter", rank=0, **over):
+        rec = {"games": games, "wins": wins, "kills": 9, "deaths": 3, "assists": 0, "triples": 0, "quadras": 0,
+               "pentas": 0, "grade": ""}
+        rec.update(over)
+        return defender("Garen", rec, cls, 0, rank)
+
+    def test_levels_won_add_to_the_level_and_bosses_get_tougher(self):
+        self.assertEqual(self.champ(rank=3)["level"], self.champ()["level"] + 3)
+        self.assertGreater(boss(self.champ(rank=3))["hp"], boss(self.champ())["hp"])
+        self.assertEqual(boss(self.champ())["name"], "Sergeant Honk")
+        self.assertEqual(boss(self.champ(rank=7))["name"], "The Goose King")
+
+    def test_boss_fight_is_repeatable_and_fair(self):
+        self.assertEqual(boss_fight(self.champ(), 5), boss_fight(self.champ(), 5))
+        wins = lambda d: sum(boss_fight(d, i)["win"] for i in range(200))
+        self.assertGreater(wins(self.champ()), 100)            # an average champion usually beats its first boss ...
+        self.assertLess(wins(self.champ(rank=6)), 100)         # ... but the bosses higher up are a real test
+        self.assertGreater(wins(self.champ(wins=8, grade="S")), wins(self.champ()))   # better games, better odds
+
+
 class FakeTracker:
     def __init__(self, players):
         self._players = players
@@ -343,6 +365,33 @@ class GameTests(TempStorageCase):
         self.assertTrue(out["result"]["raid"]["practice"])
         after = out["players"][0]
         self.assertEqual((after["crumbs"], after["feathers"], after["raids"]), (before["crumbs"], before["feathers"], []))
+
+    def test_a_win_on_a_defender_earns_one_boss_challenge(self):
+        self.game.state(viewer=False, now=1000)
+        self.assertEqual(self.game.state(viewer=False, now=1000)["players"][0]["challenges"], [])   # history doesn't count
+        challenge = lambda: self.game.act({"owner": "duo one#na1", "action": "challenge", "champion": "Annie"}, viewer=False, now=5000)
+        with self.assertRaises(ValueError):   # no win yet
+            challenge()
+        self.rows["duo one#na1"][:0] = [row("4", 4), row("3", 3)]   # two wins on Annie: still one challenge
+        self.assertEqual(self.game.state(viewer=False, now=2000)["players"][0]["challenges"], ["Annie"])
+        before = self.game.state(viewer=False, now=5000)["players"][0]["squad"][0]
+        out = challenge()
+        fight, p = out["result"]["fight"], out["players"][0]
+        self.assertEqual(p["challenges"], [])   # used up, win or lose
+        self.assertEqual(p["bossFights"][0]["boss"]["name"], fight["boss"]["name"])
+        self.assertEqual(p["ranks"].get("Annie", 0), 1 if fight["win"] else 0)
+        self.assertEqual(p["squad"][0]["level"], before["level"] + (1 if fight["win"] else 0))
+        with self.assertRaises(ValueError):
+            challenge()
+
+    def test_a_loss_or_a_champion_off_the_squad_earns_no_challenge(self):
+        self.game.state(viewer=False, now=1000)
+        # five defenders: Annie, then the most played; Zed, played once, is left out
+        self.rows["duo one#na1"][:0] = [row(f"{c}{i}", 10, win=False, champion=c) for c in "BCDE" for i in range(3)]
+        self.rows["duo one#na1"][:0] = [row("Z", 20, champion="Zed"), row("A", 20, win=False)]
+        p = self.game.state(viewer=False, now=2000)["players"][0]
+        self.assertNotIn("Zed", [d["champion"] for d in p["squad"]])
+        self.assertEqual(p["challenges"], [])
 
     def test_score_counts_districts(self):
         s = new_utopia("A#1", 0)

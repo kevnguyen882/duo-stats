@@ -21,6 +21,9 @@ to nests.
 The Champion Quarter is a lounge where your five defenders rest; there you can see each one's stats and buy it hats
 (just for looks: HATS). Hats belong to the champion, so they stay if it leaves the squad and comes back.
 The Volcano Spa is where the fire ducks soak, one for each game with an S+ (volcano_spa()).
+The Training Grounds: a new win on one of your five defenders earns it a challenge (one waiting at a time). Challenge
+the boss there, a one-on-one fight scaled to the defender's level (boss_fight()); beat it and the defender goes up a
+level for good. Win or lose, the challenge is used up.
 
 First version: the numbers below are guesses to see how it plays, and are meant to be tuned.
 """
@@ -175,6 +178,8 @@ def migrate(s: dict):
     s.pop("nextSpawn", None)
     s.setdefault("spawned", 0)
     s.setdefault("hats", {})
+    for k, v in (("ranks", {}), ("challenges", []), ("bossFights", [])):   # the Training Grounds
+        s.setdefault(k, v)
 
 
 def _fill_pond(s: dict):
@@ -248,17 +253,75 @@ def champion_records(rows: list) -> dict:
     return out
 
 
-def defender(champion: str, rec: dict, cls: str, training: int) -> dict:
-    """A champion's raid stats, from that player's own games on it."""
-    level = min(rec["games"], 20)
+def defender(champion: str, rec: dict, cls: str, training: int, rank: int = 0) -> dict:
+    """A champion's raid stats, from that player's own games on it (and the levels it won in the Training Grounds)."""
+    level = min(rec["games"], 20) + rank
     wr = rec["wins"] / rec["games"] if rec["games"] else 0
     kda = (rec["kills"] + rec["assists"]) / max(rec["deaths"], 1)
     star = STAR.get(rec["grade"], 0)
     boost = 1 + 0.12 * star + 0.1 * training
     hp = round((60 + 6 * level) * (0.7 + 0.6 * wr) * boost)
     return {"champion": champion, "cls": cls, "level": level, "hp": hp, "atk": round((6 + 1.2 * min(kda, 8) + 0.4 * level) * boost, 1),
-            "star": star, "grade": rec["grade"], "training": training, "triples": rec["triples"], "quadras": rec["quadras"],
+            "star": star, "grade": rec["grade"], "training": training, "rank": rank, "triples": rec["triples"], "quadras": rec["quadras"],
             "pentas": rec["pentas"], "games": rec["games"], "winRate": round(wr, 3), "kda": round(kda, 2)}
+
+
+# ---- the Training Grounds ----
+MAX_RANK = 10        # levels a defender can win from bosses
+BOSS_STEP = 0.06     # each boss beaten gives that defender's next one 6% more health
+BOSSES = [(0, "Sergeant Honk"), (2, "The Goose Knight"), (4, "Mother Goose"), (7, "The Goose King")]   # by levels won
+
+
+def boss(d: dict) -> dict:
+    """The boss a defender faces next. Its stats sit halfway between the defender's own and an average champion's at
+    the same level, so a strong defender is favoured but never sure to win; each level won makes the next boss tougher."""
+    lv = d["level"]
+    hp = (d["hp"] + 60 + 6 * lv) / 2
+    atk = (d["atk"] + 9.6 + 0.4 * lv) / 2
+    name = next(n for r, n in reversed(BOSSES) if d["rank"] >= r)
+    return {"name": name, "level": lv, "hp": round(6 * atk * (1 + BOSS_STEP * d["rank"])), "atk": round(hp / 7, 1)}
+
+
+def boss_fight(d: dict, seed, max_rounds: int = 20) -> dict:
+    """One defender against its boss, fought automatically. Returns the fight report."""
+    rng = random.Random(f"boss-{seed}-{d['champion']}")
+    b = boss(d)
+    hp, bhp, a, cls = d["hp"], b["hp"], d["atk"], d["cls"]
+    log, used_ult = [], False
+    roll = lambda: rng.uniform(0.7, 1.3)
+    rounds = 0
+    for rounds in range(1, max_rounds + 1):
+        if d["pentas"] and not used_ult and rounds >= 2:
+            used_ult, dmg = True, a * 3
+            log.append(f"Round {rounds}: {d['champion']} used a pentakill ultimate!")
+        else:
+            dmg = a * {"tank": 0.9, "mage": 1.1, "marksman": 1.15, "support": 0.9, "fighter": 1.0, "assassin": 1.1}[cls]
+            if cls == "assassin" and rounds == 1:
+                dmg *= 1.5
+                log.append(f"Round 1: {d['champion']} struck first from the shadows.")
+            if rng.random() < min(0.1 * d["triples"] + 0.15 * d["quadras"], 0.3):
+                dmg *= 2
+                log.append(f"Round {rounds}: {d['champion']} landed a double hit.")
+        bhp -= dmg * roll() + (2 if d["star"] == 3 else 0)   # S+: a flame aura
+        if cls in ("fighter", "support"):
+            hp = min(d["hp"], hp + a * (0.2 if cls == "fighter" else 0.4))
+        if bhp <= 0:
+            log.append(f"Round {rounds}: {b['name']} is beaten! {d['champion']} goes up a level.")
+            break
+        bite = b["atk"] * roll() * (0.75 if cls == "tank" else 1)
+        if rounds % 3 == 0:
+            bite *= 1.6
+            log.append(f"Round {rounds}: {b['name']} let out a Honk of Doom.")
+        hp -= bite
+        if hp <= 0:
+            log.append(f"Round {rounds}: {d['champion']} was knocked out.")
+            break
+        if rounds in (1, 5, 10, 15):
+            log.append(f"Round {rounds}: {b['name']} has {max(0, round(bhp))} of {b['hp']} health left.")
+    else:
+        log.append(f"{b['name']} outlasted {d['champion']} and waddled off.")
+    return {"win": bhp <= 0, "rounds": rounds, "champion": d["champion"], "cls": cls, "boss": b,
+            "hpLeft": max(0, round(hp)), "bossLeft": max(0, round(bhp)), "log": log[-12:]}
 
 
 # ---- goose raids ----
@@ -373,7 +436,7 @@ def new_utopia(riot_id: str, now: int) -> dict:
     return {"riotId": riot_id, "founded": now, "tick": now, "crumbs": float(FOUNDING_GIFT), "feathers": 0,
             "levels": dict(START_LEVELS), "ducklings": [], "lost": 0, "spawned": 0, "hats": {}, "pond": STARTING_DUCKS, "edge": 0,
             "golden": 0, "boost": 0.0, "champs": {}, "fire": 0, "graded": {}, "games": [], "raids": [], "raidWins": 0,
-            "squad": [], "training": {}, "log": [], "founding": None}
+            "squad": [], "training": {}, "ranks": {}, "challenges": [], "bossFights": [], "log": [], "founding": None}
 
 
 def fresh_start(s: dict, now: int) -> dict:
@@ -530,13 +593,16 @@ class DuckUtopia:
                     continue
                 boost = catch_up(scores[key], best)
                 got = apply_badges(s, r)
+                recs = champion_records(rows.get(key, []))
+                squad = self._squad(s, recs, classes)
                 if r.get("win"):
                     s["crumbs"] += WIN_CRUMBS * boost
                     got.insert(0, f"{round(WIN_CRUMBS * boost)} breadcrumbs")
+                    if r["champion"] in [d["champion"] for d in squad] and r["champion"] not in s["challenges"]:
+                        s["challenges"].append(r["champion"])   # a win on a defender: a boss challenge in the Training Grounds
+                        got.append("a Training Grounds challenge")
                 if got:
                     self._note(s, now, f"{'Won' if r.get('win') else 'Played'} on {r['champion']}: {', '.join(got)}.")
-                recs = champion_records(rows.get(key, []))
-                squad = self._squad(s, recs, classes)
                 if squad:
                     rep = raid(squad, mid, data["raids"], s["levels"]["fence"])
                     self._reward(s, rep, boost)
@@ -583,7 +649,7 @@ class DuckUtopia:
                 break
             if c not in chosen:
                 chosen.append(c)
-        return [defender(c, recs[c], classes.get(c, "fighter"), s["training"].get(c, 0)) for c in chosen]
+        return [defender(c, recs[c], classes.get(c, "fighter"), s["training"].get(c, 0), s["ranks"].get(c, 0)) for c in chosen]
 
     def _reward(self, s: dict, rep: dict, boost: float):
         if rep["win"]:
@@ -604,7 +670,7 @@ class DuckUtopia:
     # ---- what you can do ----
     def _do(self, s: dict, body: dict, player, now: int, data: dict) -> dict:
         action = body.get("action")
-        rows = self.stats.together([player]) if action in ("squad", "train", "practice", "hat") else {}
+        rows = self.stats.together([player]) if action in ("squad", "train", "practice", "hat", "challenge") else {}
         recs = champion_records(rows.get(player.key, []))
         if action == "upgrade":
             b = body.get("building")
@@ -689,6 +755,24 @@ class DuckUtopia:
             rep = raid(squad, f"practice-{now}", data.get("raids", 0) + 6, s["levels"]["fence"])
             rep.update(practice=True, t=now)
             return {"raid": rep}
+        if action == "challenge":   # the Training Grounds: one defender against its boss
+            c = body.get("champion")
+            if c not in s["challenges"]:
+                raise ValueError(f"{c} has no challenge waiting: win a game on it while it's one of your defenders.")
+            if c not in recs:
+                raise ValueError("Only champions you've played together can fight here.")
+            if s["ranks"].get(c, 0) >= MAX_RANK:
+                raise ValueError(f"{c} has beaten every boss.")
+            d = defender(c, recs[c], self._classes().get(c, "fighter"), s["training"].get(c, 0), s["ranks"].get(c, 0))
+            rep = boss_fight(d, now)
+            s["challenges"].remove(c)
+            if rep["win"]:
+                s["ranks"][c] = s["ranks"].get(c, 0) + 1
+            rep.update(t=now, level=d["level"] + (1 if rep["win"] else 0))
+            s["bossFights"] = ([rep] + s["bossFights"])[:MAX_REPORTS]
+            self._note(s, now, f"Training Grounds: {c} beat {rep['boss']['name']} and reached level {rep['level']}." if rep["win"]
+                       else f"Training Grounds: {c} lost to {rep['boss']['name']}.")
+            return {"fight": rep}
         raise ValueError("Unknown action.")
 
     # ---- what the page gets ----
@@ -707,7 +791,8 @@ class DuckUtopia:
             lv = s["levels"]
             out.append({
                 **{k: s[k] for k in ("riotId", "feathers", "levels", "lost", "spawned", "hats", "pond", "edge", "golden", "boost",
-                                     "champs", "fire", "raids", "raidWins", "training", "log", "founding", "founded")},
+                                     "champs", "fire", "raids", "raidWins", "training", "ranks", "challenges", "bossFights",
+                                     "log", "founding", "founded")},
                 "crumbs": round(s["crumbs"], 2), "ducklings": sorted(s["ducklings"]),
                 "score": scores[i], "catchUp": catch_up(scores[i], best), "leading": len(scores) > 1 and scores[i] == best and scores.count(best) == 1,
                 "rate": round(crumb_rate(s), 3), "nestSpace": nest_space(lv["nests"]), "pondSpace": pond_space(lv["pond"]),
@@ -719,7 +804,7 @@ class DuckUtopia:
                 "buildings": {b: {"level": lv[b], "name": building_name(b, lv[b]) if lv[b] else None,
                                   "next": building_name(b, lv[b] + 1) if upgrade_cost(b, lv[b]) is not None else None,
                                   "cost": upgrade_cost(b, lv[b])} for b in BUILDINGS},
-                "squad": self._squad(s, recs, classes),
+                "squad": [{**d, "boss": boss(d), "maxRank": d["rank"] >= MAX_RANK} for d in self._squad(s, recs, classes)],
                 "champions": sorted(({"champion": c, "cls": classes.get(c, "fighter"), "games": r["games"]}
                                      for c, r in recs.items()), key=lambda x: (-x["games"], x["champion"])),
             })

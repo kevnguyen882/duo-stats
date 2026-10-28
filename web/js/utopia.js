@@ -88,7 +88,7 @@ setInterval(()=>{ if(U && U.players.some(p=>p.ducklings.length && p.ducklings[0]
 
 // ---- drawing the panels ----
 function renderPanels(){
-  renderScore(); renderWhose(); renderResources(); renderBuild(); renderLab(); renderQuarter(); renderVolcano(); renderSquad(); renderRaids(); renderLog();
+  renderScore(); renderWhose(); renderResources(); renderBuild(); renderLab(); renderQuarter(); renderVolcano(); renderSquad(); renderRaids(); renderGrounds(); renderLog();
   if(tipEl && !tipEl.isConnected) showTip({target: document.body});   // what it was over has been redrawn
 }
 function renderScore(){
@@ -200,7 +200,7 @@ function renderQuarter(){
     : 'Opens with your first S-, S or S+ together. Your defenders will rest here between goose raids.';
   if(!d){ $('#quarterDetail').innerHTML = open ? '<p class="uempty">No defenders yet: play a game together first.</p>' : ''; return; }
   const mineHats = p.hats[d.champion] || {owned: [], on: null}, have = crumbsNow(p);
-  const rows = [['Class', CLASS_NAME[d.cls]], ['Level', `${d.level} (from ${plural(d.games, 'game')} together)`], ['Health', `${d.hp} HP`],
+  const rows = [['Class', CLASS_NAME[d.cls]], ['Level', `${d.level} (from ${plural(d.games, 'game')} together${d.rank ? `, +${d.rank} from bosses in the Training Grounds` : ''})`], ['Health', `${d.hp} HP`],
     ['Attack', `${d.atk} ATK`], ['Win rate', `${Math.round(d.winRate * 100)}%`], ['KDA', d.kda.toFixed(2)], ['Best grade', d.grade || 'none yet'],
     ['Training', d.training ? `${d.training} of 10 (+${d.training * 10}% health and attack)` : 'none yet'],
     ['Multikills', kills(d.triples, d.quadras) + (d.pentas ? `${d.triples || d.quadras ? ', ' : ''}${plural(d.pentas, 'penta')}` : '') || 'none yet'],
@@ -284,6 +284,32 @@ function renderRaids(){
     ${U.players[U.me] && U.players[U.me].squad.length ? '<div class="ubtns"><button class="ghost" data-practice>Practice raid (nothing won or lost)</button></div>' : ''}`;
 }
 $('#raids').addEventListener('click', e=>{ if(e.target.closest('[data-practice]')) act({action: 'practice'}, true); });
+
+// ---- the Training Grounds: a win on a defender earns it a challenge; beat the boss for a level ----
+function fightReport(f, i){
+  return `<div class="urep ${f.win ? '' : 'lost'}" style="--c:${COLORS[i] || COLORS[0]}">
+    <h3><span class="who">${esc(f.champion)} vs ${esc(f.boss.name)}</span><span class="r">${f.win ? 'Level up!' : 'Beaten'}</span></h3>
+    <div class="ugeese">${pic('duck-' + f.cls)}<img class="pix ${f.win ? 'gone' : ''}" src="${artURL('goose-king')}" alt="${esc(f.boss.name)}"></div>
+    <div>${f.rounds} round${f.rounds === 1 ? '' : 's'} · boss level ${f.boss.level} · ${f.boss.hp} HP · ${f.boss.atk} ATK</div>
+    <div class="rw">${f.win ? `${esc(f.champion)} is now level ${f.level}.` : `${esc(f.boss.name)} had ${f.bossLeft} health left. Win another game on ${esc(f.champion)} to try again.`}</div>
+    <ol>${f.log.map(l=>`<li>${esc(l)}</li>`).join('')}</ol></div>`;
+}
+function renderGrounds(){
+  const p = U.players[viewing], own = mine(), ready = new Set(p.challenges);
+  const rows = p.squad.map(d=>{
+    const b = d.boss, can = ready.has(d.champion) && !d.maxRank;
+    const state = d.maxRank ? 'beat every boss' : can ? `challenge ready: ${esc(b.name)} · ${b.hp} HP · ${b.atk} ATK` : 'win a game on it to earn a challenge';
+    return `<div class="udef">${pic('duck-' + d.cls, 'duck pix')}${champIcon(d.champion)}
+      <div class="t"><b>${esc(d.champion)}</b><span>Lv ${d.level}${d.rank ? ` (+${d.rank} from bosses)` : ''} · ${state}</span></div>
+      ${own && can ? `<button data-challenge="${esc(d.champion)}">Challenge</button>` : ''}</div>`;
+  }).join('');
+  const last = p.bossFights[0];
+  $('#grounds').innerHTML = `<p class="unote" style="margin-top:0">Win a game together on one of your five defenders and it earns a challenge here (one waiting at a time).
+      Each challenge is a one-on-one fight against a boss built for that defender's level: win and it goes up a level for good; win or lose, the challenge is used up.</p>
+    ${p.squad.length ? rows : '<p class="uempty">No defenders yet: play a game together first.</p>'}
+    ${last ? `<h3 style="margin:14px 0 8px;font-size:14px">Latest boss fight</h3><div class="uraids">${fightReport(last, viewing)}</div>` : ''}`;
+}
+$('#grounds').addEventListener('click', e=>{ const c = e.target.closest('[data-challenge]'); if(c) act({action: 'challenge', champion: c.dataset.challenge}); });
 function renderLog(){
   const p = U.players[viewing];
   $('#log').innerHTML = p.log.length ? `<ul class="ulog">${p.log.map(l=>`<li><time>${new Date(l.t).toLocaleString(undefined, {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'})}</time><span>${esc(l.text)}</span></li>`).join('')}</ul>`
