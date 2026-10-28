@@ -374,23 +374,32 @@ class GameTests(TempStorageCase):
         after = out["players"][0]
         self.assertEqual((after["crumbs"], after["feathers"], after["raids"]), (before["crumbs"], before["feathers"], []))
 
-    def test_a_win_on_a_defender_earns_one_boss_challenge(self):
+    def test_each_win_on_a_defender_earns_a_boss_challenge(self):
         self.game.state(viewer=False, now=1000)
         self.assertEqual(self.game.state(viewer=False, now=1000)["players"][0]["challenges"], [])   # history doesn't count
         challenge = lambda: self.game.act({"owner": "duo one#na1", "action": "challenge", "champion": "Annie"}, viewer=False, now=5000)
         with self.assertRaises(ValueError):   # no win yet
             challenge()
-        self.rows["duo one#na1"][:0] = [row("4", 4), row("3", 3)]   # two wins on Annie: still one challenge
-        self.assertEqual(self.game.state(viewer=False, now=2000)["players"][0]["challenges"], ["Annie"])
+        self.rows["duo one#na1"][:0] = [row("4", 4), row("3", 3)]   # two wins on Annie: two challenges
+        self.assertEqual(self.game.state(viewer=False, now=2000)["players"][0]["challenges"], ["Annie", "Annie"])
         before = self.game.state(viewer=False, now=5000)["players"][0]["squad"][0]
         out = challenge()
         fight, p = out["result"]["fight"], out["players"][0]
-        self.assertEqual(p["challenges"], [])   # used up, win or lose
+        self.assertEqual(p["challenges"], ["Annie"])   # one used up, win or lose; the other still waits
         self.assertEqual(p["bossFights"][0]["boss"]["name"], fight["boss"]["name"])
         self.assertEqual(p["ranks"].get("Annie", 0), 1 if fight["win"] else 0)
         self.assertEqual(p["squad"][0]["level"], before["level"] + (1 if fight["win"] else 0))
-        with self.assertRaises(ValueError):
+        self.assertEqual(challenge()["players"][0]["challenges"], [])   # the second fight
+        with self.assertRaises(ValueError):   # and no third
             challenge()
+
+    def test_no_challenges_once_every_boss_is_beaten(self):
+        self.game.state(viewer=False, now=1000)
+        data = self.game._load()
+        data["players"]["duo one#na1"]["ranks"]["Annie"] = utopia.MAX_RANK
+        self.storage.write_json(self.game.path, data)
+        self.rows["duo one#na1"].insert(0, row("3", 3))
+        self.assertEqual(self.game.state(viewer=False, now=2000)["players"][0]["challenges"], [])
 
     def test_a_test_fight_needs_no_challenge_and_changes_nothing(self):
         before = self.game.state(viewer=False, now=1000)["players"][0]

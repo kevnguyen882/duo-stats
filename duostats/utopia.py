@@ -21,7 +21,7 @@ to nests.
 The Champion Quarter is a lounge where your five defenders rest; there you can see each one's stats and buy it hats
 (just for looks: HATS). Hats belong to the champion, so they stay if it leaves the squad and comes back.
 The Volcano Spa is where the fire ducks soak, one for each game with an S+ (volcano_spa()).
-The Training Grounds: a new win on one of your five defenders earns it a challenge (one waiting at a time). Challenge
+The Training Grounds: a new win on one of your five defenders earns it a challenge, and they add up. Challenge
 the boss there, a one-on-one fight scaled to the defender's level (boss_fight()); beat it and the defender goes up a
 level for good. Win or lose, the challenge is used up.
 
@@ -610,7 +610,7 @@ class DuckUtopia:
                 if r.get("win"):
                     s["crumbs"] += WIN_CRUMBS * boost
                     got.insert(0, f"{round(WIN_CRUMBS * boost)} breadcrumbs")
-                    if r["champion"] in [d["champion"] for d in squad] and r["champion"] not in s["challenges"]:
+                    if r["champion"] in [d["champion"] for d in squad] and s["ranks"].get(r["champion"], 0) < MAX_RANK:
                         s["challenges"].append(r["champion"])   # a win on a defender: a boss challenge in the Training Grounds
                         got.append("a Training Grounds challenge")
                 if got:
