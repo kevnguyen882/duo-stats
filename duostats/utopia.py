@@ -24,6 +24,10 @@ The Volcano Spa is where the fire ducks soak, one for each game with an S+ (volc
 The Training Grounds: a new win on one of your five defenders earns it a challenge, and they add up. Challenge
 the boss there, a one-on-one fight scaled to the defender's level (boss_fight()); beat it and the defender goes up a
 level for good. Win or lose, the challenge is used up.
+The Spa (once built): recovery soaks. A defender soaks in a pool with bath salts at one of three temperatures (SALTS,
+TEMPS; hotter costs more and does more). It sits out raids while it soaks, then comes out refreshed with the salt's
+perk, used up by its next goose raid or boss fight. The Hot springs have a second pool, and every fire duck heats
+the water a little more (heat()).
 
 First version: the numbers below are guesses to see how it plays, and are meant to be tuned.
 """
@@ -178,7 +182,7 @@ def migrate(s: dict):
     s.pop("nextSpawn", None)
     s.setdefault("spawned", 0)
     s.setdefault("hats", {})
-    for k, v in (("ranks", {}), ("challenges", []), ("bossFights", [])):   # the Training Grounds
+    for k, v in (("ranks", {}), ("challenges", []), ("bossFights", []), ("soaks", []), ("perks", {})):   # Training Grounds, Spa
         s.setdefault(k, v)
 
 
@@ -276,8 +280,8 @@ def boss(d: dict) -> dict:
     """The boss a defender faces next. Its stats sit halfway between the defender's own and an average champion's at
     the same level, so a strong defender is favoured but never sure to win; each level won makes the next boss tougher."""
     lv = d["level"]
-    hp = (d["hp"] + 60 + 6 * lv) / 2
-    atk = (d["atk"] + 9.6 + 0.4 * lv) / 2
+    hp = (d.get("baseHp", d["hp"]) + 60 + 6 * lv) / 2     # a spa perk makes the defender stronger, not its boss
+    atk = (d.get("baseAtk", d["atk"]) + 9.6 + 0.4 * lv) / 2
     name = next(n for r, n in reversed(BOSSES) if d["rank"] >= r)
     return {"name": name, "level": lv, "hp": round(6 * atk * (1 + BOSS_STEP * d["rank"])), "atk": round(hp / 7, 1)}
 
@@ -334,6 +338,51 @@ def boss_fight(d: dict, seed, max_rounds: int = 20) -> dict:
         log.append(f"{b['name']} outlasted {d['champion']} and waddled off.")
     return {"win": bhp <= 0, "rounds": rounds, "champion": d["champion"], "cls": cls, "boss": b,
             "hp": d["hp"], "hpLeft": max(0, round(hp)), "bossLeft": max(0, round(bhp)), "log": log[-12:], "steps": steps}
+
+
+
+# ---- the Spa: recovery soaks ----
+SALTS = {   # salt -> (name, what its perk does)
+    "eucalyptus": ("Eucalyptus salts", "more health"),
+    "chili": ("Chili salts", "more attack"),
+    "golden": ("Golden salts", "more breadcrumbs and feathers from its next raid win"),
+}
+TEMPS = {   # temperature -> (name, breadcrumbs, minutes soaking, perk strength)
+    "warm": ("Warm", 400, 60, 0.15),
+    "hot": ("Hot", 1200, 120, 0.30),
+    "scalding": ("Scalding", 3000, 180, 0.50),
+}
+FIRE_HEAT, MAX_HEAT = 0.05, 0.5   # each fire duck makes every perk 5% stronger, up to 50%
+
+
+def heat(s: dict) -> float:
+    return round(min(FIRE_HEAT * s["fire"], MAX_HEAT), 2)
+
+
+def perk_power(s: dict, salt: str, temp: str) -> float:
+    """How strong a soak's perk is: +15% / 30% / 50% health or attack, twice that in raid rewards for golden salts."""
+    return round(TEMPS[temp][3] * (2 if salt == "golden" else 1) * (1 + heat(s)), 3)
+
+
+def finish_soaks(s: dict, now: int) -> list:
+    """Defenders whose soak is over come out refreshed. Returns their soaks."""
+    done = [x for x in s["soaks"] if x["until"] <= now]
+    s["soaks"] = [x for x in s["soaks"] if x["until"] > now]
+    for x in done:
+        s["perks"][x["champion"]] = {"salt": x["salt"], "temp": x["temp"], "power": x["power"]}
+    return done
+
+
+def with_perk(d: dict, perk) -> dict:
+    """A defender with its spa perk applied. Its boss is still built from its own stats (baseHp, baseAtk)."""
+    if not perk:
+        return d
+    d = dict(d, perk=perk, baseHp=d["hp"], baseAtk=d["atk"])
+    if perk["salt"] == "eucalyptus":
+        d["hp"] = round(d["hp"] * (1 + perk["power"]))
+    elif perk["salt"] == "chili":
+        d["atk"] = round(d["atk"] * (1 + perk["power"]), 1)
+    return d
 
 
 # ---- goose raids ----
@@ -448,7 +497,8 @@ def new_utopia(riot_id: str, now: int) -> dict:
     return {"riotId": riot_id, "founded": now, "tick": now, "crumbs": float(FOUNDING_GIFT), "feathers": 0,
             "levels": dict(START_LEVELS), "ducklings": [], "lost": 0, "spawned": 0, "hats": {}, "pond": STARTING_DUCKS, "edge": 0,
             "golden": 0, "boost": 0.0, "champs": {}, "fire": 0, "graded": {}, "games": [], "raids": [], "raidWins": 0,
-            "squad": [], "training": {}, "ranks": {}, "challenges": [], "bossFights": [], "log": [], "founding": None}
+            "squad": [], "training": {}, "ranks": {}, "challenges": [], "bossFights": [], "soaks": [], "perks": {},
+            "log": [], "founding": None}
 
 
 def fresh_start(s: dict, now: int) -> dict:
@@ -584,6 +634,8 @@ class DuckUtopia:
         for p in players:
             migrate(data["players"][p.key])
             advance(data["players"][p.key], now)
+            for x in finish_soaks(data["players"][p.key], now):
+                self._note(data["players"][p.key], now, f"{x['champion']} came out of the spa refreshed: {SALTS[x['salt']][1]}.")
             if "graded" not in data["players"][p.key]:   # before any new game is counted, so no grade pays twice
                 data["players"][p.key]["graded"] = first_graded(data["players"][p.key], rows.get(p.key, []))
         # new games together since Founding Day, oldest first: rewards, then the same goose wave for both
@@ -617,7 +669,10 @@ class DuckUtopia:
                     self._note(s, now, f"{'Won' if r.get('win') else 'Played'} on {r['champion']}: {', '.join(got)}.")
                 if squad:
                     rep = raid(squad, mid, data["raids"], s["levels"]["fence"])
-                    self._reward(s, rep, boost)
+                    golden = sum(d["perk"]["power"] for d in squad if d.get("perk", {}).get("salt") == "golden")
+                    self._reward(s, rep, boost, golden)
+                    for d in squad:   # spa perks last one raid
+                        s["perks"].pop(d["champion"], None)
                     rep.update(matchId=mid, t=now, champion=r["champion"])
                     s["raids"] = ([rep] + s["raids"])[:MAX_REPORTS]
                     self._note(s, now, "Goose raid: " + (f"won! +{rep['reward']['crumbs']} breadcrumbs, +{rep['reward']['feathers']} feathers"
@@ -654,19 +709,27 @@ class DuckUtopia:
         return s
 
     def _squad(self, s: dict, recs: dict, classes: dict) -> list:
-        """The five defenders: the chosen squad, filled up with the most-played champions."""
-        chosen = [c for c in s["squad"] if c in recs][:5]
+        """The five defenders: the chosen squad, filled up with the most-played champions. Champions soaking in the spa
+        sit out, and others fill in for them."""
+        soaking = {x["champion"] for x in s["soaks"]}
+        chosen = [c for c in s["squad"] if c in recs and c not in soaking][:5]
         for c in sorted(recs, key=lambda c: (-recs[c]["games"], c)):
             if len(chosen) >= 5:
                 break
-            if c not in chosen:
+            if c not in chosen and c not in soaking:
                 chosen.append(c)
-        return [defender(c, recs[c], classes.get(c, "fighter"), s["training"].get(c, 0), s["ranks"].get(c, 0)) for c in chosen]
+        return [self._defender(s, c, recs, classes) for c in chosen]
 
-    def _reward(self, s: dict, rep: dict, boost: float):
+    @staticmethod
+    def _defender(s: dict, c: str, recs: dict, classes: dict) -> dict:
+        return with_perk(defender(c, recs[c], classes.get(c, "fighter"), s["training"].get(c, 0), s["ranks"].get(c, 0)),
+                         s["perks"].get(c))
+
+    def _reward(self, s: dict, rep: dict, boost: float, golden: float = 0):
+        """golden: the bonus from defenders with golden spa salts (0.6 = +60%)."""
         if rep["win"]:
             s["raidWins"] += 1
-            crumbs, feathers = round(30 * rep["total"] * boost), round((1 + rep["wave"] // 5) * boost)
+            crumbs, feathers = round(30 * rep["total"] * boost * (1 + golden)), round((1 + rep["wave"] // 5) * boost * (1 + golden))
             s["crumbs"] += crumbs
             s["feathers"] += feathers
             rep["reward"], rep["stolen"] = {"crumbs": crumbs, "feathers": feathers}, 0
@@ -682,7 +745,7 @@ class DuckUtopia:
     # ---- what you can do ----
     def _do(self, s: dict, body: dict, player, now: int, data: dict) -> dict:
         action = body.get("action")
-        rows = self.stats.together([player]) if action in ("squad", "train", "practice", "hat", "challenge", "spar") else {}
+        rows = self.stats.together([player]) if action in ("squad", "train", "practice", "hat", "challenge", "spar", "soak") else {}
         recs = champion_records(rows.get(player.key, []))
         if action == "upgrade":
             b = body.get("building")
@@ -771,9 +834,11 @@ class DuckUtopia:
             c = body.get("champion")
             if c not in recs:
                 raise ValueError("Only champions you've played together can fight here.")
-            d = defender(c, recs[c], self._classes().get(c, "fighter"), s["training"].get(c, 0), s["ranks"].get(c, 0))
+            if any(x["champion"] == c for x in s["soaks"]):
+                raise ValueError(f"{c} is soaking in the spa.")
+            d = self._defender(s, c, recs, self._classes())
             rep = boss_fight(d, f"test-{now}")
-            rep.update(t=now, level=d["level"], practice=True)
+            rep.update(t=now, level=d["level"], practice=True, perk=d.get("perk"))
             return {"fight": rep}
         if action == "challenge":   # the Training Grounds: one defender against its boss
             c = body.get("champion")
@@ -783,9 +848,14 @@ class DuckUtopia:
                 raise ValueError("Only champions you've played together can fight here.")
             if s["ranks"].get(c, 0) >= MAX_RANK:
                 raise ValueError(f"{c} has beaten every boss.")
-            d = defender(c, recs[c], self._classes().get(c, "fighter"), s["training"].get(c, 0), s["ranks"].get(c, 0))
+            if any(x["champion"] == c for x in s["soaks"]):
+                raise ValueError(f"{c} is soaking in the spa: the challenge waits until it's out.")
+            d = self._defender(s, c, recs, self._classes())
             rep = boss_fight(d, now)
             s["challenges"].remove(c)
+            if d.get("perk") and d["perk"]["salt"] != "golden":   # golden salts are for raids, so they keep
+                s["perks"].pop(c)
+                rep["perk"] = d["perk"]
             if rep["win"]:
                 s["ranks"][c] = s["ranks"].get(c, 0) + 1
             rep.update(t=now, level=d["level"] + (1 if rep["win"] else 0))
@@ -793,6 +863,29 @@ class DuckUtopia:
             self._note(s, now, f"Training Grounds: {c} beat {rep['boss']['name']} and reached level {rep['level']}." if rep["win"]
                        else f"Training Grounds: {c} lost to {rep['boss']['name']}.")
             return {"fight": rep}
+        if action == "soak":   # the Spa: a recovery soak, with bath salts at a temperature
+            c, salt, temp = body.get("champion"), body.get("salt"), body.get("temp")
+            if not s["levels"]["spa"]:
+                raise ValueError("Build the Spa first.")
+            if c not in recs:
+                raise ValueError("Only champions you've played together can soak here.")
+            if salt not in SALTS or temp not in TEMPS:
+                raise ValueError("There's no such soak.")
+            if any(x["champion"] == c for x in s["soaks"]):
+                raise ValueError(f"{c} is already soaking.")
+            if c in s["perks"]:
+                raise ValueError(f"{c} is already refreshed: its perk is used up by its next raid or boss fight.")
+            if len(s["soaks"]) >= s["levels"]["spa"]:
+                raise ValueError("Every pool is taken: wait for a soak to finish" + (", or build the Hot springs." if s["levels"]["spa"] < 2 else "."))
+            name, cost, minutes, _ = TEMPS[temp]
+            if s["crumbs"] < cost:
+                raise ValueError(f"Not enough breadcrumbs: {cost:,} needed.")
+            s["crumbs"] -= cost
+            soak = {"champion": c, "salt": salt, "temp": temp, "power": perk_power(s, salt, temp), "start": now,
+                    "until": now + minutes * 60000}
+            s["soaks"].append(soak)
+            self._note(s, now, f"{c} is soaking in a {name.lower()} bath with {SALTS[salt][0].lower()}.")
+            return {"soak": soak}
         raise ValueError("Unknown action.")
 
     # ---- what the page gets ----
@@ -811,11 +904,11 @@ class DuckUtopia:
             lv = s["levels"]
             out.append({
                 **{k: s[k] for k in ("riotId", "feathers", "levels", "lost", "spawned", "hats", "pond", "edge", "golden", "boost",
-                                     "champs", "fire", "raids", "raidWins", "training", "ranks", "challenges", "bossFights",
+                                     "champs", "fire", "raids", "raidWins", "training", "ranks", "challenges", "bossFights", "soaks", "perks",
                                      "log", "founding", "founded")},
                 "crumbs": round(s["crumbs"], 2), "ducklings": sorted(s["ducklings"]),
                 "score": scores[i], "catchUp": catch_up(scores[i], best), "leading": len(scores) > 1 and scores[i] == best and scores.count(best) == 1,
-                "rate": round(crumb_rate(s), 3), "nestSpace": nest_space(lv["nests"]), "pondSpace": pond_space(lv["pond"]),
+                "rate": round(crumb_rate(s), 3), "heat": heat(s), "nestSpace": nest_space(lv["nests"]), "pondSpace": pond_space(lv["pond"]),
                 "districts": districts(s), "boostFrom": boost_breakdown(s, rows.get(p.key, [])),
                 "plaza": penta_plaza(s, rows.get(p.key, [])), "volcano": volcano_spa(s, rows.get(p.key, [])),
                 "lab": {"spawnCost": spawn_cost(s["spawned"]), "grow": grow_minutes(lv["incubation"]),
@@ -829,4 +922,6 @@ class DuckUtopia:
                                      for c, r in recs.items()), key=lambda x: (-x["games"], x["champion"])),
             })
         return {"now": now, "me": 1 if viewer else 0, "players": out, "goldenRate": GOLDEN_RATE, "fireRate": FIRE_RATE,
-                "hatShop": [{"id": h, "name": n, "cost": c} for h, (n, c) in HATS.items()]}
+                "hatShop": [{"id": h, "name": n, "cost": c} for h, (n, c) in HATS.items()],
+                "salts": [{"id": k, "name": n, "does": does} for k, (n, does) in SALTS.items()],
+                "temps": [{"id": k, "name": n, "cost": c, "minutes": m, "power": pw} for k, (n, c, m, pw) in TEMPS.items()]}

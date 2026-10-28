@@ -22,7 +22,8 @@ const COLORS = ['var(--p1)', 'var(--p2)'];
 const BUILD_INFO = {   // building -> (art for its level, what it does)
   pond: [l=>`pond-${l >= 7 ? '3-lagoon' : l >= 4 ? '2-lake' : '1-pond'}`, (p)=>`Room for ${p.pondSpace} ducks; only ducks in the pond collect breadcrumbs`],
   bakery: [l=>`bakery-${Math.min(3, Math.max(1, Math.ceil(l / 3)))}`, (p)=>p.levels.bakery ? `+${p.levels.bakery * 25}% breadcrumbs (+25% a level)` : 'Makes breadcrumbs faster: +25% a level'],
-  spa: [l=>l >= 2 ? 'spa-2-hotsprings' : 'spa-1-spa', ()=>'Luxury and bragging rights: a big boost to your Ductopia Score'],
+  spa: [l=>l >= 2 ? 'spa-2-hotsprings' : 'spa-1-spa', (p)=>p.levels.spa >= 2 ? 'Two pools for recovery soaks (see the Spa panel), and a big boost to your Ductopia Score'
+    : p.levels.spa ? 'A pool for recovery soaks (see the Spa panel); the Hot springs add a second' : 'Recovery soaks that refresh your defenders with perks, and a big boost to your Ductopia Score'],
   fence: [()=>'tile-mud', (p)=>p.levels.fence ? `Geese bite ${Math.round(Math.min(.06 * p.levels.fence, .5) * 100)}% softer in raids` : 'Goose defences: geese bite 6% softer a level in raids'],
 };
 const LAB = ['nests', 'incubation'];   // the Duck Infirmary's upgrades, shown in its lab rather than under Build
@@ -84,11 +85,11 @@ function accept(s){
 let openedFromLink = false;
 setInterval(load, 20000);
 // when the next duckling is due to grow, ask straight away rather than waiting for the next check
-setInterval(()=>{ if(U && U.players.some(p=>p.ducklings.length && p.ducklings[0] <= nowApp())) load(); }, 5000);
+setInterval(()=>{ if(U && U.players.some(p=>p.ducklings.length && p.ducklings[0] <= nowApp() || p.soaks.some(x=>x.until <= nowApp()))) load(); }, 5000);
 
 // ---- drawing the panels ----
 function renderPanels(){
-  renderScore(); renderWhose(); renderResources(); renderBuild(); renderLab(); renderQuarter(); renderVolcano(); renderSquad(); renderRaids(); renderGrounds(); renderLog();
+  renderScore(); renderWhose(); renderResources(); renderBuild(); renderLab(); renderQuarter(); renderVolcano(); renderSquad(); renderRaids(); renderGrounds(); renderSpa(); renderLog();
   if(tipEl && !tipEl.isConnected) showTip({target: document.body});   // what it was over has been redrawn
 }
 function renderScore(){
@@ -174,7 +175,7 @@ $('#labBuild').addEventListener('click', e=>{
 function affordable(){   // build buttons light up as breadcrumbs come in
   if(!mine()) return;
   const have = crumbsNow(U.players[viewing]);
-  document.querySelectorAll('[data-build], [data-spawn], [data-hatbuy]').forEach(b=>{ b.disabled = busy || have < +b.dataset.cost || !!b.dataset.full; });
+  document.querySelectorAll('[data-build], [data-spawn], [data-hatbuy], [data-soak]').forEach(b=>{ b.disabled = busy || have < +b.dataset.cost || !!b.dataset.full; });
 }
 $('#build').addEventListener('click', e=>{
   const b = e.target.closest('[data-build]'); if(b) act({action: 'upgrade', building: b.dataset.build});
@@ -234,7 +235,7 @@ function renderSquad(){
   const p = U.players[viewing], own = mine();
   if(!p.squad.length){ $('#squad').innerHTML = '<p class="uempty">Defenders are champions you\'ve played together. Play a game first.</p>'; return; }
   const list = p.squad.map(d=>`<div class="udef">${pic('duck-' + d.cls, 'duck pix')}${champIcon(d.champion)}
-      <div class="t"><b>${esc(d.champion)} ${stars(d.star)}</b><span>${CLASS_NAME[d.cls]} · Lv ${d.level} · ${d.hp} HP · ${d.atk} ATK${d.training ? ` · trained ${d.training}` : ''}${d.pentas ? ' · ultimate' : ''}</span></div>
+      <div class="t"><b>${esc(d.champion)} ${stars(d.star)}</b><span>${CLASS_NAME[d.cls]} · Lv ${d.level} · ${d.hp} HP · ${d.atk} ATK${d.training ? ` · trained ${d.training}` : ''}${d.pentas ? ' · ultimate' : ''}${d.perk ? ` · <b class="uperk">♨ ${perkText(d.perk)}</b>` : ''}</span></div>
       ${own ? `<button class="ghost" data-train="${esc(d.champion)}" ${p.feathers < 2 + d.training || d.training >= 10 ? 'disabled' : ''} title="Training: +10% health and attack">Train ${pic('icon-feather')}${2 + d.training}</button>` : ''}
     </div>`).join('');
   const chosen = new Set(p.squad.map(d=>d.champion));
@@ -243,6 +244,7 @@ function renderSquad(){
       <div class="ubtns"><button data-squad-save>Save squad</button><button class="ghost" data-squad-cancel>Cancel</button></div>` : '';
   $('#squad').innerHTML = list + (own ? (picking ? picker : '<div class="ubtns"><button class="ghost" data-squad-open>Change squad</button></div>')
     : `<p class="unote">${esc(shortName(p.riotId))}'s squad. Stats come from their own games on each champion.</p>`)
+    + (p.soaks.length ? `<p class="unote">In the spa: ${p.soaks.map(x=>esc(x.champion)).join(', ')}. Fill-ins defend until they're out.</p>` : '')
     + '<p class="unote">Tanks soak up hits, mages hit groups, marksmen pierce armour, supports heal, assassins pick off flying geese. Each champion\'s stats come from your games on it: games played set its level, win rate its health, KDA its attack, S grades its stars.</p>';
 }
 $('#squad').addEventListener('click', e=>{
@@ -317,6 +319,56 @@ $('#grounds').addEventListener('click', e=>{
   else if(e.target.closest('[data-replay]')) playFight(U.players[viewing].bossFights[0]);
 });
 
+// ---- the Spa: recovery soaks with bath salts at three temperatures; fire ducks heat the water ----
+const timeLeft = ms => ms >= 3600000 ? `${Math.floor(ms / 3600000)}h ${String(Math.floor(ms / 60000) % 60).padStart(2, '0')}m` : clock(ms);
+const PERK_WHAT = {eucalyptus: 'health', chili: 'attack', golden: 'raid rewards'};
+const perkText = k => `+${Math.round(k.power * 100)}% ${PERK_WHAT[k.salt]}`;
+const SALT_ART = {eucalyptus: 'duck-fighter', chili: 'duck-fire', golden: 'duck-golden'};
+let soakPick = {champion: null, salt: 'eucalyptus', temp: 'warm'};
+function renderSpa(){
+  const p = U.players[viewing], own = mine(), pools = p.levels.spa;
+  const heatNote = `${plural(p.fire, 'fire duck')} from the Volcano Spa heat the water: every perk ${p.heat ? `is <b>${Math.round(p.heat * 100)}%</b> stronger` : 'gets stronger with each one'} (+5% a fire duck, up to +50%).`;
+  if(!pools){
+    $('#spa').innerHTML = `<p class="unote" style="margin-top:0">Build the Spa (in Build) to open recovery soaks: a defender soaks with bath salts, sits out raids while it does,
+      and comes out with a perk for its next goose raid or boss fight. Hotter water costs more and does more.</p><p class="unote">${heatNote}</p>`;
+    return;
+  }
+  const busyC = new Set([...p.soaks.map(x=>x.champion), ...Object.keys(p.perks)]);
+  const pool = i => { const x = p.soaks[i]; return x
+    ? `<div class="upool ${x.temp}">${pic(SALT_ART[x.salt], 'pix spr')}<div><b>${esc(x.champion)}</b><span>${U.temps.find(t=>t.id === x.temp).name} · ${U.salts.find(s=>s.id === x.salt).name.toLowerCase()} · ${perkText(x)}</span>
+        <span>out in <b data-until="${x.until}">${timeLeft(x.until - nowApp())}</b></span></div></div>`
+    : `<div class="upool empty"><div><b>Empty pool</b><span>${own ? 'Pick a defender below' : 'Nobody soaking'}</span></div></div>`; };
+  const refreshed = Object.entries(p.perks);
+  let html = `<p class="unote" style="margin-top:0">A soak takes a defender out of raids for a while; it comes out refreshed with its salt's perk, which is used up by its next goose raid or boss fight
+      (golden salts: its next raid). ${pools < 2 ? 'The Hot springs add a second pool.' : ''}</p>
+    <div class="upools">${Array.from({length: pools}, (_, i)=>pool(i)).join('')}</div>
+    <p class="unote">${heatNote}</p>
+    ${refreshed.length ? `<h3 class="uspah">Refreshed</h3>${refreshed.map(([c, k])=>`<div class="udef">${pic(SALT_ART[k.salt], 'duck pix')}${champIcon(c)}<div class="t"><b>${esc(c)}</b><span>${perkText(k)} · for its next ${k.salt === 'golden' ? 'raid win' : 'raid or boss fight'}</span></div></div>`).join('')}` : ''}`;
+  if(own){
+    const squad = p.squad.map(d=>d.champion), others = p.champions.map(c=>c.champion).filter(c=>!squad.includes(c));
+    const free = [...squad, ...others].filter(c=>!busyC.has(c));
+    if(!free.includes(soakPick.champion)) soakPick.champion = free[0] || null;
+    const temp = U.temps.find(t=>t.id === soakPick.temp), full = p.soaks.length >= pools;
+    const power = (salt, t) => Math.round(t.power * (salt === 'golden' ? 2 : 1) * (1 + p.heat) * 100);
+    const next = Math.min(...p.soaks.map(x=>x.until));
+    html += `<h3 class="uspah">New soak</h3>${full ? `<p class="uempty">Every pool is taken: the next one is free in <b data-until="${next}">${timeLeft(next - nowApp())}</b>.</p>` : free.length ? `
+      <label class="usel">Defender <select data-soak-champ>${free.map(c=>`<option ${c === soakPick.champion ? 'selected' : ''} value="${esc(c)}">${esc(c)}${squad.includes(c) ? '' : ' (not defending)'}</option>`).join('')}</select></label>
+      <div class="uchoice" role="radiogroup" aria-label="Bath salts">${U.salts.map(s=>`<button class="ghost ${s.id === soakPick.salt ? 'on' : ''}" role="radio" aria-checked="${s.id === soakPick.salt}" data-salt="${s.id}">${pic(SALT_ART[s.id])}<b>${esc(s.name)}</b><span>${esc(s.does)}</span></button>`).join('')}</div>
+      <div class="uchoice temps" role="radiogroup" aria-label="Temperature">${U.temps.map(t=>`<button class="ghost ${t.id} ${t.id === soakPick.temp ? 'on' : ''}" role="radio" aria-checked="${t.id === soakPick.temp}" data-temp="${t.id}"><b>${esc(t.name)}</b><span>+${power(soakPick.salt, t)}% ${PERK_WHAT[soakPick.salt]}</span><span>${pic('icon-breadcrumb')}${fmt(t.cost)} · ${timeLeft(t.minutes * 60000)}</span></button>`).join('')}</div>
+      <div class="ubtns"><button data-soak data-cost="${temp.cost}">Start soak ${pic('icon-breadcrumb')}${fmt(temp.cost)}</button></div>`
+      : '<p class="uempty">Every defender is soaking or already refreshed.</p>'}`;
+  }
+  $('#spa').innerHTML = html;
+  affordable();
+}
+$('#spa').addEventListener('click', e=>{
+  const s = e.target.closest('[data-salt]'), t = e.target.closest('[data-temp]');
+  if(s){ soakPick.salt = s.dataset.salt; renderSpa(); }
+  else if(t){ soakPick.temp = t.dataset.temp; renderSpa(); }
+  else if(e.target.closest('[data-soak]')) act({action: 'soak', ...soakPick});
+});
+$('#spa').addEventListener('change', e=>{ if(e.target.matches('[data-soak-champ]')) soakPick.champion = e.target.value; });
+
 // ---- a boss fight, played back round by round (from the fight's steps) ----
 const MOVE_NOTE = {ult: 'Pentakill ultimate!', first: 'Strikes first from the shadows!', double: 'Double hit!'};
 const MOVE_POP = {ult: 'Penta ult!', first: 'Ambush!', double: 'Double!'};   // short, to fit over the duck
@@ -326,7 +378,7 @@ function playFight(f){
   const run = ++fightRun, box = $('#arena'), b = f.boss, calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const wait = ms => new Promise(r=>setTimeout(r, calm ? ms / 4 : ms));
   box.innerHTML = `<div class="box uarena"><h2 id="arenaTitle">${esc(f.champion)} vs ${esc(b.name)}</h2>
-    <p>${f.practice ? 'Test fight: nothing won or lost' : 'Training Grounds challenge'} · boss level ${b.level}</p>
+    <p>${f.practice ? 'Test fight: nothing won or lost' : 'Training Grounds challenge'} · boss level ${b.level}${f.perk && f.perk.salt !== 'golden' ? ` · ♨ ${perkText(f.perk)}` : ''}</p>
     <div class="ustage">
       <div class="ufighter" data-side="me"><b>${esc(f.champion)}</b><div class="ubar"><i></i></div><span class="hp"></span>${pic('duck-' + f.cls, 'pix spr')}</div>
       <div class="uvs">VS</div>
@@ -432,6 +484,7 @@ setInterval(()=>{
   const p = U.players[viewing], c = $('#crumbs'), g = $('#grow');
   if(c) c.textContent = fmt(crumbsNow(p));
   if(g) g.textContent = growLeft(p);
+  document.querySelectorAll('[data-until]').forEach(el=>{ el.textContent = timeLeft(+el.dataset.until - nowApp()); });
   affordable();
 }, 250);
 
