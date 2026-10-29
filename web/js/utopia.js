@@ -86,7 +86,7 @@ function accept(s){
 let openedFromLink = false;
 setInterval(load, 20000);
 // when the next duckling is due to grow, ask straight away rather than waiting for the next check
-setInterval(()=>{ if(U && U.players.some(p=>p.ducklings.length && p.ducklings[0] <= nowApp() || p.soaks.some(x=>x.until <= nowApp()) || Object.values(p.bakery.bakes).some(u=>u <= nowApp()))) load(); }, 5000);
+setInterval(()=>{ if(U && U.players.some(p=>p.ducklings.length && p.ducklings[0] <= nowApp() || p.soaks.some(x=>x.until <= nowApp()) || Object.values(p.bakery.bakes).flat().some(u=>u <= nowApp()))) load(); }, 5000);
 
 // ---- drawing the panels ----
 function renderPanels(){
@@ -179,7 +179,7 @@ $('#labBuild').addEventListener('click', e=>{
 function affordable(){   // build buttons light up as breadcrumbs come in
   if(!mine()) return;
   const have = crumbsNow(U.players[viewing]);
-  document.querySelectorAll('[data-build], [data-spawn], [data-hatbuy], [data-soak], [data-machine], [data-speed], [data-bake]').forEach(b=>{ b.disabled = busy || have < +b.dataset.cost || !!b.dataset.full; });
+  document.querySelectorAll('[data-build], [data-spawn], [data-hatbuy], [data-soak], [data-machine], [data-speed], [data-extra], [data-bake]').forEach(b=>{ b.disabled = busy || have < +b.dataset.cost || !!b.dataset.full; });
 }
 $('#build').addEventListener('click', e=>{
   const b = e.target.closest('[data-build]'); if(b) act({action: 'upgrade', building: b.dataset.build});
@@ -451,9 +451,10 @@ const spaRoom = (()=>{
 let treatSel = null;   // the treat picked in the kitchen (its card is highlighted)
 const badgeChip = (U_, id, text, cls = '') => `<span class="ubadge ${cls}" title="${esc(U_.badgeInfo[id].name)}">${U_.badgeInfo[id].icon} ${text}</span>`;
 const wildFor = (p, cls) => (p.volcano || []).filter(d=>!d.caught && d.cls === cls).length;
+const batches = (p, id) => p.bakery.bakes[id] || [];   // when each batch baking now is done, soonest first
 function treatState(p, t){   // locked, forSale, ready or baking
   const B = p.bakery;
-  return t.id in B.bakes ? 'baking' : B.machines[t.id] ? 'ready' : p.levels.bakery >= t.unlock ? 'forSale' : 'locked';
+  return batches(p, t.id).length ? 'baking' : B.machines[t.id] ? 'ready' : p.levels.bakery >= t.unlock ? 'forSale' : 'locked';
 }
 function renderBakery(){
   const p = U.players[viewing], own = mine(), B = p.bakery, bs = p.buildings, lvl = p.levels.bakery;
@@ -479,15 +480,20 @@ function renderBakery(){
     else {
       const recipe = `<div class="urecipe">Each batch: <span class="ubadge">${pic('icon-breadcrumb')} ${fmt(t.crumbs)}</span>${t.badges.map(([b, n])=>
         badgeChip(U, b, `${n} ${esc(U.badgeInfo[b].name)} <span>(${B.badges[b] || 0} left)</span>`, short.some(([s])=>s === b) ? 'short' : '')).join('')}</div>`;
-      const bake = st === 'baking' ? `<span class="baking">Baking: <strong data-until="${B.bakes[t.id]}">${timeLeft(B.bakes[t.id] - nowApp())}</strong> left</span>`
-        : `<button data-bake="${t.id}" data-cost="${t.crumbs}" data-full="${short.length ? 1 : ''}" ${own && !short.length ? '' : 'disabled'}>Bake ${pic('icon-breadcrumb')}${fmt(t.crumbs)}</button>
-           <span>${short.length ? `Needs ${short.map(([b, n])=>`${n - (B.badges[b] || 0)} more ${esc(U.badgeInfo[b].name)}`).join(', ')}` : fmtMin(m.minutes)}</span>`;
+      const going = batches(p, t.id), free = m.count - going.length;
+      const bake = (going.length ? `<span class="baking">Baking${going.length > 1 ? ` ${going.length} batches` : ''}: ${going.map(u=>`<strong data-until="${u}">${timeLeft(u - nowApp())}</strong>`).join(', ')} left</span>` : '')
+        + (free > 0 ? `<button data-bake="${t.id}" data-cost="${t.crumbs}" data-full="${short.length ? 1 : ''}" ${own && !short.length ? '' : 'disabled'}>Bake ${pic('icon-breadcrumb')}${fmt(t.crumbs)}</button>
+           <span>${short.length ? `Needs ${short.map(([b, n])=>`${n - (B.badges[b] || 0)} more ${esc(U.badgeInfo[b].name)}`).join(', ')}` : `${fmtMin(m.minutes)}${m.count > 1 ? ` · ${free} of ${m.count} machines free` : ''}`}</span>` : '');
       const speed = m.speedCost == null ? '<span class="max">As fast as it gets</span>'
         : lvl < m.speedNeeds ? `<span class="max">Next: bakery level ${m.speedNeeds}</span>`
         : `<button data-speed="${t.id}" data-cost="${m.speedCost}" ${own ? '' : 'disabled'}>${pic('icon-breadcrumb')}${fmt(m.speedCost)}</button>`;
+      // once it's as fast as it gets: more of the same machine, each baking another batch at once (very expensive)
+      const extra = m.speedCost != null ? '' : `<div class="ubld">${pic('machine-' + t.id)}<div class="t"><b>More ${esc(t.machine.toLowerCase())}s · ${m.count} of ${U.maxMachines}</b>
+          <span>${m.count > 1 ? `${m.count} batches bake at once. ` : ''}Each one bakes another batch at the same time</span></div>
+        ${m.extraCost == null ? '<span class="max">No room for more</span>' : `<button data-extra="${t.id}" data-cost="${m.extraCost}" ${own ? '' : 'disabled'}>${pic('icon-breadcrumb')}${fmt(m.extraCost)}</button>`}</div>`;
       body = recipe + `<div class="ubake">${bake}</div>
         <div class="ubld">${pic('machine-' + t.id)}<div class="t"><b>${esc(t.machine)}${m.speed ? ` · speed ${m.speed} of ${U.speeds}` : ''}</b>
-          <span>A batch takes ${fmtMin(m.minutes)}${m.nextMinutes ? `. Next: ${fmtMin(m.nextMinutes)}` : ''}</span></div>${speed}</div>`;
+          <span>A batch takes ${fmtMin(m.minutes)}${m.nextMinutes ? `. Next: ${fmtMin(m.nextMinutes)}` : ''}</span></div>${speed}</div>${extra}`;
     }
     return `<div class="utreat ${st === 'locked' ? 'locked' : ''} ${treatSel === t.id ? 'sel' : ''}" data-treat-card="${t.id}">
       <div class="utreat-head">${pic('treat-' + t.id, 'pix', t.name)}<div><b>${esc(t.name)}</b><span>${CLASS_NAME[t.id]} treat${have ? ` · ${have} in the pantry` : ''}${wildFor(p, t.id) ? ` · lures ${plural(wildFor(p, t.id), 'wild fire duck')}` : ''}</span></div></div>${body}</div>`;
@@ -497,7 +503,7 @@ function renderBakery(){
 }
 $('#bakeryDetail').addEventListener('click', e=>{
   const b = e.target.closest('[data-build]'); if(b) return act({action: 'upgrade', building: b.dataset.build});
-  for(const action of ['machine', 'speed', 'bake']){
+  for(const action of ['machine', 'speed', 'extra', 'bake']){
     const x = e.target.closest(`[data-${action}]`);
     if(x) return act({action, treat: x.dataset[action]});
   }
@@ -563,12 +569,14 @@ const bakeryRoom = (()=>{
           g.globalAlpha = .6 * (1 - tt); g.fillStyle = '#fff';
           g.fillRect(Math.round(s.x + 18 + q * 9 + Math.sin(now / 500 + q) * 3), Math.round(s.y + 8 - tt * 26), 5, 5); g.globalAlpha = 1;
         }
-        const left = B.bakes[t.id] - nowApp(), total = B.machines[t.id].minutes * 60000, prog = Math.min(1, Math.max(0, 1 - left / total));
+        const bs = batches(p, t.id), left = bs[0] - nowApp(), total = B.machines[t.id].minutes * 60000, prog = Math.min(1, Math.max(0, 1 - left / total));
         g.fillStyle = '#343a40'; g.fillRect(s.x + 6, s.y + s.h + 4, s.w - 12, 5);
         g.fillStyle = '#fcc419'; g.fillRect(s.x + 7, s.y + s.h + 5, Math.round((s.w - 14) * prog), 3);
-        label(timeLeft(left), cx, s.y + s.h + 12, '#ffe066');
+        label(`${timeLeft(left)}${bs.length > 1 ? ` +${bs.length - 1}` : ''}`, cx, s.y + s.h + 12, '#ffe066');   // the soonest, and how many more
       } else label(st === 'locked' ? `🔒 Bakery ${t.unlock}` : st === 'forSale' ? 'For sale' : 'Ready', cx, s.y + s.h + 6,
                    st === 'ready' ? '#b2f2bb' : '#ffe8cc');
+      const count = B.machines[t.id] ? B.machines[t.id].count : 1;
+      if(count > 1) label(`×${count}`, s.x + s.w - 6, s.y + 2, '#fcc419');   // more than one of this machine
       if(i === hover || t.id === treatSel){ g.strokeStyle = i === hover ? '#fff3bf' : '#fcc419'; g.lineWidth = 2; g.strokeRect(s.x - 2, s.y - 2, s.w + 4, s.h + 4); }
     });
     // the baker
@@ -594,7 +602,7 @@ const bakeryRoom = (()=>{
     if(hover < 0){ tip.classList.remove('on'); return; }
     const p = U.players[viewing], t = U.treats[hover], st = treatState(p, t);
     tip.innerHTML = `<b>${esc(t.machine)}</b><p>${{locked: `Unlocks at bakery level ${t.unlock}.`, forSale: `For sale: ${fmt(t.machineCost)} breadcrumbs.`,
-      ready: `Ready to bake ${esc(t.name.toLowerCase())}.`, baking: `Baking ${esc(t.name.toLowerCase())}: done in ${timeLeft(p.bakery.bakes[t.id] - nowApp())}.`}[st]} Click to see it below.</p>`;
+      ready: `Ready to bake ${esc(t.name.toLowerCase())}.`, baking: `Baking ${esc(t.name.toLowerCase())}: ${batches(p, t.id).length > 1 ? `${batches(p, t.id).length} batches, the first ` : ''}done in ${timeLeft(batches(p, t.id)[0] - nowApp())}.`}[st]} Click to see it below.</p>`;
     tip.classList.add('on');
     const w = tip.offsetWidth;
     tip.style.left = Math.min(Math.max(8, e.clientX - w / 2), innerWidth - w - 8) + 'px'; tip.style.top = (e.clientY + 16) + 'px';
@@ -825,7 +833,7 @@ const scene = (()=>{
     [x, y] = at('bakery');
     if(p.levels.bakery){
       sprite(BUILD_INFO.bakery[0](p.levels.bakery), x, y, S);
-      const baking = Object.keys(p.bakery.bakes).length;
+      const baking = Object.values(p.bakery.bakes).flat().length;
       for(let q = 0; q < (baking ? 3 : 0); q++){   // smoke from the chimney while something bakes
         const t = (now / 1600 + q / 3) % 1; g.globalAlpha = .55 * (1 - t); g.fillStyle = '#f1f3f5';
         g.fillRect(Math.round(x + S * .75 + Math.sin(now / 400 + q) * 2), Math.round(y + 2 - t * 12), 4, 4); g.globalAlpha = 1;
