@@ -56,6 +56,16 @@ class PipelineTests(unittest.TestCase):
         s["levels"]["bakery"] = 2
         self.assertAlmostEqual(crumb_rate(s), 10 * (1 + 2 * utopia.BAKERY_BONUS) * 1.5)
 
+    def test_rate_breakdown_adds_up(self):
+        s = new_utopia("A#1", 0)
+        s.update(pond=10, golden=2, champs={"Lux": "S", "Nami": "S+"}, caught=["Nami"], boost=0.5)
+        s["levels"]["bakery"] = 2
+        b = utopia.rate_breakdown(s)
+        self.assertEqual([(x["id"], x["count"]) for x in b["sources"]], [("pond", 10), ("golden", 2), ("champion", 2), ("fire", 1)])
+        self.assertAlmostEqual(b["base"], sum(x["perMin"] for x in b["sources"]))
+        self.assertAlmostEqual(b["total"], b["base"] * (1 + b["bakery"]) * (1 + b["boost"]))
+        self.assertAlmostEqual(b["total"], crumb_rate(s))
+
 
 class InfirmaryTests(unittest.TestCase):
     def test_costs_and_times(self):

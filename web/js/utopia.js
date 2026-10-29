@@ -117,9 +117,10 @@ function renderResources(){
   const p = U.players[viewing];
   // the breadcrumbs again, pinned to the corner so they're always in view (whoever's Ductopia is being looked at)
   $('#crumbPill').innerHTML = `${pic('icon-breadcrumb')}<b id="crumbsPill">${fmt(crumbsNow(p))}</b><span>${viewing === U.me ? 'breadcrumbs' : `${esc(shortName(p.riotId))}'s breadcrumbs`}</span>`;
+  $('#crumbPill').dataset.tipHtml = rateTip(p);
   $('#crumbPill').classList.remove('hidden');
   $('#resources').innerHTML = `
-    <div>${pic('icon-breadcrumb')}<b id="crumbs">${fmt(crumbsNow(p))}</b><span>breadcrumbs · ${fmt(p.rate)}/min</span></div>
+    <div class="utipped" tabindex="0" data-tip-html="${esc(rateTip(p))}">${pic('icon-breadcrumb')}<b id="crumbs">${fmt(crumbsNow(p))}</b><span>breadcrumbs · ${fmt(p.rate)}/min</span></div>
     <div>${pic('icon-feather')}<b>${p.feathers}</b><span>goose feathers</span></div>
     <div>${pic('duck-plain')}<b>${p.pond}/${p.pondSpace}</b><span>ducks in the pond</span></div>
     ${p.edge ? `<div class="warn">${pic('duck-plain')}<b>${p.edge}</b><span>waiting at the pond's edge (upgrade the pond)</span></div>` : ''}
@@ -129,6 +130,19 @@ function renderResources(){
     ${p.boost ? `<div class="utipped" tabindex="0" data-tip-html="${esc(boostTip(p))}"><b>+${pctOf(p.boost)}</b><span>multikill boost</span></div>` : ''}`;
 }
 const pctOf = v => `${+(v * 100).toFixed(1)}%`;
+const perMin = v => v >= 1000 ? fmt(v) : String(+v.toFixed(1));   // keep a decimal (champion ducks collect 1.5), so the rows add up
+// the breadcrumbs' hover card: what each kind of duck collects a minute, then the bonuses that multiply it all
+function rateTip(p){
+  const r = p.rateFrom, times = v => `×${+(1 + v).toFixed(3)}`;
+  return `<b>${perMin(r.total)} breadcrumbs a minute</b>
+    <table class="utip">${r.sources.map(x=>`<tr class="${x.count ? '' : 'sub'}"><td>${esc(x.name)} <span>${x.count} × ${perMin(x.each)}</span></td><td>+${perMin(x.perMin)}</td></tr>`).join('')}
+      <tr class="sub"><td>All your ducks</td><td>${perMin(r.base)}/min</td></tr></table>
+    <div class="uth">Multiplied by</div>
+    <table class="utip"><tr class="${r.bakery ? '' : 'sub'}"><td>Bakery <span>${p.levels.bakery ? `level ${p.levels.bakery}, +${pctOf(r.bakery)}` : 'not built yet'}</span></td><td>${times(r.bakery)}</td></tr>
+      <tr class="${r.boost ? '' : 'sub'}"><td>Multikill boost <span>+${pctOf(r.boost)}, from triples and quadras</span></td><td>${times(r.boost)}</td></tr>
+      <tr><td><b>Total</b></td><td>${perMin(r.total)}/min</td></tr></table>
+    <p>Wild fire ducks collect nothing until they're caught. On top of this, each game together brings ${U.winCrumbs || 100} breadcrumbs for a win, and whatever your defenders win in the goose raid.</p>`;
+}
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 function kills(t, q){ return [t && plural(t, 'triple'), q && plural(q, 'quadra')].filter(Boolean).join(', '); }
 // the multikill boost's hover card: what it's made of, which champions earned most of it, and the latest games
