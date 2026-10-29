@@ -35,7 +35,8 @@ perk, used up by its next goose raid or boss fight. The Hot springs have a secon
 heats the water a little more (heat()).
 The Bakery: besides its breadcrumb bonus, each bakery level unlocks machines that bake sweet treats, one for each
 class (TREATS). A treat costs breadcrumbs and badges, and takes a while to bake; speed upgrades shorten that, and
-need higher bakery levels too. Badges are spent from a pool for each player: those earned (badges.py, as in the badge
+need higher bakery levels too. Once a machine has every speed upgrade, more of the same machine can be bought (very
+expensive: extra_machine_cost()), each one baking another batch at the same time. Badges are spent from a pool for each player: those earned (badges.py, as in the badge
 showcase) minus those already used up. They leave Ductopia only, never the showcase. Treats lure fire ducks.
 
 First version: the numbers below are guesses to see how it plays, and are meant to be tuned.
@@ -194,8 +195,9 @@ def migrate(s: dict):
     s.setdefault("hats", {})
     for k, v in (("ranks", {}), ("challenges", []), ("bossFights", []), ("soaks", []), ("perks", {}),   # Training Grounds, Spa
                  ("machines", {}), ("bakes", {}), ("treats", {}), ("spentBadges", {}),               # Bakery
-                 ("caught", []), ("seasonFire", {})):                                               # Volcano Spa
+                 ("caught", []), ("seasonFire", {}), ("machineCount", {})):                         # Volcano Spa, Bakery
         s.setdefault(k, v)
+    s["bakes"] = {t: u if isinstance(u, list) else [u] for t, u in s["bakes"].items()}   # one batch per machine, from before extra machines
 
 
 def _fill_pond(s: dict):
@@ -429,6 +431,8 @@ MACHINE_SPEEDS = 5      # speed upgrades per machine; the nth needs bakery level
 MACHINE_SPEEDUP = 0.8   # each one: 20% less time baking
 SPEED_COST = 0.5        # the first speed upgrade costs half the machine ...
 SPEED_GROWTH = 1.8      # ... and each one after 80% more
+MAX_MACHINES = 5        # of each machine, once its speed upgrades are done: each bakes a batch at the same time
+EXTRA_MIN, EXTRA_TIMES, EXTRA_GROWTH = 100000, 25, 3   # the second costs 25 machines (at least 100,000), each after 3x more
 
 
 def bake_minutes(treat: str, speed: int) -> float:
@@ -444,18 +448,30 @@ def speed_cost(treat: str, speed: int):
     return None if speed >= MACHINE_SPEEDS else round(TREATS[treat][3] * SPEED_COST * SPEED_GROWTH ** speed)
 
 
+def extra_machine_cost(treat: str, count: int):
+    """Breadcrumbs for another of this machine, with `count` already; None at the most. 100k, 300k, 900k, 2.7M for the
+    cheaper machines; 1M, 3M, 9M, 27M for the chocolate tempering machine."""
+    return None if count >= MAX_MACHINES else round(max(EXTRA_MIN, TREATS[treat][3] * EXTRA_TIMES) * EXTRA_GROWTH ** (count - 1))
+
+
 def badges_left(earned: dict, spent: dict) -> dict:
     """Badges still to spend in Ductopia: earned (as in the badge showcase) minus those the bakery has used up."""
     return {b: max(0, n - spent.get(b, 0)) for b, n in earned.items()}
 
 
 def finish_bakes(s: dict, now: int) -> list:
-    """Treats that are done baking go into the pantry. Returns which."""
-    done = sorted((t for t, until in s["bakes"].items() if until <= now), key=lambda t: s["bakes"][t])
-    for t in done:
-        del s["bakes"][t]
-        s["treats"][t] = s["treats"].get(t, 0) + 1
-    return done
+    """Batches that are done baking go into the pantry. Returns [(treat, how many batches)]."""
+    out = []
+    for t, untils in list(s["bakes"].items()):
+        n = sum(1 for u in untils if u <= now)
+        if n:
+            s["treats"][t] = s["treats"].get(t, 0) + n
+            out.append((t, n))
+        if n == len(untils):
+            del s["bakes"][t]
+        elif n:
+            s["bakes"][t] = [u for u in untils if u > now]
+    return out
 
 
 # ---- goose raids ----
@@ -571,7 +587,7 @@ def new_utopia(riot_id: str, now: int) -> dict:
             "levels": dict(START_LEVELS), "ducklings": [], "lost": 0, "spawned": 0, "hats": {}, "pond": STARTING_DUCKS, "edge": 0,
             "golden": 0, "boost": 0.0, "champs": {}, "fire": 0, "graded": {}, "games": [], "raids": [], "raidWins": 0,
             "squad": [], "training": {}, "ranks": {}, "challenges": [], "bossFights": [], "soaks": [], "perks": {},
-            "machines": {}, "bakes": {}, "treats": {}, "spentBadges": {}, "caught": [], "seasonFire": {}, "log": [], "founding": None}
+            "machines": {}, "machineCount": {}, "bakes": {}, "treats": {}, "spentBadges": {}, "caught": [], "seasonFire": {}, "log": [], "founding": None}
 
 
 def fresh_start(s: dict, now: int) -> dict:
@@ -711,8 +727,9 @@ class DuckUtopia:
             advance(data["players"][p.key], now)
             for x in finish_soaks(data["players"][p.key], now):
                 self._note(data["players"][p.key], now, f"{x['champion']} came out of the spa refreshed: {SALTS[x['salt']][1]}.")
-            for t in finish_bakes(data["players"][p.key], now):
-                self._note(data["players"][p.key], now, f"The {TREATS[t][1].lower()} finished a batch of {TREATS[t][0].lower()}.")
+            for t, n in finish_bakes(data["players"][p.key], now):
+                self._note(data["players"][p.key], now, f"The {TREATS[t][1].lower()} finished a batch of {TREATS[t][0].lower()}." if n == 1
+                           else f"The {TREATS[t][1].lower()}s finished {n} batches of {TREATS[t][0].lower()}.")
             self._season_fire(data["players"][p.key], p, now)
             if "graded" not in data["players"][p.key]:   # before any new game is counted, so no grade pays twice
                 data["players"][p.key]["graded"] = first_graded(data["players"][p.key], rows.get(p.key, []))
@@ -998,7 +1015,7 @@ class DuckUtopia:
             s["caught"].append(c)
             self._note(s, now, f"Lured a wild fire duck with {name.lower()}: caught {c}'s fire duck!")
             return {"caught": c, "treat": cls}
-        if action in ("machine", "speed", "bake"):   # the Bakery
+        if action in ("machine", "speed", "extra", "bake"):   # the Bakery
             t = body.get("treat")
             if t not in TREATS:
                 raise ValueError("There's no such treat.")
@@ -1019,9 +1036,17 @@ class DuckUtopia:
                     raise ValueError(f"The {machine.lower()} is as fast as it gets.")
                 if bakery < needs:
                     raise ValueError(f"The next speed upgrade needs bakery level {needs}.")
+            elif action == "extra":
+                count = s["machineCount"].get(t, 1)
+                if s["machines"][t] < MACHINE_SPEEDS:
+                    raise ValueError(f"Finish the {machine.lower()}'s speed upgrades first.")
+                cost = extra_machine_cost(t, count)
+                if cost is None:
+                    raise ValueError(f"There's no room for more than {MAX_MACHINES} of the {machine.lower()}.")
             else:
-                if t in s["bakes"]:
-                    raise ValueError(f"The {machine.lower()} is already baking.")
+                if len(s["bakes"].get(t, [])) >= s["machineCount"].get(t, 1):
+                    raise ValueError(f"Every {machine.lower()} is already baking." if s["machineCount"].get(t, 1) > 1
+                                     else f"The {machine.lower()} is already baking.")
                 left = badges_left(badge_counts(self.stats.together(self.tracker.players())).get(player.key, {}), s["spentBadges"])
                 short = [f"{n - left.get(b, 0)} more {BADGE_INFO[b][1]}" for b, n in recipe.items() if left.get(b, 0) < n]
                 if short:
@@ -1036,15 +1061,20 @@ class DuckUtopia:
                 return {"machine": t}
             if action == "speed":
                 speed = s["machines"][t] = s["machines"][t] + 1
-                if t in s["bakes"]:   # the batch in it speeds up too
-                    s["bakes"][t] = now + round(max(0, s["bakes"][t] - now) * MACHINE_SPEEDUP)
+                if t in s["bakes"]:   # the batches in it speed up too
+                    s["bakes"][t] = [now + round(max(0, u - now) * MACHINE_SPEEDUP) for u in s["bakes"][t]]
                 self._note(s, now, f"Sped up the {machine.lower()} to level {speed}.")
                 return {"speed": speed}
+            if action == "extra":
+                count = s["machineCount"][t] = s["machineCount"].get(t, 1) + 1
+                self._note(s, now, f"Bought another {machine.lower()}: {count} batches of {name.lower()} can bake at once.")
+                return {"machines": count}
             for b, n in recipe.items():
                 s["spentBadges"][b] = s["spentBadges"].get(b, 0) + n
-            s["bakes"][t] = now + round(bake_minutes(t, s["machines"][t]) * 60000)
+            until = now + round(bake_minutes(t, s["machines"][t]) * 60000)
+            s["bakes"][t] = sorted(s["bakes"].get(t, []) + [until])
             self._note(s, now, f"Started baking {name.lower()} ({', '.join(f'{n} {BADGE_INFO[b][1]}' for b, n in recipe.items())}).")
-            return {"baking": t, "until": s["bakes"][t]}
+            return {"baking": t, "until": until}
         raise ValueError("Unknown action.")
 
     # ---- what the page gets ----
@@ -1079,7 +1109,9 @@ class DuckUtopia:
                            "spent": s["spentBadges"], "treats": s["treats"], "bakes": s["bakes"],
                            "machines": {t: {"speed": sp, "minutes": bake_minutes(t, sp), "speedCost": speed_cost(t, sp),
                                             "speedNeeds": speed_needs(sp),
-                                            "nextMinutes": bake_minutes(t, sp + 1) if sp < MACHINE_SPEEDS else None}
+                                            "nextMinutes": bake_minutes(t, sp + 1) if sp < MACHINE_SPEEDS else None,
+                                            "count": s["machineCount"].get(t, 1),
+                                            "extraCost": extra_machine_cost(t, s["machineCount"].get(t, 1))}
                                         for t, sp in s["machines"].items()}},
                 "buildings": {b: {"level": lv[b], "name": building_name(b, lv[b]) if lv[b] else None,
                                   "next": building_name(b, lv[b] + 1) if upgrade_cost(b, lv[b]) is not None else None,
@@ -1098,4 +1130,4 @@ class DuckUtopia:
                 "treats": [{"id": t, "name": n, "machine": m, "unlock": u, "machineCost": mc, "crumbs": c,
                             "badges": [[b, k] for b, k in r.items()], "minutes": mins}
                            for t, (n, m, u, mc, c, r, mins) in TREATS.items()],
-                "badgeInfo": {b: {"icon": ic, "name": n} for b, (ic, n) in BADGE_INFO.items()}, "speeds": MACHINE_SPEEDS}
+                "badgeInfo": {b: {"icon": ic, "name": n} for b, (ic, n) in BADGE_INFO.items()}, "speeds": MACHINE_SPEEDS, "maxMachines": MAX_MACHINES}

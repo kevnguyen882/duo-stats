@@ -448,12 +448,12 @@ class GameTests(TempStorageCase):
         self.assertEqual((b["earned"]["triple"], b["badges"]["triple"], b["badges"]["crit"]), (4, 1, 0))
         self.assertEqual(b["spent"], {"triple": 3, "crit": 1})
         self.assertEqual(p["crumbs"], 100000 - utopia.TREATS["marksman"][3] - utopia.TREATS["marksman"][4])
-        self.assertEqual(b["bakes"], {"marksman": 1 + 45 * MIN})
+        self.assertEqual(b["bakes"], {"marksman": [1 + 45 * MIN]})
         with self.assertRaises(ValueError):   # one batch at a time
             self.bake("bake", "marksman")
         self.bakery(2)
         p = self.bake("speed", "marksman")   # the batch in the fryer speeds up too
-        self.assertEqual(p["bakery"]["bakes"], {"marksman": 1 + round(45 * MIN * utopia.MACHINE_SPEEDUP)})
+        self.assertEqual(p["bakery"]["bakes"], {"marksman": [1 + round(45 * MIN * utopia.MACHINE_SPEEDUP)]})
         p = self.game.state(viewer=False, now=1 + round(45 * MIN * utopia.MACHINE_SPEEDUP))["players"][0]
         self.assertEqual((p["bakery"]["treats"], p["bakery"]["bakes"]), ({"marksman": 1}, {}))
         self.assertIn("bullseye donuts", p["log"][0]["text"])
@@ -503,6 +503,40 @@ class GameTests(TempStorageCase):
         p = self.game.state(viewer=False, now=8)["players"][0]
         self.assertEqual([(d["champion"], d["games"]) for d in p["volcano"]], [("Draven", 1)])
         self.assertFalse(any("wild Draven" in l["text"] for l in p["log"]))
+
+    def test_more_machines_once_the_speed_upgrades_are_done(self):
+        for i in range(12):   # badges for four batches
+            self.rows["duo one#na1"].append(row(f"b{i}", 0, triples=1, crit=1600))
+        self.game.state(viewer=False, now=1)
+        self.bakery(10, crumbs=10_000_000)
+        self.bake("machine", "marksman")
+        with self.assertRaises(ValueError):   # the speed upgrades come first
+            self.bake("extra", "marksman")
+        for _ in range(utopia.MACHINE_SPEEDS):
+            self.bake("speed", "marksman")
+        before = self.bake("bake", "marksman")
+        with self.assertRaises(ValueError):   # one machine: one batch at a time
+            self.bake("bake", "marksman")
+        p = self.bake("extra", "marksman")
+        m = p["bakery"]["machines"]["marksman"]
+        self.assertEqual(before["crumbs"] - p["crumbs"], utopia.EXTRA_MIN)   # very expensive
+        self.assertEqual((m["count"], m["extraCost"]), (2, utopia.EXTRA_MIN * utopia.EXTRA_GROWTH))
+        p = self.bake("bake", "marksman", now=2)   # two machines: two batches at once
+        mins = round(utopia.bake_minutes("marksman", utopia.MACHINE_SPEEDS) * MIN)
+        self.assertEqual(p["bakery"]["bakes"], {"marksman": [1 + mins, 2 + mins]})
+        with self.assertRaises(ValueError):
+            self.bake("bake", "marksman", now=2)
+        p = self.game.state(viewer=False, now=2 + mins)["players"][0]
+        self.assertEqual((p["bakery"]["treats"], p["bakery"]["bakes"]), ({"marksman": 2}, {}))
+        self.assertIn("finished 2 batches", p["log"][0]["text"])   # both done by now: one note
+        self.assertEqual(utopia.extra_machine_cost("assassin", 1), 1_000_000)
+        self.assertIsNone(utopia.extra_machine_cost("marksman", utopia.MAX_MACHINES))
+
+    def test_old_bakes_become_one_batch_each(self):
+        s = new_utopia("A#1", 0)
+        s["bakes"] = {"marksman": 500}
+        migrate(s)
+        self.assertEqual(s["bakes"], {"marksman": [500]})
 
     def test_only_your_own_utopia(self):
         with self.assertRaises(PermissionError):
