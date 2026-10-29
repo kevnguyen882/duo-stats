@@ -208,6 +208,22 @@ const HAT_ART = {
   crown: [['..........', '..........', '.Y.Y.Y....', '.YYYYY....', '.YRYCY....', '.YYYYY....'], {Y: '#fcc419', R: '#e03131', C: '#38bdf8'}],
 };
 
+// ---- the Bakery's sweet treats, one for each class (10x10 maps, drawn at 20x20) ----
+const TREAT_ART = {
+  marksman: [['..DDDDDD..', '.DPPRPPPD.', 'DPPPPPBPPD', 'DPYP..PPPD', 'DPP....RPD', 'DPPP..PPPD', 'DBPPPPPYPD', '.DPPRPPPD.', '..DDDDDD..', '..........'],
+    {D: '#d9a066', P: '#f783ac', R: '#e03131', Y: '#ffe066', B: '#4dabf7'}],   // bullseye donuts
+  fighter: [['..LLLLLL..', '.LCCCCCCL.', 'LCLLLLLLCL', 'LCLCCCWLCL', 'LCLCLLCLCL', 'LCLWCCCLCL', 'LCLLLLLLCL', '.LCCWCCCL.', '..LLLLLL..', '..........'],
+    {L: '#e8c08a', C: '#a0522d', W: '#fff8e1'}],                                  // cinnamon rolls
+  support: [['....R.....', '...RR.....', '.WWWWWWWW.', 'HHHHHHHHHH', 'YHYYHYYYHY', 'YYYYYYYYYY', 'WWWWWWWWWW', 'YYYYYYYYYY', 'YYYYYYYYYY', 'SSSSSSSSSS'],
+    {R: '#e03131', W: '#fff8e1', H: '#f59f00', Y: '#ffd43b', S: '#ced4da'}],      // honey cakes
+  mage: [['..PPPPPP..', '.PPPPPPPP.', '.CCCCCCCC.', '.PPPPPPPP.', '..TTTTTT..', '.TTTTTTTT.', '.CCCCCCCC.', '.TTTTTTTT.', '..Y...Y...', '.....Y....'],
+    {P: '#b197fc', C: '#fff8e1', T: '#63e6be', Y: '#ffe066'}],                    // macarons
+  tank: [['..........', '.WWWWWWWW.', '.WBWWWWBW.', 'BBBBBBBBBB', 'BRBBGBBRBB', 'BBBGBBRBBB', 'BBRBBBBBGB', 'BBBBBRBBBB', 'DDDDDDDDDD', '..........'],
+    {W: '#fff8e1', B: '#8b5a2b', R: '#e03131', G: '#40c057', D: '#5c3317'}],      // fruitcake
+  assassin: [['..........', '.KKK..KKK.', 'KSKKKKSKKK', 'KKKKKKKKKK', 'KKKGKKKKGK', '.KKK..KKK.', '...KKKK...', '..KSKKKK..', '..KKKGKK..', '...KKKK...'],
+    {K: '#3b2314', S: '#8b5a2b', G: '#fcc419'}],                                  // chocolate truffles
+};
+
 // ---- icons and tiles ----
 const ICONS = {
   'icon-breadcrumb': [['..........', '..XXXXX...', '.XYYYYYX..', 'XYYZYYYYX.', 'XYYYYYZYX.', '.XYYYYYX..', '..XXXXX...'], {X: '#8d5524', Y: '#e0a96d', Z: '#c68642'}],
@@ -308,6 +324,43 @@ function buildArt(){
     [[33, 35, 2, 14], [35, 48, 2, 10], [45, 35, 2, 9], [43, 43, 2, 12], [41, 54, 2, 8]].forEach(([x, y, w, h])=>px(x, y, w, h, '#e8590c'));   // lava runs
     [[34, 36], [44, 38], [36, 52], [42, 50]].forEach(([x, y])=>px(x, y, 1, 2, '#ffd43b'));
   });
+  // the Bakery: its kitchen, its machines (one for each treat) and the treats
+  ART['tile-kitchen'] = canvasOf(32, 32, (g, px)=>{ px(0, 0, 32, 32, '#e9e2d4'); px(0, 0, 16, 16, '#b9ad98'); px(16, 16, 16, 16, '#b9ad98'); });
+  ART['tile-kitchen-wall'] = canvasOf(32, 32, (g, px)=>{   // cream subway tiles
+    px(0, 0, 32, 32, '#f3ead8');
+    [0, 8, 16, 24].forEach((y, i)=>{ px(0, y, 32, 1, '#d8ccb4'); [0, 16].forEach(x=>px((x + (i % 2) * 8) % 32, y, 1, 8, '#d8ccb4')); });
+  });
+  ART['machine-marksman'] = chunky(64, px=>{   // a donut fryer
+    px(4, 12, 24, 14, '#adb5bd'); px(4, 12, 24, 2, '#dee2e6'); px(6, 14, 20, 4, '#f59f00'); px(6, 14, 20, 1, '#ffd43b');
+    px(9, 13, 6, 3, '#f783ac'); px(11, 14, 2, 1, '#f59f00'); px(18, 13, 6, 3, '#f783ac'); px(20, 14, 2, 1, '#f59f00');
+    px(14, 20, 4, 3, '#e03131'); px(6, 26, 2, 4, '#495057'); px(24, 26, 2, 4, '#495057'); px(27, 8, 2, 10, '#868e96'); px(25, 8, 4, 2, '#868e96');
+  });
+  ART['machine-fighter'] = chunky(64, px=>{   // a dough mixer
+    px(6, 26, 22, 4, '#c92a2a'); px(21, 8, 6, 18, '#e03131'); px(8, 5, 19, 6, '#e03131'); px(8, 5, 19, 1, '#ff8787');
+    px(14, 11, 2, 5, '#868e96'); px(8, 16, 13, 10, '#ced4da'); px(8, 16, 13, 1, '#f1f3f5'); px(10, 15, 9, 2, '#f1e3c6'); px(24, 14, 2, 2, '#f1f3f5');
+  });
+  ART['machine-support'] = chunky(64, px=>{   // a honey oven
+    px(4, 6, 24, 22, '#f8f0e3'); px(4, 4, 24, 3, '#f59f00'); px(8, 7, 2, 3, '#f59f00'); px(19, 7, 2, 5, '#f59f00'); px(24, 7, 1, 2, '#f59f00');
+    px(7, 13, 18, 11, '#495057'); px(8, 14, 16, 9, '#343a40'); px(10, 17, 12, 5, '#ff922b'); px(12, 16, 8, 2, '#ffd43b');
+    px(8, 9, 2, 2, '#495057'); px(12, 9, 2, 2, '#495057'); px(5, 28, 3, 2, '#495057'); px(24, 28, 3, 2, '#495057');
+  });
+  ART['machine-mage'] = chunky(64, px=>{   // an enchanted piping bench
+    px(2, 19, 28, 3, '#6b4423'); px(2, 19, 28, 1, '#8a5a34'); px(4, 22, 2, 8, '#5c3317'); px(26, 22, 2, 8, '#5c3317');
+    px(9, 5, 8, 9, '#7c3aed'); px(10, 4, 6, 2, '#9775fa'); px(11, 14, 4, 2, '#5f3dc4'); px(12, 16, 2, 2, '#c0eb75');
+    px(19, 16, 4, 3, '#cc5de8'); px(19, 17, 4, 1, '#fff8e1'); px(24, 16, 4, 3, '#63e6be'); px(24, 17, 4, 1, '#fff8e1');
+    [[5, 4], [20, 6], [24, 10], [6, 13], [18, 2]].forEach(([x, y])=>px(x, y, 1, 1, '#ffe066'));
+  });
+  ART['machine-tank'] = chunky(64, px=>{   // a stone oven
+    px(2, 26, 28, 4, '#5c636a'); px(20, 2, 4, 8, '#5c636a');
+    for(let i = 0; i < 18; i++){ const w = Math.round(14 + Math.sqrt(i) * 3.4); px(16 - Math.round(w / 2), 8 + i, w, 1, i % 4 ? '#868e96' : '#6c757d'); }
+    px(11, 17, 10, 9, '#2b1d18'); px(12, 16, 8, 1, '#2b1d18'); px(13, 21, 6, 5, '#ff922b'); px(14, 23, 4, 3, '#ffd43b');
+  });
+  ART['machine-assassin'] = chunky(64, px=>{   // a chocolate tempering machine
+    px(6, 6, 20, 18, '#5c636a'); px(6, 6, 20, 2, '#343a40'); px(9, 10, 14, 9, '#212529'); px(10, 11, 12, 7, '#5c3317');
+    px(11, 13, 6, 2, '#8b5a2b'); px(15, 15, 5, 1, '#8b5a2b'); px(14, 24, 4, 3, '#495057'); px(15, 27, 2, 2, '#5c3317');
+    px(7, 29, 18, 2, '#adb5bd'); px(22, 8, 2, 1, '#e03131'); px(5, 24, 3, 6, '#495057'); px(24, 24, 3, 6, '#495057');
+  });
+  Object.entries(TREAT_ART).forEach(([cls, [rows, pal]])=>{ ART['treat-' + cls] = fromMap(rows, pal, 2); });
   ART['tile-grass'] = tile('grass'); ART['tile-water'] = tile('water'); ART['tile-mud'] = tile('mud');
   ART['ui-raid-board'] = canvasOf(128, 96, (g, px)=>{ px(0, 0, 128, 96, '#6b4423'); px(4, 4, 120, 88, '#a47148'); });
 }

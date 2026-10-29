@@ -27,6 +27,7 @@ const BUILD_INFO = {   // building -> (art for its level, what it does)
   fence: [()=>'tile-mud', (p)=>p.levels.fence ? `Geese bite ${Math.round(Math.min(.06 * p.levels.fence, .5) * 100)}% softer in raids` : 'Goose defences: geese bite 6% softer a level in raids'],
 };
 const LAB = ['nests', 'incubation'];   // the Duck Infirmary's upgrades, shown in its lab rather than under Build
+const ROOMS = [...LAB, 'bakery'];      // ... and the bakery's, in the Bakery
 const fmtMin = m => { m = Math.round(m); return m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}` : `${m} min`; };
 const clock = ms => { const m = Math.floor(Math.max(0, ms) / 60000), sec = Math.floor(Math.max(0, ms) / 1000) % 60; return `${m}:${String(sec).padStart(2, '0')}`; };
 const CLASS_NAME = {tank: 'Tank', mage: 'Mage', marksman: 'Marksman', support: 'Support', fighter: 'Fighter', assassin: 'Assassin'};
@@ -72,24 +73,24 @@ function accept(s){
   $('#msg').textContent = '';
   $('#game').classList.remove('hidden');
   renderPanels();
-  scene.reset(); plaza.reset(); lab.reset(); quarter.reset(); volcano.reset(); spaRoom.reset();
+  scene.reset(); plaza.reset(); lab.reset(); bakeryRoom.reset(); quarter.reset(); volcano.reset(); spaRoom.reset();
   founding(); checkFireDucks();
   // the main page's fire duck pop-up links here: #volcano=<player index> opens that player's Volcano Spa
   const link = !openedFromLink && /^#volcano(?:=(\d))?$/.exec(location.hash);
   if(link){
     openedFromLink = true;
-    if(link[1] && U.players[+link[1]] && +link[1] !== viewing){ viewing = +link[1]; renderPanels(); scene.reset(); plaza.reset(); lab.reset(); quarter.reset(); volcano.reset(); spaRoom.reset(); }
+    if(link[1] && U.players[+link[1]] && +link[1] !== viewing){ viewing = +link[1]; renderPanels(); scene.reset(); plaza.reset(); lab.reset(); bakeryRoom.reset(); quarter.reset(); volcano.reset(); spaRoom.reset(); }
     show('volcano');
   }
 }
 let openedFromLink = false;
 setInterval(load, 20000);
 // when the next duckling is due to grow, ask straight away rather than waiting for the next check
-setInterval(()=>{ if(U && U.players.some(p=>p.ducklings.length && p.ducklings[0] <= nowApp() || p.soaks.some(x=>x.until <= nowApp()))) load(); }, 5000);
+setInterval(()=>{ if(U && U.players.some(p=>p.ducklings.length && p.ducklings[0] <= nowApp() || p.soaks.some(x=>x.until <= nowApp()) || Object.values(p.bakery.bakes).some(u=>u <= nowApp()))) load(); }, 5000);
 
 // ---- drawing the panels ----
 function renderPanels(){
-  renderScore(); renderWhose(); renderResources(); renderBuild(); renderLab(); renderQuarter(); renderVolcano(); renderSquad(); renderRaids(); renderGrounds(); renderSpa(); renderLog();
+  renderScore(); renderWhose(); renderResources(); renderBuild(); renderLab(); renderBakery(); renderQuarter(); renderVolcano(); renderSquad(); renderRaids(); renderGrounds(); renderSpa(); renderLog();
   if(tipEl && !tipEl.isConnected) showTip({target: document.body});   // what it was over has been redrawn
 }
 function renderScore(){
@@ -108,12 +109,15 @@ function renderWhose(){
 $('#whose').addEventListener('click', e=>{
   const b = e.target.closest('[data-view]'); if(!b) return;
   viewing = +b.dataset.view; store.set('utopia_view', viewing); picking = false;
-  renderPanels(); scene.reset(); plaza.reset(); lab.reset(); quarter.reset(); volcano.reset(); spaRoom.reset();
+  renderPanels(); scene.reset(); plaza.reset(); lab.reset(); bakeryRoom.reset(); quarter.reset(); volcano.reset(); spaRoom.reset();
 });
 
 function growLeft(p){ return p.ducklings.length ? clock(p.ducklings[0] - nowApp()) : ''; }
 function renderResources(){
   const p = U.players[viewing];
+  // the breadcrumbs again, pinned to the corner so they're always in view (whoever's Ductopia is being looked at)
+  $('#crumbPill').innerHTML = `${pic('icon-breadcrumb')}<b id="crumbsPill">${fmt(crumbsNow(p))}</b><span>${viewing === U.me ? 'breadcrumbs' : `${esc(shortName(p.riotId))}'s breadcrumbs`}</span>`;
+  $('#crumbPill').classList.remove('hidden');
   $('#resources').innerHTML = `
     <div>${pic('icon-breadcrumb')}<b id="crumbs">${fmt(crumbsNow(p))}</b><span>breadcrumbs · ${fmt(p.rate)}/min</span></div>
     <div>${pic('icon-feather')}<b>${p.feathers}</b><span>goose feathers</span></div>
@@ -148,11 +152,11 @@ function buildRow(b, x, p, own, img, what, next){
 }
 function renderBuild(){
   const p = U.players[viewing], own = mine();
-  $('#build').innerHTML = Object.entries(p.buildings).filter(([b])=>!LAB.includes(b)).map(([b, x])=>{
+  $('#build').innerHTML = Object.entries(p.buildings).filter(([b])=>!ROOMS.includes(b)).map(([b, x])=>{
     const [img, what] = BUILD_INFO[b];
     return buildRow(b, x, p, own, img(Math.max(1, x.level)), what(p), x.next && x.level ? (x.next === x.name ? `level ${x.level + 1}` : x.next) : '');
   }).join('') + (own ? '' : `<p class="unote">Only ${esc(shortName(p.riotId))} can build here.</p>`)
-    + '<p class="unote">The nests and spawning ducklings are in the Duck Infirmary: click it in your Ductopia.</p>';
+    + '<p class="unote">The nests and spawning ducklings are in the Duck Infirmary, and the bakery and its machines in the Bakery: click them in your Ductopia.</p>';
   affordable();
 }
 function renderLab(){
@@ -175,7 +179,7 @@ $('#labBuild').addEventListener('click', e=>{
 function affordable(){   // build buttons light up as breadcrumbs come in
   if(!mine()) return;
   const have = crumbsNow(U.players[viewing]);
-  document.querySelectorAll('[data-build], [data-spawn], [data-hatbuy], [data-soak]').forEach(b=>{ b.disabled = busy || have < +b.dataset.cost || !!b.dataset.full; });
+  document.querySelectorAll('[data-build], [data-spawn], [data-hatbuy], [data-soak], [data-machine], [data-speed], [data-bake]').forEach(b=>{ b.disabled = busy || have < +b.dataset.cost || !!b.dataset.full; });
 }
 $('#build').addEventListener('click', e=>{
   const b = e.target.closest('[data-build]'); if(b) act({action: 'upgrade', building: b.dataset.build});
@@ -328,7 +332,7 @@ let soakPick = {champion: null, salt: 'eucalyptus', temp: 'warm'};
 function renderSpa(){
   const p = U.players[viewing], own = mine(), pools = p.levels.spa;
   $('#spaTitle').textContent = pools >= 2 ? 'Hot springs' : 'Spa';
-  const heatNote = `${plural(p.fire, 'fire duck')} from the Volcano Spa heat the water: every perk ${p.heat ? `is <b>${Math.round(p.heat * 100)}%</b> stronger` : 'gets stronger with each one'} (+5% a fire duck, up to +50%).`;
+  const heatNote = `${plural(p.caught.length, 'caught fire duck')} from the Volcano Spa heat the water: every perk ${p.heat ? `is <b>${Math.round(p.heat * 100)}%</b> stronger` : 'gets stronger with each one'} (+5% a fire duck, up to +50%). Wild ones don't, until they're caught.`;
   if(!pools){
     $('#spaDetail').innerHTML = `<p class="unote">Build the Spa (in Build, back in your Ductopia) to open recovery soaks: a defender soaks with bath salts, sits out raids while it does,
       and comes out with a perk for its next goose raid or boss fight. Hotter water costs more and does more.</p><p class="unote">${heatNote}</p>`;
@@ -365,8 +369,9 @@ $('#spaDetail').addEventListener('click', e=>{
 });
 $('#spaDetail').addEventListener('change', e=>{ if(e.target.matches('[data-soak-champ]')) soakPick.champion = e.target.value; });
 
-// the Spa's scene: its pools, coloured by temperature, with the soaking ducks bobbing in the steam, and the fire ducks
-// from the Volcano Spa along the back, heating the water
+// the Spa's scene: its pools, coloured by temperature, with the soaking ducks bobbing in the steam, and the caught
+// fire ducks from the Volcano Spa along the back, heating the water
+const MAX_SPA_FIRE = 6;   // caught fire ducks drawn in each pool
 const SPW = 480, SPH = 200, POOL_WATER = {warm: ['#74c0fc', '#4dabf7'], hot: ['#ffc078', '#ff922b'], scalding: ['#ff8787', '#fa5252']};
 const spaRoom = (()=>{
   const cv = $('#spaScene'), g = cv.getContext('2d');
@@ -392,9 +397,7 @@ const spaRoom = (()=>{
     // stone floor, and a back wall where the fire ducks sit
     for(let y = 0; y < SPH; y += 32) for(let x = 0; x < SPW; x += 32) g.drawImage(art('tile-plaza'), x, y, 32, 32);
     g.fillStyle = '#5c4b3f'; g.fillRect(0, 0, SPW, 34); g.fillStyle = '#3d3029'; g.fillRect(0, 34, SPW, 4);
-    const fire = Math.min(p.fire, 12);
-    for(let i = 0; i < fire; i++) g.drawImage(art('duck-fire'), SPW / 2 - fire * 10 + i * 20 + 2, 12 + Math.round(Math.sin(now / 500 + i) * 1), 16, 16);
-    label(p.fire ? `${plural(p.fire, 'fire duck')} heating the water · perks +${Math.round(p.heat * 100)}%` : 'No fire ducks yet: an S+ brings one to heat the water', SPW / 2, 40, '#ffd8a8');
+    label(p.caught.length ? `${plural(p.caught.length, 'fire duck')} heating the water · perks +${Math.round(p.heat * 100)}%` : 'No fire ducks yet: catch one at the Volcano Spa to heat the water', SPW / 2, 40, '#ffd8a8');
     g.drawImage(art('lounge-plant'), 4, 132, 48, 48); g.drawImage(art('lounge-plant'), SPW - 52, 132, 48, 48);
     // the pools
     const pw = pools >= 2 ? 170 : 220, gap = 40, x0 = (SPW - pools * pw - (pools - 1) * gap) / 2;
@@ -407,7 +410,17 @@ const spaRoom = (()=>{
       g.fillStyle = w; g.fillRect(x, y, pw, ph);
       g.fillStyle = 'rgba(255,255,255,.35)';   // ripples
       for(let r = 0; r < 4; r++){ const rx = x + ((now / 30 + r * 53) % (pw - 24)), ry = y + 14 + r * 22; g.fillRect(Math.round(rx), ry, 18, 2); }
-      if(!soak){ label(p.levels.spa ? 'Empty pool' : '', x + pw / 2, y + ph / 2 - 4, '#e7f5ff'); continue; }
+      // the caught fire ducks lounging round the edge, warming the water (they share the pools out)
+      p.caught.filter((c, j)=>j % pools === i).slice(0, MAX_SPA_FIRE).forEach((c, j)=>{
+        const n = Math.min(Math.ceil(p.caught.length / pools), MAX_SPA_FIRE), fx = x + 6 + (j + .5) * (pw - 32) / n + Math.sin(now / 1500 + j) * 3;
+        const fy = y + 6 + (j % 2) * 8 + Math.sin(now / 600 + j * 2) * 1.2, face = j % 2 ? -1 : 1;
+        fireBanner(g, c, fx, fy, 20, face);
+        g.save(); if(face < 0){ g.translate(fx + 10, 0); g.scale(-1, 1); g.translate(-fx - 10, 0); }
+        g.drawImage(art('duck-fire'), 0, 0, 32, 24, Math.round(fx), Math.round(fy), 20, 15);   // in the water: no feet
+        g.restore();
+        g.fillStyle = 'rgba(255,170,90,.35)'; g.fillRect(Math.round(fx), Math.round(fy) + 14, 20, 2);   // the warm ripple round it
+      });
+      if(!soak){ label(p.levels.spa ? 'Empty pool' : '', x + pw / 2, y + ph / 2 + 6, '#e7f5ff'); continue; }
       // steam, more of it the hotter the water
       const puffs = {warm: 3, hot: 6, scalding: 10}[soak.temp];
       for(let s = 0; s < puffs; s++){
@@ -426,6 +439,165 @@ const spaRoom = (()=>{
       label('🔒', SPW / 2, 80); label('Build the Spa to open the pools', SPW / 2, 98, '#e7f5ff');
     }
   }
+  window.addEventListener('resize', size);
+  size(); requestAnimationFrame(draw);
+  return {reset, size};
+})();
+
+// ---- the Bakery: machines bake sweet treats, one for each class, from breadcrumbs and badges ----
+let treatSel = null;   // the treat picked in the kitchen (its card is highlighted)
+const badgeChip = (U_, id, text, cls = '') => `<span class="ubadge ${cls}" title="${esc(U_.badgeInfo[id].name)}">${U_.badgeInfo[id].icon} ${text}</span>`;
+const wildFor = (p, cls) => (p.volcano || []).filter(d=>!d.caught && d.cls === cls).length;
+function treatState(p, t){   // locked, forSale, ready or baking
+  const B = p.bakery;
+  return t.id in B.bakes ? 'baking' : B.machines[t.id] ? 'ready' : p.levels.bakery >= t.unlock ? 'forSale' : 'locked';
+}
+function renderBakery(){
+  const p = U.players[viewing], own = mine(), B = p.bakery, bs = p.buildings, lvl = p.levels.bakery;
+  const used = new Set(U.treats.flatMap(t=>t.badges.map(([b])=>b)));
+  const nextUnlock = U.treats.find(t=>t.unlock === lvl + 1);
+  const nextSpeedLevel = lvl + 1 <= 10 && (lvl + 1) % 2 === 0 ? ` and speed upgrade ${(lvl + 1) / 2}` : '';
+  $('#bakeryNote').textContent = 'Bake sweet treats here, one for each class. Each machine is unlocked by your bakery level; a treat costs breadcrumbs and badges, '
+    + 'and takes a while to bake. Badges spent here only leave Ductopia: they stay in your badge showcase. Treats lure wild fire ducks at the Volcano Spa: each class\'s treat, that class\'s fire ducks.';
+  let html = buildRow('bakery', bs.bakery, p, own, BUILD_INFO.bakery[0](Math.max(1, lvl)),
+    `${lvl ? `+${lvl * 25}% breadcrumbs` : 'Makes breadcrumbs faster'} (+25% a level), and unlocks machines and their speed upgrades`,
+    bs.bakery.cost != null ? `level ${lvl + 1}${nextUnlock ? `, unlocks the ${nextUnlock.machine.toLowerCase()}` : ''}${nextSpeedLevel}` : '');
+  html += `<h3 class="uspah">Badges to spend</h3><div class="ubadges">${Object.keys(U.badgeInfo).map(id=>{
+    const left = B.badges[id] || 0, earned = B.earned[id] || 0;
+    return badgeChip(U, id, `${esc(U.badgeInfo[id].name)} <b>${left}</b>${earned !== left ? ` of ${earned}` : ''}`, `${left ? '' : 'none'} ${used.has(id) ? 'used' : ''}`);
+  }).join('')}</div><p class="unote">Every badge you've earned together, as in your badge showcase, less those baked into treats. Outlined ones go into treats.</p>`;
+  html += `<h3 class="uspah">Treats</h3><div class="utreats">${U.treats.map(t=>{
+    const st = treatState(p, t), m = B.machines[t.id], have = B.treats[t.id] || 0;
+    const short = t.badges.filter(([b, n])=>(B.badges[b] || 0) < n);
+    let body;
+    if(st === 'locked') body = `<p class="uempty">🔒 The ${esc(t.machine.toLowerCase())} unlocks at bakery level ${t.unlock}.</p>`;
+    else if(st === 'forSale') body = `<div class="ubld">${pic('machine-' + t.id)}<div class="t"><b>${esc(t.machine)}</b><span>Bakes ${esc(t.name.toLowerCase())} in ${fmtMin(t.minutes)}</span></div>
+      <button data-machine="${t.id}" data-cost="${t.machineCost}" ${own ? '' : 'disabled'}>${pic('icon-breadcrumb')}${fmt(t.machineCost)}</button></div>`;
+    else {
+      const recipe = `<div class="urecipe">Each batch: <span class="ubadge">${pic('icon-breadcrumb')} ${fmt(t.crumbs)}</span>${t.badges.map(([b, n])=>
+        badgeChip(U, b, `${n} ${esc(U.badgeInfo[b].name)} <span>(${B.badges[b] || 0} left)</span>`, short.some(([s])=>s === b) ? 'short' : '')).join('')}</div>`;
+      const bake = st === 'baking' ? `<span class="baking">Baking: <strong data-until="${B.bakes[t.id]}">${timeLeft(B.bakes[t.id] - nowApp())}</strong> left</span>`
+        : `<button data-bake="${t.id}" data-cost="${t.crumbs}" data-full="${short.length ? 1 : ''}" ${own && !short.length ? '' : 'disabled'}>Bake ${pic('icon-breadcrumb')}${fmt(t.crumbs)}</button>
+           <span>${short.length ? `Needs ${short.map(([b, n])=>`${n - (B.badges[b] || 0)} more ${esc(U.badgeInfo[b].name)}`).join(', ')}` : fmtMin(m.minutes)}</span>`;
+      const speed = m.speedCost == null ? '<span class="max">As fast as it gets</span>'
+        : lvl < m.speedNeeds ? `<span class="max">Next: bakery level ${m.speedNeeds}</span>`
+        : `<button data-speed="${t.id}" data-cost="${m.speedCost}" ${own ? '' : 'disabled'}>${pic('icon-breadcrumb')}${fmt(m.speedCost)}</button>`;
+      body = recipe + `<div class="ubake">${bake}</div>
+        <div class="ubld">${pic('machine-' + t.id)}<div class="t"><b>${esc(t.machine)}${m.speed ? ` · speed ${m.speed} of ${U.speeds}` : ''}</b>
+          <span>A batch takes ${fmtMin(m.minutes)}${m.nextMinutes ? `. Next: ${fmtMin(m.nextMinutes)}` : ''}</span></div>${speed}</div>`;
+    }
+    return `<div class="utreat ${st === 'locked' ? 'locked' : ''} ${treatSel === t.id ? 'sel' : ''}" data-treat-card="${t.id}">
+      <div class="utreat-head">${pic('treat-' + t.id, 'pix', t.name)}<div><b>${esc(t.name)}</b><span>${CLASS_NAME[t.id]} treat${have ? ` · ${have} in the pantry` : ''}${wildFor(p, t.id) ? ` · lures ${plural(wildFor(p, t.id), 'wild fire duck')}` : ''}</span></div></div>${body}</div>`;
+  }).join('')}</div>` + (own ? '' : `<p class="unote">Only ${esc(shortName(p.riotId))} can bake here.</p>`);
+  $('#bakeryDetail').innerHTML = html;
+  affordable();
+}
+$('#bakeryDetail').addEventListener('click', e=>{
+  const b = e.target.closest('[data-build]'); if(b) return act({action: 'upgrade', building: b.dataset.build});
+  for(const action of ['machine', 'speed', 'bake']){
+    const x = e.target.closest(`[data-${action}]`);
+    if(x) return act({action, treat: x.dataset[action]});
+  }
+});
+function pickTreat(id){
+  treatSel = id; renderBakery();
+  const card = document.querySelector(`[data-treat-card="${id}"]`);
+  if(card) card.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+}
+
+// the Bakery's kitchen: the pantry shelf along the back wall, the six machines in a row (dark until unlocked, faded until
+// bought, steaming while they bake), and a baker duck in a chef's hat pottering between them
+const BKW = 480, BKH = 200, MACH = {w: 64, gap: 12, y: 84};
+const bakeryRoom = (()=>{
+  const cv = $('#bakeryScene'), g = cv.getContext('2d');
+  let hover = -1, baker = {x: 60, vx: 22};
+  function size(){   // (also called when the bakery is shown)
+    const css = cv.clientWidth || BKW, dpr = window.devicePixelRatio || 1;
+    cv.width = Math.round(css * dpr); cv.height = Math.round(css * dpr * BKH / BKW);
+    hover = -1;
+  }
+  function reset(){
+    if(!U) return;
+    const p = U.players[viewing];
+    cv.setAttribute('aria-label', !p.levels.bakery ? 'The Bakery: not built yet'
+      : `The Bakery: ${U.treats.map(t=>`${t.machine} ${{locked: 'locked', forSale: 'not bought', ready: 'ready', baking: 'baking'}[treatState(p, t)]}`).join(', ')}`);
+  }
+  function label(text, x, y, color = '#fff'){
+    g.font = 'bold 9px ui-monospace, Menlo, monospace'; g.textAlign = 'center'; g.textBaseline = 'top';
+    g.lineWidth = 3; g.strokeStyle = 'rgba(40,28,20,.9)'; g.strokeText(text, x, y); g.fillStyle = color; g.fillText(text, x, y);
+  }
+  const x0 = () => (BKW - U.treats.length * MACH.w - (U.treats.length - 1) * MACH.gap) / 2;
+  const slot = i => ({x: x0() + i * (MACH.w + MACH.gap), y: MACH.y, w: MACH.w, h: MACH.w});
+  function draw(now){
+    requestAnimationFrame(draw);
+    if(!U || view !== 'bakery') return;
+    const p = U.players[viewing], B = p.bakery, k = cv.width / BKW;
+    g.setTransform(k, 0, 0, k, 0, 0); g.imageSmoothingEnabled = false;
+    for(let y = 0; y < 72; y += 32) for(let x = 0; x < BKW; x += 32) g.drawImage(art('tile-kitchen-wall'), x, y, 32, 32);
+    for(let y = 72; y < BKH; y += 32) for(let x = 0; x < BKW; x += 32) g.drawImage(art('tile-kitchen'), x, y, 32, 32);
+    g.fillStyle = '#8a5a34'; g.fillRect(0, 70, BKW, 4);
+    // the pantry: a shelf with each treat baked so far
+    g.fillStyle = '#6b4423'; g.fillRect(40, 40, BKW - 80, 5); g.fillStyle = '#8a5a34'; g.fillRect(40, 40, BKW - 80, 1);
+    g.fillRect(52, 45, 3, 8); g.fillRect(BKW - 55, 45, 3, 8);
+    U.treats.forEach((t, i)=>{
+      const n = B.treats[t.id] || 0, s = slot(i), cx = s.x + s.w / 2;
+      g.globalAlpha = n ? 1 : .25; g.drawImage(art('treat-' + t.id), cx - 10, 20, 20, 20); g.globalAlpha = 1;
+      if(n) label(`×${n}`, cx + 16, 26, '#fff3bf');
+    });
+    label('Pantry', 26, 36, '#ffe8cc');
+    // the machines
+    U.treats.forEach((t, i)=>{
+      const s = slot(i), st = treatState(p, t), cx = s.x + s.w / 2;
+      g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(s.x + 4, s.y + s.h - 4, s.w - 8, 5);   // its shadow
+      if(st === 'locked'){ g.globalAlpha = .3; g.filter = 'brightness(0.2)'; }
+      else if(st === 'forSale') g.globalAlpha = .5;
+      const shake = st === 'baking' ? Math.round(Math.sin(now / 90 + i) * .6) : 0;
+      g.drawImage(art('machine-' + t.id), s.x + shake, s.y, s.w, s.h);
+      g.globalAlpha = 1; g.filter = 'none';
+      if(st === 'baking'){
+        for(let q = 0; q < 4; q++){   // steam
+          const tt = (now / 1800 + q / 4) % 1;
+          g.globalAlpha = .6 * (1 - tt); g.fillStyle = '#fff';
+          g.fillRect(Math.round(s.x + 18 + q * 9 + Math.sin(now / 500 + q) * 3), Math.round(s.y + 8 - tt * 26), 5, 5); g.globalAlpha = 1;
+        }
+        const left = B.bakes[t.id] - nowApp(), total = B.machines[t.id].minutes * 60000, prog = Math.min(1, Math.max(0, 1 - left / total));
+        g.fillStyle = '#343a40'; g.fillRect(s.x + 6, s.y + s.h + 4, s.w - 12, 5);
+        g.fillStyle = '#fcc419'; g.fillRect(s.x + 7, s.y + s.h + 5, Math.round((s.w - 14) * prog), 3);
+        label(timeLeft(left), cx, s.y + s.h + 12, '#ffe066');
+      } else label(st === 'locked' ? `🔒 Bakery ${t.unlock}` : st === 'forSale' ? 'For sale' : 'Ready', cx, s.y + s.h + 6,
+                   st === 'ready' ? '#b2f2bb' : '#ffe8cc');
+      if(i === hover || t.id === treatSel){ g.strokeStyle = i === hover ? '#fff3bf' : '#fcc419'; g.lineWidth = 2; g.strokeRect(s.x - 2, s.y - 2, s.w + 4, s.h + 4); }
+    });
+    // the baker
+    if(p.levels.bakery){
+      baker.x += baker.vx / 60;
+      if(baker.x < 20 || baker.x > BKW - 40) baker.vx = -baker.vx;
+      const bob = Math.abs(Math.sin(now / 200)) * 2;
+      g.save();
+      if(baker.vx < 0){ g.translate(Math.round(baker.x) + 12, 0); g.scale(-1, 1); g.translate(-Math.round(baker.x) - 12, 0); }
+      duckWithHat(g, 'plain', 'chef', baker.x, 172 - bob, 24);
+      g.restore();
+    } else {
+      g.fillStyle = 'rgba(16,20,28,.55)'; g.fillRect(0, 0, BKW, BKH);
+      label('🔒', BKW / 2, 80); label('Build the bakery to open the kitchen', BKW / 2, 98, '#fff3bf');
+    }
+  }
+  const slotAt = e => {
+    const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * BKW / r.width, y = (e.clientY - r.top) * BKH / r.height;
+    return U ? U.treats.findIndex((t, i)=>{ const s = slot(i); return x >= s.x && x < s.x + s.w && y >= s.y && y < s.y + s.h + 20; }) : -1;
+  };
+  cv.addEventListener('mousemove', e=>{
+    hover = slotAt(e); cv.classList.toggle('over', hover >= 0);
+    if(hover < 0){ tip.classList.remove('on'); return; }
+    const p = U.players[viewing], t = U.treats[hover], st = treatState(p, t);
+    tip.innerHTML = `<b>${esc(t.machine)}</b><p>${{locked: `Unlocks at bakery level ${t.unlock}.`, forSale: `For sale: ${fmt(t.machineCost)} breadcrumbs.`,
+      ready: `Ready to bake ${esc(t.name.toLowerCase())}.`, baking: `Baking ${esc(t.name.toLowerCase())}: done in ${timeLeft(p.bakery.bakes[t.id] - nowApp())}.`}[st]} Click to see it below.</p>`;
+    tip.classList.add('on');
+    const w = tip.offsetWidth;
+    tip.style.left = Math.min(Math.max(8, e.clientX - w / 2), innerWidth - w - 8) + 'px'; tip.style.top = (e.clientY + 16) + 'px';
+  });
+  cv.addEventListener('mouseleave', ()=>{ hover = -1; cv.classList.remove('over'); tip.classList.remove('on'); });
+  cv.addEventListener('click', e=>{ const i = slotAt(e); if(i >= 0) pickTreat(U.treats[i].id); });
   window.addEventListener('resize', size);
   size(); requestAnimationFrame(draw);
   return {reset, size};
@@ -517,6 +689,7 @@ async function act(body, isPractice){
     if(isPractice && s.result && s.result.raid) practice = s.result.raid;
     accept(s);
     if(s.result && s.result.fight) playFight(s.result.fight);
+    if(s.result && s.result.caught) playLure(s.result);
     if(isPractice) document.querySelector('#raids').scrollIntoView({behavior: 'smooth', block: 'start'});
   }catch(e){ $('#msg').className = 'msg err'; $('#msg').textContent = e.message; setTimeout(()=>{ $('#msg').textContent = ''; }, 5000); }
   finally{ busy = false; affordable(); }
@@ -543,8 +716,9 @@ addEventListener('scroll', ()=>showTip({target: document.body}), {passive: true,
 // numbers that tick between checks
 setInterval(()=>{
   if(!U) return;
-  const p = U.players[viewing], c = $('#crumbs'), g = $('#grow');
+  const p = U.players[viewing], c = $('#crumbs'), g = $('#grow'), pill = $('#crumbsPill');
   if(c) c.textContent = fmt(crumbsNow(p));
+  if(pill) pill.textContent = fmt(crumbsNow(p));
   if(g) g.textContent = growLeft(p);
   document.querySelectorAll('[data-until]').forEach(el=>{ el.textContent = timeLeft(+el.dataset.until - nowApp()); });
   affordable();
@@ -552,6 +726,10 @@ setInterval(()=>{
 
 // ---- the scene: a little pixel picture of the utopia being viewed ----
 const W = 480, H = 280;
+// where each place sits on the map (its picture's top-left; all PLACE_SIZE square), round the pond in the middle: the
+// Duck Infirmary and the Volcano Spa down the left, the Bakery and Spa top right, the Plaza and Quarter bottom right
+const PLACE_SIZE = 44;
+const PLACES = {lab: [16, 8], volcano: [16, 192], bakery: [350, 8], spa: [422, 8], plaza: [350, 192], quarter: [422, 192]};
 const scene = (()=>{
   const cv = $('#scene'), g = cv.getContext('2d');
   let ducks = [], t0 = performance.now();
@@ -578,9 +756,14 @@ const scene = (()=>{
   }
   function sprite(name, x, y, w, h){ g.drawImage(art(name), Math.round(x), Math.round(y), w, h ?? w); }
   function lot(x, y, text){   // an empty plot with a sign
-    g.fillStyle = 'rgba(122,90,52,.55)'; g.fillRect(x + 6, y + 30, 52, 26);
-    g.fillStyle = '#8b5a2b'; g.fillRect(x + 30, y + 14, 3, 22); g.fillStyle = '#d9b77e'; g.fillRect(x + 16, y + 8, 31, 12);
-    label(text, x + 32, y + 58, 'center', '#ffe8cc');
+    const s = PLACE_SIZE, u = s / 64;
+    g.fillStyle = 'rgba(122,90,52,.55)'; g.fillRect(x + 6 * u, y + 30 * u, 52 * u, 26 * u);
+    g.fillStyle = '#8b5a2b'; g.fillRect(x + 30 * u, y + 14 * u, 3, 22 * u); g.fillStyle = '#d9b77e'; g.fillRect(x + 16 * u, y + 8 * u, 31 * u, 12 * u);
+    label(text, x + s / 2, y + s + 2, 'center', '#ffe8cc');
+  }
+  function names(x, y, first, second, color = '#ffd8a8'){   // a place's name under it, and a second line if there's more
+    label(first, x + PLACE_SIZE / 2, y + PLACE_SIZE + 2);
+    if(second) label(second, x + PLACE_SIZE / 2, y + PLACE_SIZE + 12, 'center', color);
   }
   function draw(now){
     requestAnimationFrame(draw);
@@ -623,35 +806,46 @@ const scene = (()=>{
       label(`${p.edge} waiting for room in the pond`, b.cx, y + 19, 'center', '#ffd8a8');
     }
     // the Duck Infirmary, where ducklings grow, and the lost and found box
-    sprite('building-infirmary', 8, 6, 64);
-    label(`Infirmary ${p.ducklings.length}/${p.nestSpace}`, 40, 70);
+    const S = PLACE_SIZE, at = id => PLACES[id];
+    let [x, y] = at('lab');
+    sprite('building-infirmary', x, y, S);
+    names(x, y, 'Infirmary', `${p.ducklings.length}/${p.nestSpace} growing`);
     for(let i = 0; i < Math.min(p.ducklings.length, 8); i++){
       const hop = Math.abs(Math.sin(now / 300 + i)) * 2;
-      sprite('duckling', 8 + (i % 4) * 14, 82 + Math.floor(i / 4) * 12 - hop, 12);
+      sprite('duckling', x - 4 + (i % 4) * 13, y + S + 25 + Math.floor(i / 4) * 11 - hop, 11);
     }
     if(p.lost){
-      g.fillStyle = '#a47148'; g.fillRect(82, 46, 22, 18); g.fillStyle = '#6b4423'; g.fillRect(82, 46, 22, 3); g.fillRect(92, 46, 2, 18);
-      label(`Lost & found: ${p.lost}`, 93, 66, 'center', '#ffd8a8');
+      g.fillStyle = '#a47148'; g.fillRect(x + S + 8, y + 16, 20, 16); g.fillStyle = '#6b4423'; g.fillRect(x + S + 8, y + 16, 20, 3); g.fillRect(x + S + 17, y + 16, 2, 16);
+      label(`Lost & found: ${p.lost}`, x + S + 18, y + 34, 'center', '#ffd8a8');
     }
     // bakery and spa (an empty plot until built)
-    if(p.levels.bakery) { sprite(BUILD_INFO.bakery[0](p.levels.bakery), 404, 6, 64); label(`Bakery ${p.levels.bakery}`, 436, 70); }
-    else lot(404, 6, 'Bakery plot');
-    if(p.levels.spa) { sprite(BUILD_INFO.spa[0](p.levels.spa), 404, 90, 64); label(`${p.levels.spa >= 2 ? 'Hot springs' : 'Spa'}${p.soaks.length ? ` ♨${p.soaks.length}` : ''}`, 436, 154); }
-    else lot(404, 90, 'Spa plot');
+    [x, y] = at('bakery');
+    if(p.levels.bakery){
+      sprite(BUILD_INFO.bakery[0](p.levels.bakery), x, y, S);
+      const baking = Object.keys(p.bakery.bakes).length;
+      for(let q = 0; q < (baking ? 3 : 0); q++){   // smoke from the chimney while something bakes
+        const t = (now / 1600 + q / 3) % 1; g.globalAlpha = .55 * (1 - t); g.fillStyle = '#f1f3f5';
+        g.fillRect(Math.round(x + S * .75 + Math.sin(now / 400 + q) * 2), Math.round(y + 2 - t * 12), 4, 4); g.globalAlpha = 1;
+      }
+      names(x, y, `Bakery ${p.levels.bakery}`, baking ? `${baking} baking` : '');
+    }
+    else lot(x, y, 'Bakery plot');
+    [x, y] = at('spa');
+    if(p.levels.spa){ sprite(BUILD_INFO.spa[0](p.levels.spa), x, y, S); names(x, y, p.levels.spa >= 2 ? 'Hot springs' : 'Spa', p.soaks.length ? `${p.soaks.length} soaking` : ''); }
+    else lot(x, y, 'Spa plot');
     // districts: unlocked by real achievements only
-    const D = [['penta', 'district-penta-plaza', 'Plaza', 'a penta', p.golden, 'duck-golden'],   // short: they sit close together
-               ['champion', 'district-champion-quarter', 'Quarter', 'an S', Object.keys(p.champs).length, 'duck-fighter'],
-               ['volcano', 'district-volcano-spa', 'Volcano', 'an S+', p.fire, 'duck-fire']];
-    D.forEach(([id, img, name, need, n, duck], i)=>{
-      const x = 322 + i * 54, y = 196, open = p.districts.includes(id);
-      g.globalAlpha = open ? 1 : .35; sprite(img, x, y, 48); g.globalAlpha = 1;
-      if(open){ sprite(duck, x + 30, y + 30, 16); label(`${name} ${n}`, x + 24, y + 50); }
-      else { label('🔒', x + 24, y + 16); label(`needs ${need}`, x + 24, y + 50, 'center', '#dee2e6'); }
+    const D = [['penta', 'plaza', 'district-penta-plaza', 'Plaza', 'a penta', `${p.golden} golden`, 'duck-golden'],
+               ['champion', 'quarter', 'district-champion-quarter', 'Quarter', 'an S', `${Object.keys(p.champs).length} champs`, 'duck-fighter'],
+               ['volcano', 'volcano', 'district-volcano-spa', 'Volcano', 'an S+', `${p.caught.length}/${(p.volcano || []).length} caught`, 'duck-fire']];
+    D.forEach(([id, place, img, name, need, more, duck])=>{
+      const [x, y] = at(place), open = p.districts.includes(id);
+      g.globalAlpha = open ? 1 : .35; sprite(img, x, y, S); g.globalAlpha = 1;
+      if(open){ sprite(duck, x + S * .62, y + S * .62, 14); names(x, y, name, more); }
+      else { label('🔒', x + S / 2, y + S / 3); names(x, y, name, `needs ${need}`, '#dee2e6'); }
     });
   }
-  // clicking the Duck Infirmary, the Spa or a district visits it
-  const SPOTS = [{view: 'lab', x: 8, y: 6, w: 64, h: 76}, {view: 'spa', x: 404, y: 90, w: 64, h: 74}, {view: 'plaza', x: 322, y: 196, w: 48, h: 66}, {view: 'quarter', x: 376, y: 196, w: 48, h: 66},
-                 {view: 'volcano', x: 430, y: 196, w: 48, h: 66}];
+  // clicking the Duck Infirmary, the Bakery, the Spa or a district visits it
+  const SPOTS = Object.entries(PLACES).map(([view, [x, y]])=>({view, x: x - 8, y, w: PLACE_SIZE + 16, h: PLACE_SIZE + 24}));   // (with its labels)
   const spotAt = e => {
     const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * W / r.width, y = (e.clientY - r.top) * H / r.height;
     return SPOTS.find(o=>x >= o.x && x < o.x + o.w && y >= o.y && y < o.y + o.h);
@@ -964,12 +1158,46 @@ const quarter = (()=>{
   return {reset, size};
 })();
 
-// ---- the Volcano Spa: one fire duck for each game with an S+, soaking in hot springs under a smoking volcano ----
-const VW = 480, VH = 220, MAX_SPA = 45;
-const POOLS = [{cx: 100, cy: 170, rx: 72, ry: 25}, {cx: 246, cy: 190, rx: 84, ry: 22}, {cx: 392, cy: 168, rx: 70, ry: 25}];
+// ---- the Volcano Spa: an S+ on a champion unlocks its fire duck, which chills in the volcano's pools, wild, until it's
+// lured with its class's treat and caught. Caught ones move to the Spa ----
+// champion icons for drawing on canvases (banners), once loaded
+const champImgs = {};
+function champImg(c){
+  if(!ddVer) return null;
+  if(!champImgs[c]){ champImgs[c] = new Image(); champImgs[c].src = champURL(c); }
+  return champImgs[c].complete && champImgs[c].naturalWidth ? champImgs[c] : null;
+}
+// a fire duck's banner: a pole from its back, and a flag with its champion's icon. x, y: where the duck is drawn
+// (size s); face: 1 facing right, -1 left
+function fireBanner(g, champion, x, y, s, face){
+  const pole = Math.round(s * .95), fw = Math.round(s * .62), back = face > 0 ? x + s * .22 : x + s * .78;
+  const top = Math.round(y + s * .3 - pole), px = Math.round(back);
+  g.fillStyle = '#5c3d2e'; g.fillRect(px - 1, top, 2, pole);
+  g.fillStyle = '#ffd43b'; g.fillRect(px - 2, top - 3, 4, 3);
+  const fx = face > 0 ? px - fw - 1 : px + 1, fy = top + 1;
+  g.fillStyle = '#e8590c'; g.fillRect(fx, fy, fw, fw + 2);
+  g.fillStyle = '#ffd43b'; g.fillRect(fx, fy + fw, fw, 2);
+  const ic = champImg(champion), is = fw - 4;
+  if(ic){ g.imageSmoothingEnabled = true; g.drawImage(ic, fx + 2, fy + 2, is, is); g.imageSmoothingEnabled = false; }
+  else { g.fillStyle = '#1f2937'; g.fillRect(fx + 2, fy + 2, is, is); }
+}
+const VW = 480, VH = 270, MAX_SPA = 60, DUCK_MAX = 24, DUCK_MIN = 12;
+const POOLS = [{cx: 94, cy: 180, rx: 86, ry: 40}, {cx: 242, cy: 220, rx: 100, ry: 40}, {cx: 390, cy: 180, rx: 86, ry: 40}];
+// where each of a pool's n ducks sits, in up to three rows, and how big they are: full size while they fit, smaller
+// when there are too many (a duck and its banner need about 1.5 duck-widths)
+function poolSpots(o, n){
+  const rows = n <= 4 ? 1 : n <= 10 ? 2 : 3, cols = Math.ceil(n / rows);
+  const size = Math.max(DUCK_MIN, Math.min(DUCK_MAX, o.rx * 1.45 / (cols * 1.5), o.ry * 1.6 / rows));
+  return Array.from({length: n}, (_, i)=>{
+    const r = Math.floor(i / cols), inRow = Math.min(cols, n - r * cols), c = i % cols;
+    const dy = rows === 1 ? 0 : (r / (rows - 1) - .5) * o.ry * .9;
+    const half = o.rx * Math.sqrt(1 - (dy / o.ry) ** 2) * .72;   // narrower towards the top and bottom of the oval
+    return {x: o.cx - half + (c + .5) / inRow * half * 2 - size / 2, y: o.cy + dy - size * .55, size, face: r % 2 ? -1 : 1};   // a row faces one way, so its banners don't clash
+  });
+}
 const volcano = (()=>{
   const cv = $('#volcanoScene'), g = cv.getContext('2d');
-  let ducks = [], key = null, hover = null, t0 = performance.now();
+  let ducks = [], key = null, hover = null;
   function size(){
     hover = null;
     const css = cv.clientWidth || VW, dpr = window.devicePixelRatio || 1;
@@ -977,16 +1205,17 @@ const volcano = (()=>{
   }
   function reset(){
     if(!U) return;
-    const p = U.players[viewing], games = p.volcano || [];
-    const k = viewing + ':' + games.map(x=>x.matchId).join(',');
+    const p = U.players[viewing], all = p.volcano || [], wild = all.filter(d=>!d.caught);
+    const k = viewing + ':' + wild.map(d=>d.champion).join(',');
     if(k === key) return;   // the same residents: let them keep soaking
     key = k; hover = null;
-    ducks = games.slice(-MAX_SPA).map((game, i)=>{
-      const pool = POOLS[i % POOLS.length], a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * .6;
-      return {game, pool, x: pool.cx + Math.cos(a) * pool.rx * r - 12, y: pool.cy + Math.sin(a) * pool.ry * r - 12,
-              vx: (Math.random() < .5 ? -1 : 1) * (2 + Math.random() * 3), phase: Math.random() * 6};
+    const shown = wild.slice(-MAX_SPA);
+    ducks = [];
+    POOLS.forEach((pool, k)=>{   // shared out between the pools, each laid out in rows so the banners don't pile up
+      const mine = shown.filter((_, i)=>i % POOLS.length === k);
+      poolSpots(pool, mine.length).forEach((at, j)=>ducks.push({duck: mine[j], pool, ...at, phase: Math.random() * 6}));
     });
-    cv.setAttribute('aria-label', games.length ? `Volcano Spa: ${plural(games.length, 'fire duck')}, from S+ games on ${games.map(x=>x.champion).join(', ')}` : 'Volcano Spa, locked');
+    cv.setAttribute('aria-label', all.length ? `Volcano Spa: ${wild.length ? `wild fire ducks chilling in the pools: ${wild.map(d=>d.champion).join(', ')}` : 'every fire duck is caught'}` : 'Volcano Spa, locked');
   }
   function label(text, x, y, color = '#fff'){
     g.font = 'bold 9px ui-monospace, Menlo, monospace'; g.textAlign = 'center'; g.textBaseline = 'top';
@@ -995,8 +1224,7 @@ const volcano = (()=>{
   function draw(now){
     requestAnimationFrame(draw);
     if(!U || view !== 'volcano') return;
-    const dt = Math.min((now - t0) / 1000, .1); t0 = now;
-    const k = cv.width / VW;
+    const k = cv.width / VW, p = U.players[viewing], all = p.volcano || [];
     g.setTransform(k, 0, 0, k, 0, 0); g.imageSmoothingEnabled = false;
     // a smoky evening sky, and the volcano's glow
     const sky = g.createLinearGradient(0, 0, 0, 120);
@@ -1005,13 +1233,11 @@ const volcano = (()=>{
     glow.addColorStop(0, `rgba(255,120,40,${.38 + Math.sin(now / 700) * .06})`); glow.addColorStop(1, 'rgba(255,120,40,0)');
     g.fillStyle = glow; g.fillRect(80, 0, 320, 140);
     g.drawImage(art('volcano-peak'), 160, -26, 160, 160);
-    // smoke rising from the crater
-    for(let i = 0; i < 6; i++){
+    for(let i = 0; i < 6; i++){   // smoke rising from the crater
       const t = (now / 5200 + i / 6) % 1, x = 240 + Math.sin(t * 5 + i) * 10 + t * 30, y = 34 - t * 60, r = 4 + t * 14;
       g.fillStyle = `rgba(120,108,112,${.5 * (1 - t)})`; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
     }
-    // sparks flying out
-    for(let i = 0; i < 8; i++){
+    for(let i = 0; i < 8; i++){   // sparks flying out
       const t = (now / 1300 + i * .37) % 1, dir = i % 2 ? 1 : -1;
       g.fillStyle = i % 3 ? '#ffd43b' : '#ff6b1a';
       g.fillRect(Math.round(240 + dir * (8 + i * 3) * t), Math.round(36 - 34 * t + 50 * t * t), 2, 2);
@@ -1030,38 +1256,34 @@ const volcano = (()=>{
         g.fillStyle = `rgba(255,255,255,${.3 * (1 - t)})`; g.fillRect(Math.round(x), Math.round(o.cy - 6 - t * 30), 3, 3);
       }
     });
-    if(!ducks.length){
+    if(!all.length){
       g.fillStyle = 'rgba(20,10,8,.5)'; g.fillRect(0, 0, VW, VH);
       label('🔒', VW / 2, 92); label('Opens with your first S+ together', VW / 2, 110, '#ffe8cc');
       return;
     }
-    // the fire ducks, soaking (the hovered one stays put)
-    ducks.forEach(d=>{
-      if(d === hover) return;
-      d.x += d.vx * dt;
-      const o = d.pool, ex = (d.x + 12 - o.cx) / (o.rx * .78), ey = (d.y + 12 - o.cy) / (o.ry * .62);
-      if(ex * ex + ey * ey > 1){ d.vx = -d.vx; d.x += d.vx * dt * 2; }
-      if(Math.random() < .002) d.vx = -d.vx;
-    });
+    // the wild ones, chilling with their banners, drifting a little round their spot (the hovered one stays put)
     [...ducks].sort((a, b)=>a.y - b.y).forEach(d=>{
-      const bob = Math.sin(now / 500 + d.phase) * 1.2, x = Math.round(d.x), y = Math.round(d.y + bob);
-      if(d === hover){ g.fillStyle = 'rgba(255,255,255,.4)'; g.beginPath(); g.ellipse(x + 12, y + 18, 14, 4, 0, 0, Math.PI * 2); g.fill(); }
+      const s = d.size, drift = d === hover ? 0 : Math.sin(now / 2400 + d.phase) * s * .15;
+      const bob = Math.sin(now / 500 + d.phase) * s * .05, x = Math.round(d.x + drift), y = Math.round(d.y + bob);
+      if(d === hover){ g.fillStyle = 'rgba(255,255,255,.4)'; g.beginPath(); g.ellipse(x + s / 2, y + s * .75, s * .6, s * .17, 0, 0, Math.PI * 2); g.fill(); }
+      fireBanner(g, d.duck.champion, x, y, s, d.face);
       g.save();
-      if(d.vx < 0){ g.translate(x + 12, 0); g.scale(-1, 1); g.translate(-x - 12, 0); }
-      g.drawImage(art('duck-fire'), 0, 0, 32, 24, x, y, 24, 18);   // soaking: no feet
+      if(d.face < 0){ g.translate(x + s / 2, 0); g.scale(-1, 1); g.translate(-x - s / 2, 0); }
+      g.drawImage(art('duck-fire'), 0, 0, 32, 24, x, y, s, Math.round(s * .75));   // soaking: no feet
       g.restore();
-      if(Math.sin(now / 160 + d.phase * 3) > .6){ g.fillStyle = '#ffd43b'; g.fillRect(x + 12 + Math.round(Math.sin(d.phase) * 3), y - 3, 2, 2); }   // an ember
+      if(Math.sin(now / 160 + d.phase * 3) > .6){ g.fillStyle = '#ffd43b'; g.fillRect(x + s / 2 + Math.round(Math.sin(d.phase) * 3), y - 3, 2, 2); }   // an ember
     });
-    const extra = (U.players[viewing].volcano || []).length - ducks.length;
+    const extra = all.filter(d=>!d.caught).length - ducks.length;
     if(extra > 0) label(`+${extra} more`, VW - 30, VH - 14, '#ffe8cc');
+    if(!ducks.length) label('Every fire duck is caught: they\'re warming the Spa', VW / 2, VH - 16, '#ffe8cc');
   }
   // hover cards for the ducks (drawn here, not by showTip, since they move)
   function hideCard(){ if(hover){ hover = null; tip.classList.remove('on'); cv.classList.remove('over'); } }
   cv.addEventListener('mousemove', e=>{
     const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * VW / r.width, y = (e.clientY - r.top) * VH / r.height;
-    const hit = [...ducks].sort((a, b)=>b.y - a.y).find(d=>x >= d.x - 2 && x < d.x + 26 && y >= d.y - 4 && y < d.y + 20);
+    const hit = [...ducks].sort((a, b)=>b.y - a.y).find(d=>x >= d.x - d.size * .6 && x < d.x + d.size * 1.3 && y >= d.y - d.size && y < d.y + d.size * .85);
     if(!hit){ hideCard(); return; }
-    if(hit !== hover){ hover = hit; tip.innerHTML = fireCard(hit.game); tip.classList.add('on'); cv.classList.add('over'); }
+    if(hit !== hover){ hover = hit; tip.innerHTML = fireCard(hit.duck); tip.classList.add('on'); cv.classList.add('over'); }
     const w = tip.offsetWidth, h = tip.offsetHeight;
     let ty = e.clientY - h - 16; if(ty < 8) ty = e.clientY + 20;
     tip.style.left = Math.min(Math.max(8, e.clientX - w / 2), innerWidth - w - 8) + 'px'; tip.style.top = ty + 'px';
@@ -1073,38 +1295,128 @@ const volcano = (()=>{
   return {reset, size};
 })();
 const fireDay = ts => ts ? new Date(ts).toLocaleDateString(undefined, {month: 'short', day: 'numeric', year: 'numeric'}) : 'an earlier game';
-function fireCard(game){
-  return `<b class="ufire">S+ on ${esc(game.champion)}</b>
-    <p>${fireDay(game.start)} · ${game.win ? 'Win' : 'Loss'} · ${game.kills}/${game.deaths}/${game.assists}</p>
-    <p>A fire duck: collects ${U.fireRate} breadcrumbs a minute, no pond needed.</p>`;
+const treatOf = cls => U.treats.find(t=>t.id === cls);
+function fireCard(d){
+  return `<b class="ufire">${esc(d.champion)}'s fire duck</b>
+    <p>${CLASS_NAME[d.cls]} · ${d.games ? `${plural(d.games, 'S+ game')} together, the first ${fireDay(d.first)}` : 'a season-best S+ (S Rank Challenge)'}</p>
+    <p>${d.caught ? `Caught: it lives in the Spa, warming the water, and collects ${U.fireRate} breadcrumbs a minute.` : `Wild: lure it with ${esc(treatOf(d.cls).name.toLowerCase())}, the ${CLASS_NAME[d.cls].toLowerCase()} treat, to catch it.`}</p>`;
 }
-// every fire duck, newest first, under the scene
+// catching them: how many are caught, and a lure for each class with wild ducks
 function renderVolcano(){
-  const p = U.players[viewing], games = p.volcano || [];
-  $('#volcanoNote').textContent = games.length
-    ? `${plural(games.length, 'fire duck')}, one for each game with an S+. Each collects ${U.fireRate} breadcrumbs a minute, wherever it is. Hover a duck to see its game.`
-    : 'Opens with your first S+ together. Every game with an S+ sends a fire duck here to soak in the hot springs.';
-  $('#volcanoList').innerHTML = games.length ? `<div class="uvlist">${games.slice().reverse().map(x=>`<div class="uvduck" tabindex="0" data-tip-html="${esc(fireCard(x))}">
-      ${pic('duck-fire')}${champIcon(x.champion)}<div><b>${esc(x.champion)}</b><span>${fireDay(x.start)} · ${x.win ? 'Win' : 'Loss'} · ${x.kills}/${x.deaths}/${x.assists}</span></div></div>`).join('')}</div>` : '';
+  const p = U.players[viewing], own = mine(), all = p.volcano || [], caught = all.filter(d=>d.caught).length;
+  $('#volcanoNote').textContent = all.length
+    ? `An S+ on a champion unlocks its fire duck, and it chills here in the volcano's pools, wild, doing nothing for you yet. Lure one with the sweet treat for its class (bake them in the Bakery) to catch it: which one comes for the treat is a surprise. Caught fire ducks move into the Spa, warming the water, and collect ${U.fireRate} breadcrumbs a minute each. Hover a duck to see whose it is.`
+    : 'Opens with your first S+ together. An S+ on a champion unlocks its fire duck; catch it with a sweet treat from the Bakery.';
+  if(!all.length){ $('#volcanoList').innerHTML = ''; return; }
+  const lures = U.treats.map(t=>({t, wild: all.filter(d=>!d.caught && d.cls === t.id).length, have: p.bakery.treats[t.id] || 0})).filter(x=>x.wild);
+  $('#volcanoList').innerHTML = `
+    <div class="uvprog"><b>${caught} of ${all.length}</b> fire ducks caught<div class="ubar"><i style="width:${Math.round(caught / all.length * 100)}%"></i></div></div>
+    ${lures.length ? `<h3 class="uspah">Lure a wild fire duck</h3>${lures.map(({t, wild, have})=>`<div class="ubld">${pic('treat-' + t.id)}<div class="t"><b>${esc(t.name)}</b>
+        <span>${plural(wild, `wild ${CLASS_NAME[t.id].toLowerCase()} fire duck`)} · ${have ? `${have} in the pantry` : 'none in the pantry: bake some in the Bakery'}</span></div>
+        <button data-lure="${t.id}" ${own && have ? '' : 'disabled'}>Lure</button></div>`).join('')}`
+      : '<p class="uempty">Every fire duck is caught. The next S+ on a new champion brings another.</p>'}
+    ${own ? '' : `<p class="unote">Only ${esc(shortName(p.riotId))} can lure fire ducks here.</p>`}`;
 }
+$('#volcanoList').addEventListener('click', e=>{ const b = e.target.closest('[data-lure]'); if(b) act({action: 'lure', treat: b.dataset.lure}); });
 
-// ---- a pop-up when a new fire duck arrives (either of you). The main page shows the same one; whichever page sees it
+// ---- luring a fire duck, played out: the treat drops onto the rocks, a mystery duck creeps in and eats it, a flash as
+// it's caught, then it's revealed, carrying its champion's banner ----
+let lureRun = 0;
+function playLure(r){
+  const run = ++lureRun, box = $('#lure'), t = treatOf(r.treat), calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const p = U.players[viewing], d = (p.volcano || []).find(x=>x.champion === r.caught) || {champion: r.caught, cls: r.treat};
+  box.innerHTML = `<div class="box ulure"><h2 id="lureTitle">Luring a fire duck…</h2><p>With ${esc(t.name.toLowerCase())}</p>
+    <div class="ulure-stage"><canvas width="480" height="300" aria-hidden="true"></canvas></div>
+    <p class="ulure-say" aria-live="polite">The treat lands on the warm rocks…</p>
+    <div class="ulure-reveal hidden"><span class="uvicon">${champIcon(d.champion)}<em>S+</em></span><div><b>${esc(d.champion)}'s fire duck!</b>
+      <span>A ${CLASS_NAME[d.cls].toLowerCase()} fire duck. It's moving into the Spa to warm the water, and collects ${U.fireRate} breadcrumbs a minute.</span></div></div>
+    <button data-lure-close>Send it to the Spa</button></div>`;
+  box.classList.remove('hidden');
+  box.querySelector('button').focus();
+  const cv = box.querySelector('canvas'), g = cv.getContext('2d'), say = box.querySelector('.ulure-say');
+  const W2 = 240, H2 = 150, GROUND = 112, TX = 104, start = performance.now();
+  const crumbs = Array.from({length: 10}, (_, i)=>({a: Math.random() * Math.PI, v: 20 + Math.random() * 30, k: i}));
+  const lines = [[0, 'The treat lands on the warm rocks…'], [900, 'Something stirs on the slope…'], [2600, 'Nom nom nom…'], [3400, 'Caught!']];
+  let said = 0;
+  const T = calm ? 99999 : null;   // reduced motion: straight to the reveal
+  (function frame(now){
+    if(run !== lureRun || box.classList.contains('hidden')) return;
+    const t = T || now - start;
+    while(said < lines.length && t >= lines[said][0]){ say.textContent = lines[said][1]; said++; }
+    g.setTransform(2, 0, 0, 2, 0, 0); g.imageSmoothingEnabled = false;
+    const sky = g.createLinearGradient(0, 0, 0, GROUND); sky.addColorStop(0, '#24152b'); sky.addColorStop(1, '#7a2e1f');
+    g.fillStyle = sky; g.fillRect(0, 0, W2, GROUND);
+    g.drawImage(art('volcano-peak'), 150, 6, 110, 110);
+    for(let y = GROUND; y < H2; y += 32) for(let x = 0; x < W2; x += 32) g.drawImage(art('tile-volcanic'), x, y, 32, 32);
+    g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(0, GROUND, W2, 2);
+    // the treat: falls and bounces, then gets eaten a bite at a time
+    const bites = t < 2600 ? 0 : Math.min(4, Math.floor((t - 2600) / 200));
+    if(bites < 4){
+      const fall = Math.min(1, t / 600), bounce = t > 600 && t < 900 ? Math.sin((t - 600) / 300 * Math.PI) * 6 : 0;
+      const ty = (GROUND - 30) * fall * fall - bounce + 8, sz = 20 * (1 - bites * .22);
+      g.drawImage(art('treat-' + r.treat), TX - sz / 2, ty + (20 - sz), sz, sz);
+      if(t > 900 && t < 2600 && Math.sin(t / 150) > 0){ g.fillStyle = '#fff3bf'; g.fillRect(TX + 8, ty - 2, 2, 2); }   // it glints
+    }
+    if(t > 2600 && t < 3400) crumbs.forEach(c=>{   // crumbs flying from the pecking
+      const u = ((t - 2600) / 400 + c.k / 10) % 1;
+      g.fillStyle = '#e0a96d'; g.fillRect(Math.round(TX + Math.cos(c.a) * c.v * u), Math.round(GROUND - 6 - Math.sin(c.a) * c.v * u + 30 * u * u), 2, 2);
+    });
+    // the mystery duck: a shadow creeping in from the right, then pecking
+    const reveal = t >= 3900;
+    const walk = t < 900 ? 0 : Math.min(1, (t - 900) / 1700), dx = Math.round(W2 + 10 - walk * (W2 + 10 - TX - 8));
+    const peck = t > 2600 && t < 3400 ? Math.abs(Math.sin((t - 2600) / 100)) * 4 : 0;
+    const hop = walk > 0 && walk < 1 ? -Math.abs(Math.sin(t / 120)) * 2 : 0, dy = GROUND - 30 + hop + peck;
+    if(t >= 900){
+      if(reveal) fireBanner(g, d.champion, dx, dy, 32, -1);
+      g.save(); g.translate(dx + 16, 0); g.scale(-1, 1); g.translate(-dx - 16, 0);   // facing left, towards the treat
+      if(!reveal) g.filter = 'brightness(0.12)';
+      g.drawImage(art('duck-fire'), dx, dy, 32, 32);
+      g.restore(); g.filter = 'none';
+      if(!reveal){ g.fillStyle = '#ffd43b'; g.fillRect(dx + 9, dy + 7, 2, 2); }   // a glinting eye
+      if(!reveal && t < 2600){
+        g.font = 'bold 14px ui-monospace, Menlo, monospace'; g.textAlign = 'center'; g.fillStyle = '#ffd43b';
+        g.fillText('?', dx + 16, dy - 6 + Math.sin(t / 200) * 2);
+      }
+    }
+    // caught: a burst of light, then sparkles round the revealed duck
+    if(t >= 3400 && t < 4300){
+      const u = (t - 3400) / 900;
+      g.fillStyle = `rgba(255,236,170,${.85 * (1 - u)})`; g.beginPath(); g.arc(dx + 16, dy + 16, 10 + u * 90, 0, Math.PI * 2); g.fill();
+    }
+    if(reveal) for(let i = 0; i < 8; i++){
+      const a = i / 8 * Math.PI * 2 + t / 900, rr = 26 + Math.sin(t / 300 + i) * 3;
+      g.fillStyle = i % 2 ? '#ffd43b' : '#ff922b'; g.fillRect(Math.round(dx + 16 + Math.cos(a) * rr), Math.round(dy + 16 + Math.sin(a) * rr * .6), 2, 2);
+    }
+    if(reveal && box.querySelector('.ulure-reveal').classList.contains('hidden')){
+      box.querySelector('.ulure-reveal').classList.remove('hidden');
+      box.querySelector('h2').textContent = 'Caught!'; say.textContent = '';
+    }
+    requestAnimationFrame(frame);
+  })(start);
+}
+document.addEventListener('click', e=>{ if(e.target.closest('[data-lure-close]')) $('#lure').classList.add('hidden'); });
+
+// ---- a pop-up when a new wild fire duck appears (either of you). The main page shows the same one; whichever page sees it
 // first marks it seen in this browser, so it only pops up once.
-const FIRE_SEEN = 'ducktopia_fire_seen';   // its name from before Ductopia was renamed, so seen ones stay seen
+// how many fire ducks each player had unlocked when this browser last looked. Not the old 'ducktopia_fire_seen', which
+// counted S+ games: a page still open from before would keep resetting it, and the fire ducks would be announced again
+// and again
+const FIRE_SEEN = 'ductopia_fire_ducks_seen';
 function checkFireDucks(){
   let seen; try{ seen = JSON.parse(store.get(FIRE_SEEN) || '{}') || {}; }catch(e){ seen = {}; }
   const gained = [];
   U.players.forEach((p, i)=>{
     const k = p.riotId.toLowerCase();
-    if(seen[k] != null && p.fire > seen[k]) gained.push({p, i, n: p.fire - seen[k]});
-    seen[k] = p.fire;
+    const n = (p.volcano || []).length;   // fire ducks unlocked, wild or caught
+    if(seen[k] != null && n > seen[k]) gained.push({p, i, n: n - seen[k]});
+    seen[k] = n;
   });
   store.set(FIRE_SEEN, JSON.stringify(seen));
   if(!gained.length) return;
   const t = document.createElement('div'); t.className = 'toast firetoast'; t.setAttribute('role', 'status');
-  t.innerHTML = `<button class="toastx" aria-label="Dismiss" title="Dismiss">×</button><b>🔥 New fire duck!</b>${gained.map(({p, i, n})=>{
+  t.innerHTML = `<button class="toastx" aria-label="Dismiss" title="Dismiss">×</button><b>🔥 A wild fire duck appeared!</b>${gained.map(({p, i, n})=>{
       const champs = (p.volcano || []).slice(-n).map(x=>x.champion);
-      return `<div class="uvtoast">${pic('duck-fire')}<span><b>${i === U.me ? 'You' : esc(shortName(p.riotId))}</b> earned ${n > 1 ? `${n} fire ducks` : 'a fire duck'}${champs.length ? ` with an S+ on ${esc(champs.join(', '))}` : ''}</span></div>`;
+      return `<div class="uvtoast">${pic('duck-fire')}<span><b>${i === U.me ? 'You' : esc(shortName(p.riotId))}</b> unlocked ${n > 1 ? `${n} wild fire ducks` : 'a wild fire duck'}${champs.length ? ` with an S+ on ${esc(champs.join(', '))}` : ''}. Lure ${n > 1 ? 'them' : 'it'} with a sweet treat to catch ${n > 1 ? 'them' : 'it'}.</span></div>`;
     }).join('')}<button class="toastbtn" data-visit-volcano="${gained[0].i}">Visit the Volcano Spa</button>`;
   document.body.appendChild(t); requestAnimationFrame(()=>t.classList.add('on'));
   const close = () => { t.classList.remove('on'); setTimeout(()=>t.remove(), 400); };
@@ -1113,14 +1425,14 @@ function checkFireDucks(){
     if(e.target.closest('.toastx')) return close();
     const v = e.target.closest('[data-visit-volcano]'); if(!v) return;
     viewing = +v.dataset.visitVolcano; store.set('utopia_view', viewing);
-    renderPanels(); scene.reset(); plaza.reset(); lab.reset(); quarter.reset(); volcano.reset(); spaRoom.reset();
+    renderPanels(); scene.reset(); plaza.reset(); lab.reset(); bakeryRoom.reset(); quarter.reset(); volcano.reset(); spaRoom.reset();
     show('volcano'); close(); $('#volcano').scrollIntoView({behavior: 'smooth', block: 'start'});
   });
 }
 
-// Penta Plaza, the Duck Infirmary, the Champion Quarter and the Volcano Spa take the place of the utopia scene,
+// Penta Plaza, the Duck Infirmary, the Bakery, the Champion Quarter, the Spa and the Volcano Spa take the place of the utopia scene,
 // each with a button back
-const VIEWS = {town: () => scene, plaza: () => plaza, lab: () => lab, quarter: () => quarter, volcano: () => volcano, spa: () => spaRoom};
+const VIEWS = {town: () => scene, plaza: () => plaza, lab: () => lab, bakery: () => bakeryRoom, quarter: () => quarter, volcano: () => volcano, spa: () => spaRoom};
 let view = 'town';
 function show(v){
   view = v;
@@ -1142,7 +1454,7 @@ function founding(){
   const rows = [['icon-catchup', f.boosts, 'multikills became a permanent breadcrumb boost'],
                 ['duck-golden', f.golden, `pentakill${f.golden === 1 ? '' : 's'}: golden ducks for Penta Plaza`],
                 ['duck-fighter', f.champs, 'champions with an S grade joined the Champion Quarter'],
-                ['duck-fire', f.fire, 'S+ grades lit up the Volcano Spa']].filter(r=>r[1] > 0);
+                ['duck-fire', f.fire, 'wild fire ducks appeared at the Volcano Spa, from S+ grades']].filter(r=>r[1] > 0);
   const box = $('#founding');
   box.innerHTML = `<div class="box"><canvas></canvas><h2 id="foundTitle">Founding Day</h2>
     <p>${f.games} games together, replayed. Your Ductopia starts from your history.</p>
@@ -1168,7 +1480,8 @@ function founding(){
 document.addEventListener('click', e=>{ if(e.target.closest('[data-found-close]')) $('#founding').classList.add('hidden'); });
 document.addEventListener('keydown', e=>{
   if(e.key !== 'Escape') return;
-  if(!$('#founding').classList.contains('hidden')) $('#founding').classList.add('hidden');
+  if(!$('#lure').classList.contains('hidden')) $('#lure').classList.add('hidden');
+  else if(!$('#founding').classList.contains('hidden')) $('#founding').classList.add('hidden');
   else if(view !== 'town') show('town');
 });
 

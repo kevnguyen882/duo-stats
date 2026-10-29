@@ -39,7 +39,7 @@ python3 -m unittest
 node tests/js/run.js
 ```
 
-The first runs the Python tests (Python's built-in `unittest`), the second the page's badge and score rules (plain Node,
+The first runs the Python tests (Python's built-in `unittest`), the second the page's score rules and how it shows badges (plain Node,
 no packages). Neither needs League open, a Riot key or the internet, and neither reads or changes your `data/` folder:
 the tests use small made-up games (`tests/helpers.py`) and a pretend League client.
 
@@ -71,4 +71,4 @@ the tests use small made-up games (`tests/helpers.py`) and a pretend League clie
 | `web/utopia.html`, `web/utopia.css`, `web/js/utopia.js` | The Ductopia page (opened from the link at the top, or `/ductopia`) |
 | `web/js/utopia-art.js` | Ductopia's placeholder pixel art; a PNG with the same name in `web/img/utopia/` replaces each one |
 | `web/js/` | The page's code, one file per tab (`overview.js`, `live.js`, `srank.js`, ...) |
-| `tests/` | The tests: one `test_*.py` file per part of the app, and `js/` for the page's badge and score rules |
+| `tests/` | The tests: one `test_*.py` file per part of the app, and `js/` for the page's score rules and badge display (the badge rules are in `test_badges.py`) |

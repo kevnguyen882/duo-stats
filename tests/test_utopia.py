@@ -5,7 +5,7 @@ from duostats.games import Player
 from duostats.utopia import (DuckUtopia, advance, apply_badges, boost_breakdown, boss, boss_fight, catch_up, crumb_rate,
                              defender, goose_wave, heat, perk_power, with_perk,
                              grow_minutes, migrate, new_utopia, penta_plaza, raid, score, spawn_cost, upgrade_cost,
-                             first_graded, late_grades, volcano_spa)
+                             first_graded, fire_ducks, late_grades, wild_fire_ducks)
 from tests.helpers import TempStorageCase
 
 MIN = 60000
@@ -140,19 +140,35 @@ class RewardTests(unittest.TestCase):
                 row("3", 30, champion="Lux", grade="S"), row("4", 40, champion="Nilah", grade="S+")]
         self.assertEqual(first_graded(s, rows), {"1": "S+", "2": "S"})
         got = [(r["champion"], g) for r, g in late_grades(s, rows)]
-        self.assertEqual(got, [("Lux", ["a Lux champion duck (S)"]), ("Nilah", ["a fire duck"])])
+        self.assertEqual(got, [("Lux", ["a Lux champion duck (S)"]), ("Nilah", [])])   # Nilah's fire duck came with game 1
         self.assertEqual((s["fire"], s["champs"]["Lux"]), (2, "S"))
         self.assertEqual(late_grades(s, rows), [])
 
-    def test_volcano_spa_has_a_fire_duck_per_s_plus_game(self):
+    def test_a_fire_duck_for_each_champion_with_an_s_plus(self):
         s = new_utopia("A#1", 0)
         rows = [row("3", 30, champion="Lux", grade="S+"), row("1", 10, champion="Nilah", grade="S+"),
                 row("2", 20, champion="Sona", grade="S"), row("4", 40, champion="Jinx", grade="S+", remake=True),
+                row("6", 35, champion="Nilah", grade="S+"),
                 row("5", 50, champion="Kayn", grade="S+")]   # game 5 isn't counted in the utopia yet
-        s["games"] = ["1", "2", "3", "4"]
-        spa = volcano_spa(s, rows)
-        self.assertEqual([d["champion"] for d in spa], ["Nilah", "Lux"])   # oldest first; an S isn't a fire duck
-        self.assertEqual(spa[1]["start"], 30)
+        s["games"] = ["1", "2", "3", "4", "6"]
+        got = [apply_badges(s, r) for r in sorted(rows, key=lambda r: r["start"]) if r["matchId"] in s["games"] and not r["remake"]]
+        self.assertIn("a wild Nilah fire duck at the volcano", got[0])
+        self.assertNotIn("a wild Nilah fire duck at the volcano", got[3])   # her second S+: the same duck
+        ducks = fire_ducks(s, rows, {"Lux": "mage", "Nilah": "marksman"})
+        self.assertEqual([(d["champion"], d["cls"], d["games"], d["caught"]) for d in ducks],
+                         [("Nilah", "marksman", 2, False), ("Lux", "mage", 1, False)])   # oldest first; an S isn't a fire duck
+        self.assertEqual(ducks[1]["first"], 30)
+        self.assertEqual(wild_fire_ducks(s, "mage", {"Lux": "mage", "Nilah": "marksman"}), ["Lux"])
+
+    def test_wild_fire_ducks_do_nothing_until_caught(self):
+        s = new_utopia("A#1", 0)
+        s["champs"] = {"Lux": "S+", "Nilah": "S+"}
+        s["fire"] = 2
+        none = dict(s, fire=0)   # (the S+ games themselves don't count; Lux and Nilah are still champion ducks)
+        self.assertEqual((crumb_rate(s), heat(s), score(s)), (crumb_rate(none), 0, score(none)))
+        s["caught"] = ["Lux"]
+        self.assertAlmostEqual(crumb_rate(s) - crumb_rate(dict(s, caught=[])), utopia.FIRE_RATE)
+        self.assertEqual(heat(s), utopia.FIRE_HEAT)
 
     def test_catch_up_curve(self):
         self.assertEqual(catch_up(1000, 1000), 1.0)
@@ -225,9 +241,9 @@ class SpaTests(unittest.TestCase):
         s = new_utopia("A#1", 0)
         self.assertEqual([perk_power(s, "chili", k) for k in ("warm", "hot", "scalding")], [0.15, 0.3, 0.5])
         self.assertEqual(perk_power(s, "golden", "warm"), 0.3)   # golden salts: twice as much, in raid rewards
-        s["fire"] = 4
+        s["caught"] = ["C1", "C2", "C3", "C4"]
         self.assertEqual((heat(s), perk_power(s, "chili", "hot")), (0.2, 0.36))
-        s["fire"] = 50
+        s["caught"] = [f"C{i}" for i in range(50)]
         self.assertEqual(heat(s), utopia.MAX_HEAT)
 
     def test_perks_make_the_defender_stronger_not_its_boss(self):
@@ -256,7 +272,19 @@ class FakeStats:
 
 
 class FakeChamps:
-    roles = {"Annie": ["mage"], "Garen": ["fighter", "tank"]}
+    roles = {"Annie": ["mage"], "Garen": ["fighter", "tank"], "Draven": ["marksman"]}
+
+    @staticmethod
+    def alias_of(cid):
+        return {"1": "Annie", "119": "Draven"}.get(str(cid), str(cid))
+
+
+class FakeSeason:
+    def __init__(self, grades):
+        self.grades = grades   # {player key: {champion id: grade}}
+
+    def saved_best(self, player):
+        return self.grades.get(player.key, {})
 
 
 class FakeClient:
@@ -379,6 +407,102 @@ class GameTests(TempStorageCase):
         self.assertEqual(hat(hat="cap", op="wear")["players"][0]["hats"]["Annie"]["on"], "cap")
         with self.assertRaises(ValueError):   # not a champion played together
             self.game.act({"owner": "duo one#na1", "action": "hat", "champion": "Teemo", "hat": "cap", "op": "buy"}, viewer=False, now=1)
+
+    def bakery(self, level, crumbs=100000):
+        data = self.game._load()
+        data["players"]["duo one#na1"]["levels"]["bakery"] = level
+        data["players"]["duo one#na1"]["crumbs"] = crumbs
+        self.storage.write_json(self.game.path, data)
+
+    def bake(self, action, treat, now=1):
+        return self.game.act({"owner": "duo one#na1", "action": action, "treat": treat}, viewer=False, now=now)["players"][0]
+
+    def test_bakery_levels_unlock_machines_and_speed_upgrades(self):
+        self.game.state(viewer=False, now=1)
+        with self.assertRaises(ValueError):   # no bakery yet
+            self.bake("machine", "marksman")
+        self.bakery(2)
+        p = self.bake("machine", "marksman")
+        self.assertEqual(p["crumbs"], 100000 - utopia.TREATS["marksman"][3])
+        self.assertEqual(p["bakery"]["machines"]["marksman"]["speed"], 0)
+        with self.assertRaises(ValueError):   # the honey oven needs bakery level 3
+            self.bake("machine", "support")
+        with self.assertRaises(ValueError):   # already bought
+            self.bake("machine", "marksman")
+        with self.assertRaises(ValueError):   # no dough mixer to speed up
+            self.bake("speed", "fighter")
+        p = self.bake("speed", "marksman")   # the first speed upgrade needs bakery level 2
+        self.assertEqual(p["bakery"]["machines"]["marksman"]["minutes"], 45 * utopia.MACHINE_SPEEDUP)
+        self.assertEqual(p["bakery"]["machines"]["marksman"]["speedNeeds"], 4)
+        with self.assertRaises(ValueError):   # the second needs level 4
+            self.bake("speed", "marksman")
+
+    def test_baking_uses_up_breadcrumbs_and_badges(self):
+        for i in range(4):   # 4 Triple Kill badges and 1 Big Crit
+            self.rows["duo one#na1"].append(row(f"b{i}", 0, triples=1, crit=1600 if i == 0 else 0))
+        self.game.state(viewer=False, now=1)
+        self.bakery(1)
+        self.bake("machine", "marksman")
+        p = self.bake("bake", "marksman")
+        b = p["bakery"]
+        self.assertEqual((b["earned"]["triple"], b["badges"]["triple"], b["badges"]["crit"]), (4, 1, 0))
+        self.assertEqual(b["spent"], {"triple": 3, "crit": 1})
+        self.assertEqual(p["crumbs"], 100000 - utopia.TREATS["marksman"][3] - utopia.TREATS["marksman"][4])
+        self.assertEqual(b["bakes"], {"marksman": 1 + 45 * MIN})
+        with self.assertRaises(ValueError):   # one batch at a time
+            self.bake("bake", "marksman")
+        self.bakery(2)
+        p = self.bake("speed", "marksman")   # the batch in the fryer speeds up too
+        self.assertEqual(p["bakery"]["bakes"], {"marksman": 1 + round(45 * MIN * utopia.MACHINE_SPEEDUP)})
+        p = self.game.state(viewer=False, now=1 + round(45 * MIN * utopia.MACHINE_SPEEDUP))["players"][0]
+        self.assertEqual((p["bakery"]["treats"], p["bakery"]["bakes"]), ({"marksman": 1}, {}))
+        self.assertIn("bullseye donuts", p["log"][0]["text"])
+        with self.assertRaises(ValueError) as e:   # the badges are used up
+            self.bake("bake", "marksman", now=2 + 45 * MIN)
+        self.assertIn("2 more Triple Kill, 1 more Big Crit", str(e.exception))
+
+    def treats(self, **n):
+        data = self.game._load()
+        data["players"]["duo one#na1"]["treats"] = n
+        self.storage.write_json(self.game.path, data)
+
+    def test_luring_a_wild_fire_duck_with_its_class_of_treat(self):
+        self.rows["duo one#na1"].append(row("9", 0, grade="S+"))   # Annie (a mage): her fire duck is unlocked
+        p = self.game.state(viewer=False, now=1)["players"][0]
+        self.assertEqual([(d["champion"], d["cls"], d["caught"]) for d in p["volcano"]], [("Annie", "mage", False)])
+        rate = p["rate"]
+        lure = lambda treat: self.game.act({"owner": "duo one#na1", "action": "lure", "treat": treat}, viewer=False, now=1)
+        self.treats(marksman=1)
+        with self.assertRaises(ValueError):   # no wild marksman fire ducks
+            lure("marksman")
+        with self.assertRaises(ValueError):   # no macarons in the pantry
+            lure("mage")
+        self.treats(mage=2)
+        out = lure("mage")
+        p = out["players"][0]
+        self.assertEqual(out["result"], {"caught": "Annie", "treat": "mage"})
+        self.assertEqual((p["bakery"]["treats"], p["caught"]), ({"mage": 1}, ["Annie"]))
+        self.assertTrue(p["volcano"][0]["caught"])
+        self.assertAlmostEqual(p["rate"] - rate, utopia.FIRE_RATE)   # caught: it collects breadcrumbs and heats the Spa
+        self.assertEqual(p["heat"], utopia.FIRE_HEAT)
+        self.assertIn("caught Annie's fire duck", p["log"][0]["text"])
+        with self.assertRaises(ValueError):   # every mage fire duck is caught
+            lure("mage")
+
+    def test_a_season_best_s_plus_unlocks_a_fire_duck_too(self):
+        season = FakeSeason({"duo one#na1": {"119": "S+", "1": "S", "999": "S+"}})   # Draven S+ in a solo game; 999: unknown
+        self.game.season = season
+        p = self.game.state(viewer=False, now=5)["players"][0]
+        self.assertEqual([(d["champion"], d["cls"], d["games"], d["caught"]) for d in p["volcano"]], [("Draven", "marksman", 0, False)])
+        self.assertIn("season-best S+ grades: Draven", p["log"][0]["text"])
+        self.assertNotIn("Draven", p["champs"])   # a fire duck, not a champion duck: those still need a game together
+        season.grades = {}   # a new season: it stays unlocked
+        p = self.game.state(viewer=False, now=6)["players"][0]
+        self.assertEqual([d["champion"] for d in p["volcano"]], ["Draven"])
+        self.rows["duo one#na1"].insert(0, row("7", 7, champion="Draven", grade="S+"))   # an S+ together later: the same duck
+        p = self.game.state(viewer=False, now=8)["players"][0]
+        self.assertEqual([(d["champion"], d["games"]) for d in p["volcano"]], [("Draven", 1)])
+        self.assertFalse(any("wild Draven" in l["text"] for l in p["log"]))
 
     def test_only_your_own_utopia(self):
         with self.assertRaises(PermissionError):

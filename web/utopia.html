@@ -21,7 +21,7 @@ document.documentElement.dataset.theme=t})()</script>
   <div id="game" class="hidden">
     <div class="uscore" id="scoreboard"></div>
     <div class="srtools"><div class="seg" role="group" aria-label="Whose utopia" id="whose"></div></div>
-    <div class="uscene" id="town"><canvas id="scene" aria-label="Ductopia (click the Duck Infirmary, the Spa, Penta Plaza, the Champion Quarter or the Volcano Spa to visit them)" role="img"></canvas></div>
+    <div class="uscene" id="town"><canvas id="scene" aria-label="Ductopia (click the Duck Infirmary, the Bakery, the Spa, Penta Plaza, the Champion Quarter or the Volcano Spa to visit them)" role="img"></canvas></div>
     <!-- Penta Plaza takes the scene's place while you visit it -->
     <section class="panel uplaza hidden" id="plaza">
       <div class="uplaza-top"><button class="ghost" data-back>← Back to Ductopia</button><h2>Penta Plaza</h2></div>
@@ -31,6 +31,11 @@ document.documentElement.dataset.theme=t})()</script>
       <div class="uplaza-top"><button class="ghost" data-back>← Back to Ductopia</button><h2>Duck Infirmary</h2></div>
       <div class="uplaza-scene"><canvas id="labScene" role="img"></canvas></div><p class="unote" id="labNote"></p>
       <div id="labBuild"></div></section>
+    <!-- and the Bakery, where the machines bake sweet treats -->
+    <section class="panel uplaza ubakery hidden" id="bakery">
+      <div class="uplaza-top"><button class="ghost" data-back>← Back to Ductopia</button><h2>Bakery</h2></div>
+      <div class="uplaza-scene"><canvas id="bakeryScene" role="img"></canvas></div><p class="unote" id="bakeryNote"></p>
+      <div id="bakeryDetail"></div></section>
     <!-- and the Champion Quarter, the defenders' lounge -->
     <section class="panel uplaza uquarter hidden" id="quarter">
       <div class="uplaza-top"><button class="ghost" data-back>← Back to Ductopia</button><h2>Champion Quarter</h2></div>
@@ -56,7 +61,9 @@ document.documentElement.dataset.theme=t})()</script>
     <section class="panel"><h2>What's happened</h2><div id="log"></div></section>
   </div>
 </div>
+<div class="ucrumbs hidden" id="crumbPill" role="status" aria-label="Breadcrumbs"></div>   <!-- breadcrumbs, always in view -->
 <div class="ufound hidden" id="founding" role="dialog" aria-modal="true" aria-labelledby="foundTitle"></div>
+<div class="ufound hidden" id="lure" role="dialog" aria-modal="true" aria-labelledby="lureTitle"></div>   <!-- luring a fire duck, played out -->
 <div class="ufound hidden" id="arena" role="dialog" aria-modal="true" aria-labelledby="arenaTitle"></div>   <!-- a boss fight, played back -->
 
 <script src="/js/utopia-art.js"></script>  <!-- placeholder pixel art (replaced by PNGs in img/utopia/) -->

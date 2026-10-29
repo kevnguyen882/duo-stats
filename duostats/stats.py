@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from . import badges as badgesmod
 from . import games as gamesmod
 from .errors import DuoStatsError
 from .league_client import LeagueClient
@@ -17,6 +18,7 @@ class StatsService:
     def __init__(self, storage: Storage, client: LeagueClient, riot: RiotApi,
                  directory: PlayerDirectory, tracker: GameTracker):
         self.storage, self.client, self.riot, self.directory, self.tracker = storage, client, riot, directory, tracker
+        self._best = {}   # queue -> {player key: best damage}, from the last rows built (for Personal Best in match details)
 
     def build(self, riot_ids, region: str = "NA", queue=None, count: int = 40) -> dict:
         warnings = []
@@ -41,7 +43,7 @@ class StatsService:
         rows = self._rows(players, queue)
         return {"players": [{"riotId": p.riot_id, "ranks": self._ranks(p, region), "games": rows[p.key]}
                             for p in players],
-                "region": region, "warnings": warnings, "clientOpen": client_open}
+                "region": region, "warnings": warnings, "clientOpen": client_open, "badges": badgesmod.catalog()}
 
     def match(self, game_id) -> dict:
         """Everyone's stats in one saved game, for the match details window."""
@@ -53,7 +55,13 @@ class StatsService:
         except DuoStatsError:
             champions = self.client.champions
         game = gamesmod.parse(*saved, champions)
-        return gamesmod.match_detail(game, self.tracker.players(), self.storage.game_grades(game.game_id))
+        players = self.tracker.players()
+        detail = gamesmod.match_detail(game, players, self.storage.game_grades(game.game_id))
+        queue = self.storage.settings().get("queue") or None   # Personal Best: against the games the page has loaded
+        if str(queue) not in self._best:
+            self._rows(players, queue)
+        badgesmod.attach_match(detail, self._best.get(str(queue), {}))
+        return detail
 
     def together(self, players) -> dict:
         """{player key: rows} for every saved game the players played together, newest first, from what's on this Mac."""
@@ -96,6 +104,8 @@ class StatsService:
                 out[key].append(r)
         for key in out:
             out[key].sort(key=lambda r: r.get("start") or 0, reverse=True)
+        badgesmod.attach(out, {p.key: p.riot_id.split("#")[0] for p in players})
+        self._best[str(queue)] = badgesmod.best_damage(out)
         return out
 
     def _ranks(self, player, region: str) -> dict:

@@ -75,14 +75,24 @@ class SeasonGrades:
                             self.record(player.riot_id, cid, g)
                 except DuoStatsError:
                     pass
+            for cid, g in self.saved_best(player).items():
+                best[cid] = better(g, best.get(cid, "")) if best.get(cid) else g
             saved = self.storage.season().get(player.key) or {}
-            for cid, v in (saved.get("apiGrades") or {}).items():
-                if len(v) >= 2 and v[1] >= start:   # this season only
-                    best[cid] = better(v[0], best.get(cid, "")) if best.get(cid) else v[0]
             client_fresh = (saved.get("updated") or 0) >= start
-            if client_fresh:
-                for cid, g in (saved.get("grades") or {}).items():
-                    best[cid] = better(g, best.get(cid, "")) if best.get(cid) else g
             out.append({"riotId": player.riot_id, "champs": {c: g for c, g in best.items() if is_s_rank(g)},
                         "clientUpdated": saved.get("updated") if client_fresh else None})
         return {"players": out}
+
+    def saved_best(self, player) -> dict:
+        """{champion id: best grade this season}, from what's saved on this Mac (the client's grades, and those seen in
+        the post-game chat or Riot's API). Asks nothing over the network."""
+        start = season_start_ms()
+        saved = self.storage.season().get(player.key) or {}
+        best = {}
+        for cid, v in (saved.get("apiGrades") or {}).items():
+            if len(v) >= 2 and v[1] >= start:   # this season only
+                best[cid] = better(v[0], best.get(cid, "")) if best.get(cid) else v[0]
+        if (saved.get("updated") or 0) >= start:
+            for cid, g in (saved.get("grades") or {}).items():
+                best[cid] = better(g, best.get(cid, "")) if best.get(cid) else g
+        return best

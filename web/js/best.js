@@ -5,7 +5,7 @@
 
 const MULTIKILL_BADGES = [['pentas','penta','Pentakill'],['quadras','quadra','Quadra'],['triples','triple','Triple']];
 
-function bestGameRow(entry, rank, second, best){
+function bestGameRow(entry, rank, second){
   const x = entry.x, tags = [];
   MULTIKILL_BADGES.forEach(([k,cls,label])=>{
     if(x[k]) tags.push(`<span class="mkb ${cls}" title="${x[k]} ${label.toLowerCase()}${x[k]>1?'s':''}">${label}<i>${x[k]}</i></span>`); });
@@ -17,7 +17,7 @@ function bestGameRow(entry, rank, second, best){
   return `<div class="hlc ${second?'second':''}" style="--c:${entry.c}"><div class="rk">${second ? '↳' : rank}</div>${icon(x.champion)}
     <div><div class="t"><b style="color:${entry.c}">${esc(shortName(entry.p.riotId))}</b> · ${esc(x.champion)} · ${x.kills}/${x.deaths}/${x.assists}</div>
       <div class="tags">${tags.join('')}</div>
-      ${badgeChips(gameBadges(x, {best: best[entry.p.riotId.toLowerCase()], name: shortName(entry.p.riotId), multikills: false, mate: mateRow(lastData.players, entry.i, x)}))}</div>
+      ${badgeChips(gameBadges(x, {multikills: false}))}</div>
     <div class="score">${scoreBadge(entry.s)}<small>score</small></div></div>`;
 }
 
@@ -96,7 +96,6 @@ function bestList(players, per){
   const top = Object.values(byGame).filter(r=>bestWho === 'both' || r.some(e=>String(e.i)===bestWho))
     .map(r=>r.sort(lead)).sort((a,b)=>b[0].s-a[0].s).slice(0, BEST_SHOWN);
   if(!top.length) return `<p class="empty">${bestRange === 'all' ? 'No games yet.' : `No games ${bestBack ? 'in this period' : 'yet'}.`}</p>`;
-  const best = bestDamage(players);   // Personal Best is always against every saved game
-  return `<div class="hl">${top.map((g,n)=>`<div class="hlg" data-match="${esc(g[0].x.matchId)}" role="button" tabindex="0" aria-label="Match details">${bestGameRow(g[0], n+1, false, best)}${g.slice(1).map(e=>bestGameRow(e, '', true, best)).join('')}</div>`).join('')}</div>
+  return `<div class="hl">${top.map((g,n)=>`<div class="hlg" data-match="${esc(g[0].x.matchId)}" role="button" tabindex="0" aria-label="Match details">${bestGameRow(g[0], n+1, false)}${g.slice(1).map(e=>bestGameRow(e, '', true)).join('')}</div>`).join('')}</div>
     <p class="note">Score blends damage, game length, KDA, kill participation, share of team damage, the win and any multikills; long, high-damage games score highest. Hover a badge to see what it's for, and click a game for its full details.</p>`;
 }

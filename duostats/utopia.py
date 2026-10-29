@@ -5,8 +5,8 @@ the same race, and it's brought up to date whenever the page asks: idle breadcru
 passed, so nothing runs in the background.
 
   Founding Day  the first time, each player's saved games together are replayed: every triple / quadra is a
-                permanent breadcrumb boost, every pentakill a golden duck, every S- or S a champion duck and every
-                S+ a fire duck. The pond starts with STARTING_DUCKS ducks.
+                permanent breadcrumb boost, every pentakill a golden duck, every S- or S a champion duck, and every
+                champion's first S+ a wild fire duck. The pond starts with STARTING_DUCKS ducks.
   each new game together, after that
                 a win gives bonus breadcrumbs, the badges give their rewards, and geese raid both utopias. Your five
                 defenders fight them automatically.
@@ -14,20 +14,29 @@ passed, so nothing runs in the background.
 The duck pipeline: new ducks come from the Duck Infirmary, a lab whose nests are fluid chambers. You spawn a
 duckling into a free nest for breadcrumbs (spawn_cost(), a little more after each one; never while the nests are
 full). It grows there for grow_minutes(), then moves to the pond, or waits at its edge if it's full. Only ducks in
-the pond collect breadcrumbs (golden, champion and fire ducks collect wherever they are). The infirmary's upgrades:
+the pond collect breadcrumbs (golden, champion and caught fire ducks collect wherever they are). The infirmary's upgrades:
 more nests, and a shorter incubation time. Wins used to give ducklings; any still in the old lost and found box move
 to nests.
 
 The Champion Quarter is a lounge where your five defenders rest; there you can see each one's stats and buy it hats
 (just for looks: HATS). Hats belong to the champion, so they stay if it leaves the squad and comes back.
-The Volcano Spa is where the fire ducks soak, one for each game with an S+ (volcano_spa()).
+The Volcano Spa: an S+ on a champion unlocks its fire duck, wild at first (fire_ducks()): an S+ in a game together, or
+a season-best S+ from the S Rank Challenge (season.py; from any game, so solo ones count too). Once unlocked it stays,
+even when a new season starts. A wild fire duck does
+nothing until it's caught: lure it with the sweet treat for its champion's class (TREATS), and a wild fire duck of that
+class, picked at random, eats it and is caught. Caught fire ducks soak in the volcano's pools, collect breadcrumbs and
+heat the Spa. The aim: catch them all.
 The Training Grounds: a new win on one of your five defenders earns it a challenge, and they add up. Challenge
 the boss there, a one-on-one fight scaled to the defender's level (boss_fight()); beat it and the defender goes up a
 level for good. Win or lose, the challenge is used up.
 The Spa (once built): recovery soaks. A defender soaks in a pool with bath salts at one of three temperatures (SALTS,
 TEMPS; hotter costs more and does more). It sits out raids while it soaks, then comes out refreshed with the salt's
-perk, used up by its next goose raid or boss fight. The Hot springs have a second pool, and every fire duck heats
-the water a little more (heat()).
+perk, used up by its next goose raid or boss fight. The Hot springs have a second pool, and every caught fire duck
+heats the water a little more (heat()).
+The Bakery: besides its breadcrumb bonus, each bakery level unlocks machines that bake sweet treats, one for each
+class (TREATS). A treat costs breadcrumbs and badges, and takes a while to bake; speed upgrades shorten that, and
+need higher bakery levels too. Badges are spent from a pool for each player: those earned (badges.py, as in the badge
+showcase) minus those already used up. They leave Ductopia only, never the showcase. Treats lure fire ducks.
 
 First version: the numbers below are guesses to see how it plays, and are meant to be tuned.
 """
@@ -38,6 +47,7 @@ import math
 import random
 import threading
 
+from .badges import BADGE_INFO, badge_counts
 from .grades import grade_rank, now_ms
 
 # ---- tuning ----
@@ -47,7 +57,7 @@ FRESH_START = 2              # data version: utopias saved before this start ove
 DUCK_RATE = 1.0              # breadcrumbs a minute for each duck in the pond
 GOLDEN_RATE = 3.0            # ... for each golden duck (pentakills)
 CHAMPION_RATE = 1.5          # ... for each champion duck (S- or S on a champion)
-FIRE_RATE = 2.0              # ... for each fire duck (S+)
+FIRE_RATE = 2.0              # ... for each caught fire duck (S+)
 BAKERY_BONUS = 0.25          # +25% breadcrumbs per bakery level
 TRIPLE_BOOST, QUADRA_BOOST = 0.005, 0.015   # permanent breadcrumb boost per triple / quadra kill
 GROW_MINUTES = 8 * 60        # how long a duckling takes to grow in its nest, before incubation upgrades
@@ -109,7 +119,7 @@ def score(s: dict) -> int:
     """The Ductopia Score: ducks, buildings, districts and raid wins."""
     ducks = s["pond"] + s["edge"] + len(s["ducklings"]) + s["lost"]
     lv = s["levels"]
-    return (10 * ducks + 50 * s["golden"] + 40 * len(s["champs"]) + 50 * s["fire"]
+    return (10 * ducks + 50 * s["golden"] + 40 * len(s["champs"]) + 50 * len(s["caught"])
             + 20 * (lv["nests"] + lv["pond"]) + 25 * lv["bakery"] + 60 * lv["spa"] + 15 * lv["fence"]
             + 100 * len(districts(s)) + 30 * s["raidWins"])
 
@@ -121,7 +131,7 @@ def districts(s: dict) -> list:
         out.append("penta")
     if s["champs"]:
         out.append("champion")
-    if s["fire"]:
+    if wild_and_caught(s):
         out.append("volcano")
     return out
 
@@ -139,7 +149,7 @@ def catch_up(mine: int, best: int) -> float:
 def crumb_rate(s: dict) -> float:
     """Breadcrumbs a minute."""
     base = (s["pond"] * DUCK_RATE + s["golden"] * GOLDEN_RATE + len(s["champs"]) * CHAMPION_RATE
-            + s["fire"] * FIRE_RATE)
+            + len(s["caught"]) * FIRE_RATE)
     return base * (1 + BAKERY_BONUS * s["levels"]["bakery"]) * (1 + s["boost"])
 
 
@@ -182,7 +192,9 @@ def migrate(s: dict):
     s.pop("nextSpawn", None)
     s.setdefault("spawned", 0)
     s.setdefault("hats", {})
-    for k, v in (("ranks", {}), ("challenges", []), ("bossFights", []), ("soaks", []), ("perks", {})):   # Training Grounds, Spa
+    for k, v in (("ranks", {}), ("challenges", []), ("bossFights", []), ("soaks", []), ("perks", {}),   # Training Grounds, Spa
+                 ("machines", {}), ("bakes", {}), ("treats", {}), ("spentBadges", {}),               # Bakery
+                 ("caught", []), ("seasonFire", {})):                                               # Volcano Spa
         s.setdefault(k, v)
 
 
@@ -225,13 +237,30 @@ def penta_plaza(s: dict, rows: list) -> list:
             for r in sorted(games, key=lambda r: r.get("start") or 0)]
 
 
-def volcano_spa(s: dict, rows: list) -> list:
-    """The Volcano Spa's residents: one fire duck for each game with an S+, oldest first."""
+def wild_and_caught(s: dict) -> list:
+    """Every champion whose fire duck is unlocked (an S+ on it together, or a season-best S+), wild or caught."""
+    return list(dict.fromkeys([c for c, g in s["champs"].items() if g == "S+"] + list(s.get("seasonFire") or {})))
+
+
+def fire_ducks(s: dict, rows: list, classes: dict) -> list:
+    """The Volcano Spa's fire ducks: one for each champion with an S+, in the order they appeared. cls: the class of
+    treat that lures it; caught: whether it's been caught (only caught ones collect breadcrumbs and heat the Spa)."""
     counted = set(s["games"])
-    games = [r for r in rows if r["matchId"] in counted and not r.get("remake") and (r.get("grade") or "").upper() == "S+"]
-    return [{"matchId": r["matchId"], "champion": r["champion"], "start": r.get("start"), "win": bool(r.get("win")),
-             "kills": r.get("kills") or 0, "deaths": r.get("deaths") or 0, "assists": r.get("assists") or 0}
-            for r in sorted(games, key=lambda r: r.get("start") or 0)]
+    games = sorted((r for r in rows if r["matchId"] in counted and not r.get("remake") and (r.get("grade") or "").upper() == "S+"),
+                   key=lambda r: r.get("start") or 0)
+    first, n = {}, {}
+    for r in games:
+        first.setdefault(r["champion"], r)
+        n[r["champion"]] = n.get(r["champion"], 0) + 1
+    since = lambda c: (first[c].get("start") or 0) if c in first else s["seasonFire"].get(c, 0)   # season-best ones: when they turned up
+    champs = sorted(wild_and_caught(s), key=since)
+    return [{"champion": c, "cls": classes.get(c, "fighter"), "caught": c in s["caught"], "games": n.get(c, 0),
+             "first": first[c].get("start") if c in first else None} for c in champs]
+
+
+def wild_fire_ducks(s: dict, cls: str, classes: dict) -> list:
+    """The wild fire ducks a treat for `cls` can lure."""
+    return [c for c in wild_and_caught(s) if c not in s["caught"] and classes.get(c, "fighter") == cls]
 
 
 # ---- defenders ----
@@ -352,11 +381,11 @@ TEMPS = {   # temperature -> (name, breadcrumbs, minutes soaking, perk strength)
     "hot": ("Hot", 1200, 120, 0.30),
     "scalding": ("Scalding", 3000, 180, 0.50),
 }
-FIRE_HEAT, MAX_HEAT = 0.05, 0.5   # each fire duck makes every perk 5% stronger, up to 50%
+FIRE_HEAT, MAX_HEAT = 0.05, 0.5   # each caught fire duck makes every perk 5% stronger, up to 50%
 
 
 def heat(s: dict) -> float:
-    return round(min(FIRE_HEAT * s["fire"], MAX_HEAT), 2)
+    return round(min(FIRE_HEAT * len(s["caught"]), MAX_HEAT), 2)
 
 
 def perk_power(s: dict, salt: str, temp: str) -> float:
@@ -383,6 +412,50 @@ def with_perk(d: dict, perk) -> dict:
     elif perk["salt"] == "chili":
         d["atk"] = round(d["atk"] * (1 + perk["power"]), 1)
     return d
+
+
+# ---- the Bakery: sweet treats, one for each class ----
+# class -> (treat, machine, bakery level that unlocks the machine, machine's breadcrumbs, treat's breadcrumbs,
+#           badges each treat uses up, minutes baking)
+TREATS = {
+    "marksman": ("Bullseye donuts", "Donut fryer", 1, 600, 150, {"triple": 3, "crit": 1}, 45),
+    "fighter": ("Brawler's cinnamon rolls", "Dough mixer", 2, 1200, 250, {"triple": 2, "quadra": 1}, 60),
+    "support": ("Healing honey cakes", "Honey oven", 3, 2500, 400, {"lifeline": 1, "everywhere": 1}, 60),
+    "mage": ("Arcane macarons", "Enchanted piping bench", 5, 6000, 600, {"untouch": 1, "triple": 2}, 75),
+    "tank": ("Fortress fruitcake", "Stone oven", 7, 15000, 900, {"wall": 1, "triple": 2}, 90),
+    "assassin": ("Shadow truffles", "Chocolate tempering machine", 9, 40000, 1500, {"quadra": 1, "midas": 1}, 90),
+}
+MACHINE_SPEEDS = 5      # speed upgrades per machine; the nth needs bakery level 2n
+MACHINE_SPEEDUP = 0.8   # each one: 20% less time baking
+SPEED_COST = 0.5        # the first speed upgrade costs half the machine ...
+SPEED_GROWTH = 1.8      # ... and each one after 80% more
+
+
+def bake_minutes(treat: str, speed: int) -> float:
+    return TREATS[treat][6] * MACHINE_SPEEDUP ** speed   # 60 min, 48, 38 ... 20 min at speed 5
+
+
+def speed_needs(speed: int):
+    """The bakery level the next speed upgrade needs, from `speed`; None at the top."""
+    return None if speed >= MACHINE_SPEEDS else 2 * (speed + 1)
+
+
+def speed_cost(treat: str, speed: int):
+    return None if speed >= MACHINE_SPEEDS else round(TREATS[treat][3] * SPEED_COST * SPEED_GROWTH ** speed)
+
+
+def badges_left(earned: dict, spent: dict) -> dict:
+    """Badges still to spend in Ductopia: earned (as in the badge showcase) minus those the bakery has used up."""
+    return {b: max(0, n - spent.get(b, 0)) for b, n in earned.items()}
+
+
+def finish_bakes(s: dict, now: int) -> list:
+    """Treats that are done baking go into the pantry. Returns which."""
+    done = sorted((t for t, until in s["bakes"].items() if until <= now), key=lambda t: s["bakes"][t])
+    for t in done:
+        del s["bakes"][t]
+        s["treats"][t] = s["treats"].get(t, 0) + 1
+    return done
 
 
 # ---- goose raids ----
@@ -498,7 +571,7 @@ def new_utopia(riot_id: str, now: int) -> dict:
             "levels": dict(START_LEVELS), "ducklings": [], "lost": 0, "spawned": 0, "hats": {}, "pond": STARTING_DUCKS, "edge": 0,
             "golden": 0, "boost": 0.0, "champs": {}, "fire": 0, "graded": {}, "games": [], "raids": [], "raidWins": 0,
             "squad": [], "training": {}, "ranks": {}, "challenges": [], "bossFights": [], "soaks": [], "perks": {},
-            "log": [], "founding": None}
+            "machines": {}, "bakes": {}, "treats": {}, "spentBadges": {}, "caught": [], "seasonFire": {}, "log": [], "founding": None}
 
 
 def fresh_start(s: dict, now: int) -> dict:
@@ -541,8 +614,9 @@ def grade_rewards(s: dict, champion: str, g: str, before: str = "") -> list:
         s["champs"][champion] = g
         got.append(f"a {champion} champion duck ({g})")
     if g == "S+" and before != "S+":
-        s["fire"] += 1
-        got.append("a fire duck")
+        s["fire"] += 1   # S+ games (see first_graded)
+        if cur != "S+" and champion not in s.get("seasonFire", {}):   # (not already unlocked by a season-best S+)
+            got.append(f"a wild {champion} fire duck at the volcano")
     return got
 
 
@@ -580,8 +654,9 @@ def first_graded(s: dict, rows: list) -> dict:
 
 
 class DuckUtopia:
-    def __init__(self, storage, stats, tracker, client):
-        self.storage, self.stats, self.tracker, self.client = storage, stats, tracker, client
+    def __init__(self, storage, stats, tracker, client, season=None):
+        """season: the S Rank Challenge's grades (season.SeasonGrades), whose S+ grades unlock fire ducks too."""
+        self.storage, self.stats, self.tracker, self.client, self.season = storage, stats, tracker, client, season
         self.path = storage.path("utopia.json")
         self._lock = threading.Lock()
 
@@ -636,6 +711,9 @@ class DuckUtopia:
             advance(data["players"][p.key], now)
             for x in finish_soaks(data["players"][p.key], now):
                 self._note(data["players"][p.key], now, f"{x['champion']} came out of the spa refreshed: {SALTS[x['salt']][1]}.")
+            for t in finish_bakes(data["players"][p.key], now):
+                self._note(data["players"][p.key], now, f"The {TREATS[t][1].lower()} finished a batch of {TREATS[t][0].lower()}.")
+            self._season_fire(data["players"][p.key], p, now)
             if "graded" not in data["players"][p.key]:   # before any new game is counted, so no grade pays twice
                 data["players"][p.key]["graded"] = first_graded(data["players"][p.key], rows.get(p.key, []))
         # new games together since Founding Day, oldest first: rewards, then the same goose wave for both
@@ -689,6 +767,25 @@ class DuckUtopia:
         self.storage.write_json(self.path, data)
         return data
 
+    def _season_fire(self, s: dict, player, now: int):
+        """Fire ducks unlocked by a season-best S+ (the S Rank Challenge's grades, from any game). They stay unlocked."""
+        if not self.season:
+            return
+        try:
+            catalog = self.client.ensure_champions()
+        except Exception:
+            catalog = self.client.champions
+        new = []
+        for cid, g in self.season.saved_best(player).items():
+            c = catalog.alias_of(cid)
+            if (g or "").upper() != "S+" or c == str(cid) or c in wild_and_caught(s):   # (an unknown champion id stays out)
+                continue
+            s["seasonFire"][c] = now
+            new.append(c)
+        if new:
+            self._note(s, now, f"{'Wild fire ducks' if len(new) > 1 else 'A wild fire duck'} appeared at the volcano, from "
+                               f"season-best S+ grades: {', '.join(new)}.")
+
     def _found(self, player, rows: list, now: int) -> dict:
         s = new_utopia(player.riot_id, now)
         summary = {"games": 0, "wins": 0, "boosts": 0, "golden": 0, "champs": 0, "fire": 0}
@@ -696,14 +793,14 @@ class DuckUtopia:
             s["games"].append(r["matchId"])
             if r.get("remake"):
                 continue
-            before = (s["golden"], len(s["champs"]), s["fire"])
+            before = (s["golden"], len(s["champs"]), len(wild_and_caught(s)))
             apply_badges(s, r)
             summary["games"] += 1
             summary["wins"] += 1 if r.get("win") else 0
             summary["boosts"] += (r.get("triples") or 0) + (r.get("quadras") or 0)
             summary["golden"] += s["golden"] - before[0]
             summary["champs"] += len(s["champs"]) - before[1]
-            summary["fire"] += s["fire"] - before[2]
+            summary["fire"] += len(wild_and_caught(s)) - before[2]
         s["founding"] = summary
         self._note(s, now, f"Founding Day: {summary['games']} games together replayed.")
         return s
@@ -886,6 +983,68 @@ class DuckUtopia:
             s["soaks"].append(soak)
             self._note(s, now, f"{c} is soaking in a {name.lower()} bath with {SALTS[salt][0].lower()}.")
             return {"soak": soak}
+        if action == "lure":   # the Volcano Spa: a treat lures a wild fire duck of its class, and it's caught
+            cls = body.get("treat")
+            if cls not in TREATS:
+                raise ValueError("There's no such treat.")
+            name = TREATS[cls][0]
+            wild = wild_fire_ducks(s, cls, self._classes())
+            if not wild:
+                raise ValueError(f"There are no wild {cls} fire ducks to lure: an S+ on a {cls} champion unlocks one.")
+            if s["treats"].get(cls, 0) < 1:
+                raise ValueError(f"No {name.lower()} in the pantry: bake some in the Bakery.")
+            s["treats"][cls] -= 1
+            c = random.Random(f"{s['riotId']}-{now}").choice(wild)
+            s["caught"].append(c)
+            self._note(s, now, f"Lured a wild fire duck with {name.lower()}: caught {c}'s fire duck!")
+            return {"caught": c, "treat": cls}
+        if action in ("machine", "speed", "bake"):   # the Bakery
+            t = body.get("treat")
+            if t not in TREATS:
+                raise ValueError("There's no such treat.")
+            name, machine, unlock, machine_cost, crumbs, recipe, _ = TREATS[t]
+            bakery = s["levels"]["bakery"]
+            if action == "machine":
+                if t in s["machines"]:
+                    raise ValueError(f"You already have the {machine.lower()}.")
+                if bakery < unlock:
+                    raise ValueError(f"The {machine.lower()} needs bakery level {unlock}.")
+                cost = machine_cost
+            elif t not in s["machines"]:
+                raise ValueError(f"Buy the {machine.lower()} first.")
+            elif action == "speed":
+                speed = s["machines"][t]
+                cost, needs = speed_cost(t, speed), speed_needs(speed)
+                if cost is None:
+                    raise ValueError(f"The {machine.lower()} is as fast as it gets.")
+                if bakery < needs:
+                    raise ValueError(f"The next speed upgrade needs bakery level {needs}.")
+            else:
+                if t in s["bakes"]:
+                    raise ValueError(f"The {machine.lower()} is already baking.")
+                left = badges_left(badge_counts(self.stats.together(self.tracker.players())).get(player.key, {}), s["spentBadges"])
+                short = [f"{n - left.get(b, 0)} more {BADGE_INFO[b][1]}" for b, n in recipe.items() if left.get(b, 0) < n]
+                if short:
+                    raise ValueError(f"Not enough badges: {', '.join(short)} needed.")
+                cost = crumbs
+            if s["crumbs"] < cost:
+                raise ValueError(f"Not enough breadcrumbs: {cost:,} needed.")
+            s["crumbs"] -= cost
+            if action == "machine":
+                s["machines"][t] = 0
+                self._note(s, now, f"Bought the {machine.lower()} for the bakery.")
+                return {"machine": t}
+            if action == "speed":
+                speed = s["machines"][t] = s["machines"][t] + 1
+                if t in s["bakes"]:   # the batch in it speeds up too
+                    s["bakes"][t] = now + round(max(0, s["bakes"][t] - now) * MACHINE_SPEEDUP)
+                self._note(s, now, f"Sped up the {machine.lower()} to level {speed}.")
+                return {"speed": speed}
+            for b, n in recipe.items():
+                s["spentBadges"][b] = s["spentBadges"].get(b, 0) + n
+            s["bakes"][t] = now + round(bake_minutes(t, s["machines"][t]) * 60000)
+            self._note(s, now, f"Started baking {name.lower()} ({', '.join(f'{n} {BADGE_INFO[b][1]}' for b, n in recipe.items())}).")
+            return {"baking": t, "until": s["bakes"][t]}
         raise ValueError("Unknown action.")
 
     # ---- what the page gets ----
@@ -895,6 +1054,7 @@ class DuckUtopia:
         classes = self._classes()
         scores = [score(data["players"][p.key]) for p in players if p.key in data["players"]]
         best = max(scores) if scores else 0
+        earned = badge_counts(rows)
         out = []
         for i, p in enumerate(players):
             s = data["players"].get(p.key)
@@ -904,16 +1064,22 @@ class DuckUtopia:
             lv = s["levels"]
             out.append({
                 **{k: s[k] for k in ("riotId", "feathers", "levels", "lost", "spawned", "hats", "pond", "edge", "golden", "boost",
-                                     "champs", "fire", "raids", "raidWins", "training", "ranks", "challenges", "bossFights", "soaks", "perks",
+                                     "champs", "fire", "caught", "raids", "raidWins", "training", "ranks", "challenges", "bossFights", "soaks", "perks",
                                      "log", "founding", "founded")},
                 "crumbs": round(s["crumbs"], 2), "ducklings": sorted(s["ducklings"]),
                 "score": scores[i], "catchUp": catch_up(scores[i], best), "leading": len(scores) > 1 and scores[i] == best and scores.count(best) == 1,
                 "rate": round(crumb_rate(s), 3), "heat": heat(s), "nestSpace": nest_space(lv["nests"]), "pondSpace": pond_space(lv["pond"]),
                 "districts": districts(s), "boostFrom": boost_breakdown(s, rows.get(p.key, [])),
-                "plaza": penta_plaza(s, rows.get(p.key, [])), "volcano": volcano_spa(s, rows.get(p.key, [])),
+                "plaza": penta_plaza(s, rows.get(p.key, [])), "volcano": fire_ducks(s, rows.get(p.key, []), classes),
                 "lab": {"spawnCost": spawn_cost(s["spawned"]), "grow": grow_minutes(lv["incubation"]),
                         "growNext": grow_minutes(lv["incubation"] + 1) if upgrade_cost("incubation", lv["incubation"]) is not None else None,
                         "nestSpaceNext": nest_space(lv["nests"] + 1)},
+                "bakery": {"earned": earned.get(p.key, {}), "badges": badges_left(earned.get(p.key, {}), s["spentBadges"]),
+                           "spent": s["spentBadges"], "treats": s["treats"], "bakes": s["bakes"],
+                           "machines": {t: {"speed": sp, "minutes": bake_minutes(t, sp), "speedCost": speed_cost(t, sp),
+                                            "speedNeeds": speed_needs(sp),
+                                            "nextMinutes": bake_minutes(t, sp + 1) if sp < MACHINE_SPEEDS else None}
+                                        for t, sp in s["machines"].items()}},
                 "buildings": {b: {"level": lv[b], "name": building_name(b, lv[b]) if lv[b] else None,
                                   "next": building_name(b, lv[b] + 1) if upgrade_cost(b, lv[b]) is not None else None,
                                   "cost": upgrade_cost(b, lv[b])} for b in BUILDINGS},
@@ -924,4 +1090,8 @@ class DuckUtopia:
         return {"now": now, "me": 1 if viewer else 0, "players": out, "goldenRate": GOLDEN_RATE, "fireRate": FIRE_RATE,
                 "hatShop": [{"id": h, "name": n, "cost": c} for h, (n, c) in HATS.items()],
                 "salts": [{"id": k, "name": n, "does": does} for k, (n, does) in SALTS.items()],
-                "temps": [{"id": k, "name": n, "cost": c, "minutes": m, "power": pw} for k, (n, c, m, pw) in TEMPS.items()]}
+                "temps": [{"id": k, "name": n, "cost": c, "minutes": m, "power": pw} for k, (n, c, m, pw) in TEMPS.items()],
+                "treats": [{"id": t, "name": n, "machine": m, "unlock": u, "machineCost": mc, "crumbs": c,
+                            "badges": [[b, k] for b, k in r.items()], "minutes": mins}
+                           for t, (n, m, u, mc, c, r, mins) in TREATS.items()],
+                "badgeInfo": {b: {"icon": ic, "name": n} for b, (ic, n) in BADGE_INFO.items()}, "speeds": MACHINE_SPEEDS}

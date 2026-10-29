@@ -39,13 +39,6 @@
 /* the Volcano Spa: the scene, and every fire duck listed under it */
 .uvolcano .uplaza-scene{background:#3b3236}
 .uspa .uplaza-scene{background:#5c4b3f}
-.uvlist{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px;margin-top:12px}
-.uvduck{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:10px;background:var(--panel2);border:1px solid var(--line);outline:none}
-.uvduck:focus-visible{outline:2px solid var(--gold);outline-offset:1px}
-.uvduck .pix{width:32px;height:32px;image-rendering:pixelated;flex:none}
-.uvduck .ic{width:28px;height:28px;border-radius:6px;flex:none}
-.uvduck b{display:block;font-size:13.5px}
-.uvduck span{font-size:12px;color:var(--muted)}
 #tip .ufire{color:#d9480f}
 [data-theme="dark"] #tip .ufire{color:#ff922b}
 .uqpick{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 4px}
@@ -226,3 +219,53 @@ section.panel{margin-bottom:14px}
 .uend .lost{color:#e03131}
 @media (prefers-reduced-motion: reduce){ .ufound li,.ugeese img{animation:none;opacity:1} .ufighter .spr,.upop{animation:none!important} .upop{opacity:0} }
 @media(max-width:600px){.usd .n{font-size:26px}.uscore{gap:6px}.usd{padding:10px}}
+
+/* the Bakery */
+.ubakery .uplaza-scene canvas{cursor:default}
+.ubakery .uplaza-scene canvas.over{cursor:pointer}
+.ubadges{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 4px}
+.ubadge{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:999px;padding:3px 10px 3px 7px;font-size:12.5px}
+.ubadge b{font-variant-numeric:tabular-nums}
+.ubadge.none{opacity:.45}
+.ubadge.used{border-color:var(--gold)}
+.utreats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:6px}
+@media(max-width:760px){.utreats{grid-template-columns:1fr}}
+.utreat{border:1px solid var(--line);border-radius:12px;padding:10px 12px;scroll-margin-top:12px;transition:border-color .3s, background .3s}
+.utreat.sel{border-color:var(--gold);background:color-mix(in srgb, var(--gold) 10%, transparent)}
+.utreat.locked{opacity:.6}
+.utreat-head{display:flex;gap:10px;align-items:center;margin-bottom:6px}
+.utreat-head img{width:40px;height:40px;flex:none}
+.utreat-head b{display:block}
+.utreat-head span{font-size:12.5px;color:var(--muted)}
+.utreat .ubld{padding:6px 0}
+.urecipe{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12.5px;margin:4px 0 8px}
+.urecipe .ubadge.short{border-color:#e03131;color:#e03131}
+.urecipe img{width:12px;height:12px;vertical-align:-1px}
+.ubake{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px}
+.ubake button{display:inline-flex;align-items:center;gap:5px;padding:7px 12px;font-size:13px}
+.ubake button img{width:14px;height:14px}
+.ubake .baking{color:var(--gold)}
+
+/* breadcrumbs, pinned to the corner */
+.ucrumbs{position:fixed;right:16px;bottom:16px;z-index:20;display:flex;align-items:center;gap:7px;padding:8px 14px 8px 11px;
+  background:var(--panel);border:1px solid var(--gold);border-radius:999px;box-shadow:0 4px 18px rgba(0,0,0,.35);font-size:12.5px;color:var(--muted);pointer-events:none}
+.ucrumbs img{width:18px;height:18px;image-rendering:pixelated}
+.ucrumbs b{font:800 16px ui-monospace,Menlo,monospace;color:var(--text);font-variant-numeric:tabular-nums}
+@media(max-width:560px){.ucrumbs{right:10px;bottom:10px;padding:6px 11px 6px 9px}.ucrumbs span{display:none}}
+
+/* the Volcano Spa: catching fire ducks */
+.uvprog{font-size:13px;color:var(--muted);margin-top:12px}
+.uvprog b{color:var(--text);font:800 15px ui-monospace,Menlo,monospace}
+.uvprog .ubar{height:8px;border-radius:99px;background:var(--panel2);border:1px solid var(--line);margin-top:6px;overflow:hidden}
+.uvprog .ubar i{display:block;height:100%;background:linear-gradient(90deg,#e8590c,#ffd43b)}
+.uvicon{position:relative;flex:none;display:inline-block;line-height:0}
+.uvicon em{position:absolute;right:-7px;bottom:-6px;font:800 9px/1 ui-monospace,Menlo,monospace;font-style:normal;color:#fff;
+  background:linear-gradient(180deg,#ffd43b,#e8590c);border-radius:6px;padding:2px 3px;box-shadow:0 0 6px rgba(255,107,26,.8)}
+.ulure{text-align:center}
+.ulure .ulure-stage{border-radius:10px;overflow:hidden;margin:10px 0 6px;border:1px solid var(--line)}
+.ulure .ulure-stage canvas{position:static;display:block;width:100%;height:auto;image-rendering:pixelated}
+.ulure .ulure-say{min-height:1.4em;margin:4px 0}
+.ulure-reveal{display:flex;align-items:center;gap:12px;text-align:left;margin:6px 0 12px;animation:found-in .5s}
+.ulure-reveal .ic{width:48px;height:48px;border-radius:10px;box-shadow:0 0 0 2px #ff6b1a, 0 0 0 3px #ffd43b, 0 0 14px 3px rgba(255,107,26,.6)}
+.ulure-reveal b{display:block;font:800 17px ui-monospace,Menlo,monospace;color:#ff922b}
+.ulure-reveal span{font-size:13px;color:var(--muted)}

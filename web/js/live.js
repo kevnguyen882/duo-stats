@@ -164,13 +164,12 @@ function recapPanel(){
   if(!last) return '';
   const x = last.x, ended = (x.start||0) + (x.duration||0)*1000;
   if(Date.now() - ended > 3*3600*1000) return '';
-  const best = bestDamage(lastData.players);
   const [res, col] = resultOf(x);
   const rows = lastData.players.map((p,i)=>{ const r = last.rows[i]; if(!r) return '';
     return `<div class="rcp" style="--c:${COLORS[i]}">${icon(r.champion)}<div class="rcpm"><div><b style="color:${COLORS[i]}">${esc(shortName(p.riotId))}</b> · ${esc(r.champion)}
         ${r.grade==='S+' ? `<span class="n flame rgflame" style="--k:${COLORS[i]}">${FLAME}<em>S+</em></span>` : r.grade ? `<span class="gchip">${esc(r.grade)}</span>` : ''}</div>
       <div class="d">${r.kills}/${r.deaths}/${r.assists} · ${f0(r.damage)} damage · ${pct(r.kp)} kill part.</div>
-      ${badgeChips(gameBadges(r, {best: best[p.riotId.toLowerCase()], name: shortName(p.riotId), mate: mateRow(lastData.players, i, r)}))}</div>
+      ${badgeChips(gameBadges(r))}</div>
       <div class="score">${scoreBadge(perfScore(r))}<small>score</small></div></div>`; }).join('');
   return `<div class="recap"><div class="rch"><b>Last game</b> <span style="color:${col};font-weight:800">${res}</span>
       <span class="d">${esc(QUEUES[x.queueId]||'')} · ${Math.round(x.duration/60)}m · ${timeAgo(x.start)}</span>

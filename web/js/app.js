@@ -47,6 +47,7 @@ async function loadStats(quiet){
     const data = await api('/api/stats', s);
     const firstLoad = !lastData;
     lastData = data;
+    setBadges(data.badges);
     if(firstLoad) weekStart = null;
     render(data);
     const together = data.players.length > 1 ? ' together' : '';
@@ -113,25 +114,26 @@ function gameStartNotice(s){
       if(!document.hidden){ document.title = title; document.removeEventListener('visibilitychange', back); } });
   }
 }
-// ---- a new fire duck in Ductopia (an S+ together): a notification with a button to the Volcano Spa ----
+// ---- a new wild fire duck in Ductopia (an S+ on a new champion): a notification with a button to the Volcano Spa ----
 // Ductopia's page shows the same one; whichever page sees it first marks it seen in this browser (utopia.js).
 async function fireDuckNotice(){
   if(document.hidden) return;
   let u; try{ u = await api('/api/utopia'); }catch(e){ return; }
-  let seen; try{ seen = JSON.parse(store.get('ducktopia_fire_seen') || '{}') || {}; }catch(e){ seen = {}; }
+  let seen; try{ seen = JSON.parse(store.get('ductopia_fire_ducks_seen') || '{}') || {}; }catch(e){ seen = {}; }   // (as utopia.js's FIRE_SEEN)
   const gained = [];
   (u.players || []).forEach((p, i)=>{
     const k = p.riotId.toLowerCase();
-    if(seen[k] != null && p.fire > seen[k]) gained.push({p, i, n: p.fire - seen[k]});
-    seen[k] = p.fire;
+    const n = (p.volcano || []).length;   // fire ducks unlocked, wild or caught
+    if(seen[k] != null && n > seen[k]) gained.push({p, i, n: n - seen[k]});
+    seen[k] = n;
   });
-  store.set('ducktopia_fire_seen', JSON.stringify(seen));
+  store.set('ductopia_fire_ducks_seen', JSON.stringify(seen));
   if(!gained.length) return;
-  toast('🔥 New fire duck!', gained.map(({p, i, n})=>{
+  toast('🔥 A wild fire duck appeared!', gained.map(({p, i, n})=>{
     const games = (p.volcano || []).slice(-n), last = games[games.length - 1];
     const img = last && ddVer ? `<img src="${champImage(last.champion)}" alt="" onerror="this.style.visibility='hidden'">` : '';
-    return `<div class="srtoast p${i+1}"><span class="face">${img}</span><span><b>${i === u.me ? 'You' : esc(shortName(p.riotId))}</b> earned
-      ${n > 1 ? `${n} fire ducks` : 'a fire duck'}${games.length ? ` with an S+ on ${esc(games.map(x=>x.champion).join(', '))}` : ''}</span></div>`;
+    return `<div class="srtoast p${i+1}"><span class="face">${img}</span><span><b>${i === u.me ? 'You' : esc(shortName(p.riotId))}</b> unlocked
+      ${n > 1 ? `${n} wild fire ducks` : 'a wild fire duck'}${games.length ? ` with an S+ on ${esc(games.map(x=>x.champion).join(', '))}` : ''}. Lure ${n > 1 ? 'them' : 'it'} with a sweet treat to catch ${n > 1 ? 'them' : 'it'}.</span></div>`;
   }).join('') + `<button class="toastbtn" data-open-volcano="${gained[0].i}">Visit the Volcano Spa</button>`, 20000, 'firetoast');
 }
 setTimeout(fireDuckNotice, 4000);

@@ -44,12 +44,11 @@ onClick('[data-badge-who]', b=>{
 });
 
 function badgeBox(players){
-  const best = bestDamage(players);
   // badge id -> one Map per player: champion -> {n: times earned, game: the highest-scoring game it was earned in}
-  const won = Object.fromEntries(BADGES.map(([id])=>[id, players.map(()=>new Map())]));
+  const won = Object.fromEntries(BADGES.map(({id})=>[id, players.map(()=>new Map())]));
   players.forEach((p,i)=>p.games.forEach(x=>{
     const s = perfScore(x);
-    gameBadges(x, {best: best[p.riotId.toLowerCase()], name: shortName(p.riotId), mate: mateRow(players, i, x)}).forEach(b=>{
+    gameBadges(x).forEach(b=>{
       const m = won[b.id][i], cur = m.get(x.champion) || {n: 0, s: -1};
       cur.n++;
       if(s > cur.s) Object.assign(cur, {s, game: x, what: b.what});
@@ -57,7 +56,7 @@ function badgeBox(players){
     });
   }));
   const shown = players.map((p,i)=>badgeWho === 'both' || String(i) === badgeWho);
-  const tiles = BADGES.map(([id, ic, name, , , rule])=>{
+  const tiles = BADGES.map(({id, ic, name, how: rule})=>{
     const per = won[id], total = per.reduce((a,m,i)=>a + (shown[i] ? [...m.values()].reduce((s,v)=>s+v.n, 0) : 0), 0);
     return {id, ic, name, rule, per, total};
   });

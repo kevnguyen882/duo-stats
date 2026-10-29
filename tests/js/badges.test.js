@@ -4,71 +4,31 @@
 const game = over => ({matchId: '1', champion: 'Annie', win: true, remake: false, withDuo: true, duration: 1500,
   kills: 5, deaths: 5, assists: 5, kp: 0.5, dmgShare: 0.2, damage: 20000, gold: 12000, heal: 1000, mitigated: 10000,
   crit: 0, spree: 2, pentas: 0, quadras: 0, triples: 0, cs: 150, vision: 20, ...over});
-const ids = (x, opts) => gameBadges(x, opts).map(b=>b.id);
+// the badges come from the app (duostats/badges.py, which has the rule tests); the page shows what it's sent
+const penta = {id: 'penta', ic: '👑', name: 'Pentakill', what: '2 pentakills in one game.', multi: 2};
+const crit = {id: 'crit', ic: '💢', name: 'Big Crit', what: 'A 1,600 critical strike (1,500 or more).', multi: 0};
 
-test('an ordinary game earns no badges', () => {
-  assert.deepStrictEqual(ids(game()), []);
+test('a game shows the badges the app attached', () => {
+  assert.deepStrictEqual(gameBadges(game()), []);
+  assert.deepStrictEqual(gameBadges(game({badges: [crit, penta]})).map(b=>b.id), ['crit', 'penta']);
+  assert.deepStrictEqual(gameBadges(game({badges: [crit, penta]}), {multikills: false}).map(b=>b.id), ['crit']);
 });
 
-test('each badge at its threshold, and just under it', () => {
-  const cases = [
-    ['sixfig', {damage: 100000}, {damage: 99999}],
-    ['untouch', {kills: 6, assists: 10, deaths: 2}, {kills: 6, assists: 9, deaths: 2}],   // KDA 8 vs 7.5
-    ['spree', {kills: 30}, {kills: 29}],
-    ['playmaker', {assists: 50}, {assists: 49}],
-    ['marathon', {duration: 1800}, {duration: 1799}],
-    ['lifeline', {heal: 25000}, {heal: 24999}],
-    ['wall', {mitigated: 120000}, {mitigated: 119999}],
-    ['crit', {crit: 1500}, {crit: 1499}],
-    ['unstoppable', {spree: 8}, {spree: 7}],
-    ['midas', {gold: 25000}, {gold: 24999}],
-  ];
-  for(const [id, earns, misses] of cases){
-    assert.ok(ids(game(earns)).includes(id), `${id} should be earned`);
-    assert.ok(!ids(game(misses)).includes(id), `${id} should not be earned`);
-  }
+test('badge chips: one per badge, with how many', () => {
+  const html = badgeChips([crit, crit, penta]);
+  assert.ok(html.includes('Big Crit') && html.includes('<em>×2</em>'));   // earned in two games
+  assert.ok(html.includes('multi m2'));                                    // a game with two pentas
+  assert.strictEqual(badgeChips([]), '');
 });
 
-test('percentages count as the page rounds them', () => {
-  assert.ok(ids(game({kp: 0.895})).includes('everywhere'));    // shown as 90%
-  assert.ok(!ids(game({kp: 0.894})).includes('everywhere'));   // shown as 89%
-  assert.ok(ids(game({dmgShare: 0.395})).includes('carry'));
-  assert.ok(!ids(game({dmgShare: 0.394})).includes('carry'));
+test('the catalogue comes from the app, in its order', () => {
+  setBadges([{id: 'best', ic: '🏆', name: 'Personal Best', how: '...'}, {id: 'crit', ic: '💢', name: 'Big Crit', how: '...'}]);
+  assert.strictEqual(BADGES.length, 2);
+  assert.strictEqual(badgeOrder('crit'), 1);
+  setBadges(undefined);   // nothing sent: kept as it was
+  assert.strictEqual(BADGES.length, 2);
 });
 
-test('KDA with no deaths counts deaths as one', () => {
-  assert.ok(ids(game({kills: 4, assists: 4, deaths: 0})).includes('untouch'));
-});
-
-test('a remake earns nothing', () => {
-  assert.deepStrictEqual(ids(game({remake: true, damage: 200000, pentas: 1})), []);
-});
-
-test('personal best needs that player\'s best damage', () => {
-  assert.ok(ids(game({damage: 50000}), {best: 50000}).includes('best'));
-  assert.ok(!ids(game({damage: 49000}), {best: 50000}).includes('best'));
-  assert.ok(!ids(game({damage: 50000})).includes('best'));   // best not known
-});
-
-test('duo badges need both of you on the team', () => {
-  const big = game({damage: 70000, kills: 20});
-  assert.deepStrictEqual(ids(big, {mate: game({damage: 70000, kills: 20})}).filter(i=>['twins','killers'].includes(i)), ['twins','killers']);
-  assert.deepStrictEqual(ids(big, {mate: game({damage: 69999, kills: 19})}).filter(i=>['twins','killers'].includes(i)), []);
-  assert.ok(!ids(big).includes('twins'));   // no partner in that game
-});
-
-test('multikills: one badge per kind, with how many', () => {
-  const b = gameBadges(game({pentas: 2, quadras: 1}));
-  const penta = b.find(x=>x.id === 'penta'), quadra = b.find(x=>x.id === 'quadra');
-  assert.strictEqual(penta.multi, 2);
-  assert.strictEqual(quadra.multi, 0);   // just one
-  assert.ok(penta.what.includes('2 pentakills'));
-  assert.deepStrictEqual(ids(game({pentas: 1}), {multikills: false}), []);
-});
-
-test('every badge has a border drawn for it', () => {
-  for(const [id] of BADGES) assert.ok(id in BADGE_BORDERS, `no border for ${id}`);
-});
 
 test('game score', () => {
   // KDA 2 x3 = 6, kp 0.5 x20 = 10, damage share 0.2 x30 = 6, 20000/4000 = 5, 25 min = 10 past 15, win 10

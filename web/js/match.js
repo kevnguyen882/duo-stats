@@ -48,12 +48,10 @@ function itemImg(id){
 }
 
 function matchHtml(m){
-  const best = lastData ? bestDamage(lastData.players) : {};
   const all = m.teams.flatMap(t=>t.players.map(r=>{
     const x = {...r, duration: m.duration, remake: m.remake};
-    const mate = r.player != null ? t.players.find(o=>o.player != null && o.player !== r.player) : null;   // your duo partner, same team
     x.score = perfScore(x);
-    x.badges = gameBadges(x, {best: r.riotId ? best[r.riotId.toLowerCase()] : 0, mate});
+    x.badges = gameBadges(x);   // (the app works them out)
     return x;
   }));
   const mvp = m.remake ? null : all.reduce((a,b)=>b.score > a.score ? b : a, all[0]);

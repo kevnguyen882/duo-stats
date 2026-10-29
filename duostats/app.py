@@ -43,7 +43,7 @@ class App:
         self.stats = StatsService(self.storage, self.client, self.riot, self.directory, self.tracker)
         self.augments = AugmentCatalog(self.storage, self.client)
         self.opgg = OpggBuilds(self.storage, lambda: {k: v["rarity"] for k, v in self.augments.info().items()})
-        self.utopia = DuckUtopia(self.storage, self.stats, self.tracker, self.client)
+        self.utopia = DuckUtopia(self.storage, self.stats, self.tracker, self.client, self.season)
 
     # ---- the Riot API key ----
     def load_saved_key(self):
