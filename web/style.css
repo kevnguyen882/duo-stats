@@ -59,6 +59,12 @@ button.ghost{background:transparent;color:var(--gold);border:1px solid var(--gol
 .lead{color:var(--gold)}
 @media(max-width:560px){.vsrow{grid-template-columns:52px 1fr 84px 1fr 52px;font-size:13px}}
 .big{display:flex;gap:24px;flex-wrap:wrap;align-items:baseline}
+.sharerow{display:grid;grid-template-columns:70px 1fr 48px;grid-template-areas:"m b v" ". s .";align-items:center;gap:4px 10px;margin-bottom:10px}
+.sharerow .m{grid-area:m;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.6px}
+.sharerow .bar{grid-area:b;height:12px}.sharerow .v{grid-area:v;font-weight:700;text-align:right}
+.sharerow .split{grid-area:s;font-size:12px;color:var(--muted)}
+.bar.share i{border-radius:0}.bar.share .us{background:linear-gradient(90deg,var(--p1),var(--p2))}.bar.share .rest{background:var(--line)}
+.sharerow .split .us{color:var(--text);font-weight:600}
 .big .n{font-size:34px;font-weight:800}
 .big .lbl{color:var(--muted);font-size:13px}
 table{width:100%;border-collapse:collapse;font-size:14px}

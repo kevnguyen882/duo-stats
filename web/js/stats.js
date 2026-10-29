@@ -8,7 +8,7 @@ function agg(games){
   const k = sum(x=>x.kills), d = sum(x=>x.deaths), a = sum(x=>x.assists), wins = sum(x=>x.win?1:0);
   const kpG = g.filter(x=>x.kp!=null);
   return {n, wins, losses:n-wins, wr:wins/n, k:k/n, d:d/n, a:a/n, kda:(k+a)/Math.max(d,1),
-    csm:sum(x=>x.cs)/mins, dpm:sum(x=>x.damage)/mins, vision:sum(x=>x.vision)/n,
+    csm:sum(x=>x.cs)/mins, dpm:sum(x=>x.damage)/mins, gpm:sum(x=>x.gold)/mins,
     kp: kpG.length ? kpG.reduce((s,x)=>s+x.kp,0)/kpG.length : null};
 }
 

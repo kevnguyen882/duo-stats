@@ -61,7 +61,7 @@ function playerCard(p, color, shared){
 // ---- head to head ----
 function vsRows(a, b){
   const rows = [['KDA','kda',f2],['Kill part.','kp',pct],['CS / min','csm',f1],['Dmg / min','dpm',f0],
-                ['Vision / game','vision',f1],['Deaths','d',f1,true]];
+                ['Gold / min','gpm',f0],['Deaths','d',f1,true]];
   return rows.map(([label,k,fmt,lowerBetter])=>{
     const x = a[k], y = b[k]; if(x==null || y==null) return '';
     const tot = (x+y) || 1;
