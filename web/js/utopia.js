@@ -374,7 +374,7 @@ $('#spaDetail').addEventListener('change', e=>{ if(e.target.matches('[data-soak-
 
 // the Spa's scene: its pools, coloured by temperature, with the soaking ducks bobbing in the steam, and the caught
 // fire ducks from the Volcano Spa along the back, heating the water
-const MAX_SPA_FIRE = 6;   // caught fire ducks drawn in each pool
+const MAX_SPA_FIRE = 8;   // caught fire ducks drawn in the lava pool
 const SPW = 480, SPH = 200, POOL_WATER = {warm: ['#74c0fc', '#4dabf7'], hot: ['#ffc078', '#ff922b'], scalding: ['#ff8787', '#fa5252']};
 const spaRoom = (()=>{
   const cv = $('#spaScene'), g = cv.getContext('2d');
@@ -395,48 +395,70 @@ const spaRoom = (()=>{
   function draw(now){
     requestAnimationFrame(draw);
     if(!U || view !== 'spa') return;
-    const p = U.players[viewing], k = cv.width / SPW, pools = Math.max(1, p.levels.spa);
+    const p = U.players[viewing], k = cv.width / SPW;
     g.setTransform(k, 0, 0, k, 0, 0); g.imageSmoothingEnabled = false;
-    // stone floor, and a back wall where the fire ducks sit
+    // stone floor and a back wall
     for(let y = 0; y < SPH; y += 32) for(let x = 0; x < SPW; x += 32) g.drawImage(art('tile-plaza'), x, y, 32, 32);
     g.fillStyle = '#5c4b3f'; g.fillRect(0, 0, SPW, 34); g.fillStyle = '#3d3029'; g.fillRect(0, 34, SPW, 4);
-    label(p.caught.length ? `${plural(p.caught.length, 'fire duck')} heating the water · perks +${Math.round(p.heat * 100)}%` : 'No fire ducks yet: catch one at the Volcano Spa to heat the water', SPW / 2, 40, '#ffd8a8');
-    g.drawImage(art('lounge-plant'), 4, 132, 48, 48); g.drawImage(art('lounge-plant'), SPW - 52, 132, 48, 48);
-    // the pools
-    const pw = pools >= 2 ? 170 : 220, gap = 40, x0 = (SPW - pools * pw - (pools - 1) * gap) / 2;
-    for(let i = 0; i < pools; i++){
-      const x = x0 + i * (pw + gap), y = 70, ph = 100, soak = p.levels.spa ? p.soaks[i] : null;
-      const [hi, lo] = soak ? POOL_WATER[soak.temp] : ['#a5d8ff', '#74c0fc'];
+    label(p.caught.length ? `${plural(p.caught.length, 'fire duck')} in the lava pool, heating the water · perks +${Math.round(p.heat * 100)}%` : 'No fire ducks yet: catch one at the Volcano Spa to heat the water', SPW / 2, 40, '#ffd8a8');
+    g.drawImage(art('lounge-plant'), 144, 164, 28, 28); g.drawImage(art('lounge-plant'), 308, 164, 28, 28);
+    // the shared lava pool in the middle, where the caught fire ducks soak
+    const lx = 176, ly = 62, lw = 128, lh = 98;
+    const glow = g.createRadialGradient(lx + lw / 2, ly + lh / 2, 10, lx + lw / 2, ly + lh / 2, 110);
+    glow.addColorStop(0, `rgba(255,120,40,${.28 + Math.sin(now / 700) * .05})`); glow.addColorStop(1, 'rgba(255,120,40,0)');
+    g.fillStyle = glow; g.fillRect(lx - 70, ly - 50, lw + 140, lh + 100);
+    g.fillStyle = '#343a40'; g.fillRect(lx - 7, ly - 7, lw + 14, lh + 14);   // a basalt rim
+    g.fillStyle = '#495057'; g.fillRect(lx - 7, ly - 7, lw + 14, 3);
+    const lava = g.createLinearGradient(0, ly, 0, ly + lh); lava.addColorStop(0, '#e8590c'); lava.addColorStop(.5, '#c92a2a'); lava.addColorStop(1, '#8f1d1d');
+    g.fillStyle = lava; g.fillRect(lx, ly, lw, lh);
+    g.fillStyle = 'rgba(255,212,59,.4)';   // bright seams drifting across the top
+    for(let c = 0; c < 5; c++){ const cx = lx + ((now / 60 + c * 41) % (lw - 20)), cy = ly + 10 + c * 18; g.fillRect(Math.round(cx), cy, 20, 3); g.fillRect(Math.round(cx) + 4, cy + 3, 10, 2); }
+    for(let b = 0; b < 6; b++){   // bubbles that swell and pop
+      const t = (now / 1300 + b / 6) % 1, bx = lx + 10 + ((b * 47) % (lw - 20)), by = ly + 14 + ((b * 29) % (lh - 28)), r = Math.round(1 + t * 4);
+      g.globalAlpha = t < .85 ? .9 : (1 - t) * 6; g.fillStyle = '#fff3bf'; g.fillRect(bx - r, by - r, r * 2, r * 2); g.fillStyle = '#ff922b'; g.fillRect(bx - r + 1, by - r + 1, r * 2 - 2, r * 2 - 2); g.globalAlpha = 1;
+    }
+    const fire = p.caught.slice(0, MAX_SPA_FIRE), cols = Math.min(fire.length, 4);
+    fire.forEach((c, j)=>{
+      const row = Math.floor(j / 4), inRow = Math.min(4, fire.length - row * 4);
+      const fx = lx + (j % 4 + .5) * lw / inRow - 10 + Math.sin(now / 1500 + j) * 3, fy = ly + 18 + row * 34 + Math.sin(now / 600 + j * 2) * 1.2, face = j % 2 ? -1 : 1;
+      fireBanner(g, c, fx, fy, 20, face);
+      g.save(); if(face < 0){ g.translate(fx + 10, 0); g.scale(-1, 1); g.translate(-fx - 10, 0); }
+      g.drawImage(art('duck-fire'), 0, 0, 32, 24, Math.round(fx), Math.round(fy), 20, 15);   // in the lava: no feet
+      g.restore();
+      g.fillStyle = 'rgba(255,240,180,.55)'; g.fillRect(Math.round(fx), Math.round(fy) + 14, 20, 2);
+    });
+    if(p.caught.length > fire.length) label(`+${p.caught.length - fire.length} more`, lx + lw / 2, ly + lh - 12, '#fff3bf');
+    if(!cols) label('Waiting for fire ducks', lx + lw / 2, ly + lh / 2 - 4, '#fff3bf');
+    // the defenders' two smaller pools, one each side (the second opens with the Hot springs)
+    [[22, 0], [338, 1]].forEach(([x, i])=>{
+      const y = 70, pw = 120, ph = 96, open = p.levels.spa > i, soak = open ? p.soaks[i] : null;
       g.fillStyle = '#868e96'; g.fillRect(x - 6, y - 6, pw + 12, ph + 12);   // the stone rim
       g.fillStyle = '#ced4da'; g.fillRect(x - 6, y - 6, pw + 12, 3);
+      if(!open){   // boarded over until the Hot springs are built
+        for(let r = 0; r < ph; r += 12){ g.fillStyle = r % 24 ? '#7a4f26' : '#8b5a2b'; g.fillRect(x, y + r, pw, 10); }
+        if(p.levels.spa){ label('🔒', x + pw / 2, y + ph / 2 - 14); label('Opens with the', x + pw / 2, y + ph / 2 + 2, '#ffe8cc'); label('Hot springs', x + pw / 2, y + ph / 2 + 12, '#ffe8cc'); }
+        return;
+      }
+      const [hi, lo] = soak ? POOL_WATER[soak.temp] : ['#a5d8ff', '#74c0fc'];
       const w = g.createLinearGradient(0, y, 0, y + ph); w.addColorStop(0, hi); w.addColorStop(1, lo);
       g.fillStyle = w; g.fillRect(x, y, pw, ph);
       g.fillStyle = 'rgba(255,255,255,.35)';   // ripples
-      for(let r = 0; r < 4; r++){ const rx = x + ((now / 30 + r * 53) % (pw - 24)), ry = y + 14 + r * 22; g.fillRect(Math.round(rx), ry, 18, 2); }
-      // the caught fire ducks lounging round the edge, warming the water (they share the pools out)
-      p.caught.filter((c, j)=>j % pools === i).slice(0, MAX_SPA_FIRE).forEach((c, j)=>{
-        const n = Math.min(Math.ceil(p.caught.length / pools), MAX_SPA_FIRE), fx = x + 6 + (j + .5) * (pw - 32) / n + Math.sin(now / 1500 + j) * 3;
-        const fy = y + 6 + (j % 2) * 8 + Math.sin(now / 600 + j * 2) * 1.2, face = j % 2 ? -1 : 1;
-        fireBanner(g, c, fx, fy, 20, face);
-        g.save(); if(face < 0){ g.translate(fx + 10, 0); g.scale(-1, 1); g.translate(-fx - 10, 0); }
-        g.drawImage(art('duck-fire'), 0, 0, 32, 24, Math.round(fx), Math.round(fy), 20, 15);   // in the water: no feet
-        g.restore();
-        g.fillStyle = 'rgba(255,170,90,.35)'; g.fillRect(Math.round(fx), Math.round(fy) + 14, 20, 2);   // the warm ripple round it
-      });
-      if(!soak){ label(p.levels.spa ? 'Empty pool' : '', x + pw / 2, y + ph / 2 + 6, '#e7f5ff'); continue; }
+      for(let r = 0; r < 3; r++){ const rx = x + ((now / 30 + r * 53 + i * 20) % (pw - 20)), ry = y + 12 + r * 28; g.fillRect(Math.round(rx), ry, 16, 2); }
+      if(!soak){ label('Empty pool', x + pw / 2, y + ph / 2 - 4, '#e7f5ff'); return; }
       // steam, more of it the hotter the water
-      const puffs = {warm: 3, hot: 6, scalding: 10}[soak.temp];
+      const puffs = {warm: 3, hot: 5, scalding: 8}[soak.temp];
       for(let s = 0; s < puffs; s++){
-        const t = (now / 2200 + s / puffs) % 1, sx = x + 16 + ((s * 37) % (pw - 32)) + Math.sin(now / 600 + s) * 4;
-        g.globalAlpha = .55 * (1 - t); g.fillStyle = '#fff'; g.fillRect(Math.round(sx), Math.round(y + 40 - t * 60), 6, 6); g.globalAlpha = 1;
+        const t = (now / 2200 + s / puffs) % 1, sx = x + 12 + ((s * 37) % (pw - 24)) + Math.sin(now / 600 + s) * 4;
+        g.globalAlpha = .55 * (1 - t); g.fillStyle = '#fff'; g.fillRect(Math.round(sx), Math.round(y + 30 - t * 50), 5, 5); g.globalAlpha = 1;
       }
       const bob = Math.sin(now / 650 + i * 2) * 2;
       duckWithHat(g, (p.squad.find(d=>d.champion === soak.champion) || {}).cls || (p.champions.find(c=>c.champion === soak.champion) || {}).cls || 'fighter',
-                  hatOf(p, soak.champion), x + pw / 2 - 16, y + 30 + bob, 32);
-      g.fillStyle = 'rgba(255,255,255,.5)'; g.fillRect(x + pw / 2 - 18, y + 58 + Math.round(bob), 36, 2);   // where the water meets the duck
-      label(`${soak.champion} · ${perkText(soak)}`, x + pw / 2, y + 68);
-      label(`${U.temps.find(t=>t.id === soak.temp).name} · out in ${timeLeft(soak.until - nowApp())}`, x + pw / 2, y + 80, '#fff3bf');
-    }
+                  hatOf(p, soak.champion), x + pw / 2 - 14, y + 14 + bob, 28);
+      g.fillStyle = 'rgba(255,255,255,.5)'; g.fillRect(x + pw / 2 - 16, y + 39 + Math.round(bob), 32, 2);   // where the water meets the duck
+      label(soak.champion, x + pw / 2, y + 50);
+      label(perkText(soak), x + pw / 2, y + 61, '#fff3bf');
+      label(`out in ${timeLeft(soak.until - nowApp())}`, x + pw / 2, y + 72, '#fff3bf');
+    });
     if(!p.levels.spa){
       g.fillStyle = 'rgba(16,20,28,.55)'; g.fillRect(0, 0, SPW, SPH);
       label('🔒', SPW / 2, 80); label('Build the Spa to open the pools', SPW / 2, 98, '#e7f5ff');
