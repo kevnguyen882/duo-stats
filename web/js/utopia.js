@@ -400,7 +400,9 @@ const spaRoom = (()=>{
     // stone floor and a back wall
     for(let y = 0; y < SPH; y += 32) for(let x = 0; x < SPW; x += 32) g.drawImage(art('tile-plaza'), x, y, 32, 32);
     g.fillStyle = '#5c4b3f'; g.fillRect(0, 0, SPW, 34); g.fillStyle = '#3d3029'; g.fillRect(0, 34, SPW, 4);
-    label(p.caught.length ? `${plural(p.caught.length, 'fire duck')} in the lava pool, heating the water · perks +${Math.round(p.heat * 100)}%` : 'No fire ducks yet: catch one at the Volcano Spa to heat the water', SPW / 2, 40, '#ffd8a8');
+    // on the wall: how many fire ducks are in the lava pool, and how much they heat the water
+    label(p.caught.length ? `${plural(p.caught.length, 'fire duck')} in the lava pool` : 'No fire ducks yet', SPW / 2, 7, '#ffd8a8');
+    label(p.caught.length ? `heating the water · perks +${Math.round(p.heat * 100)}%` : 'catch one at the Volcano Spa to heat the water', SPW / 2, 19, '#e9c9a8');
     g.drawImage(art('lounge-plant'), 0, 172, 28, 28); g.drawImage(art('lounge-plant'), SPW - 28, 172, 28, 28);
     // the shared lava pool in the middle, where the caught fire ducks soak
     const lx = 140, ly = 58, lw = 200, lh = 112;
