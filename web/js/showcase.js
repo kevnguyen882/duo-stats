@@ -22,8 +22,8 @@ let currentBag = [];               // what's in the bag right now (all of it, be
 
 // every badge earned, newest first: {key, b (badge), x (game row), i (player index), p (player)}
 function showcaseAll(players){
-  const best = bestDamage(players), out = [];
-  players.forEach((p,i)=>p.games.forEach(x=>gameBadges(x, {best: best[p.riotId.toLowerCase()], name: shortName(p.riotId), mate: mateRow(players, i, x)})
+  const out = [];
+  players.forEach((p,i)=>p.games.forEach(x=>gameBadges(x)
     .forEach(b=>out.push({key: `${x.matchId}|${p.riotId.toLowerCase()}|${b.id}`, b, x, i, p}))));
   return out.sort((a,b)=>(b.x.start||0)-(a.x.start||0) || a.i-b.i);
 }
@@ -108,7 +108,6 @@ function scItem(it, style, stack = 0){
 
 // ---- the bag's stacks and filters ----
 const squash = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');   // "Kai'Sa" and "kaisa" match
-const BADGE_ORDER = Object.fromEntries(BADGES.map(([id], n)=>[id, n]));
 // the search box matches a champion or a badge's name ("drav", "unstoppable")
 function bagByChampion(){ const q = squash(bagChamp); return q ? currentBag.filter(it=>squash(it.x.champion).includes(q) || squash(it.b.name).includes(q)) : currentBag; }
 function bagFiltered(){ return bagByChampion().filter(it=>!bagStack || stackOf(it) === bagStack); }
@@ -128,12 +127,12 @@ function bagContents(){
   if(bagGroup === 'champion') showcaseItems.forEach(it=>earned.set(it.x.champion, (earned.get(it.x.champion) || 0) + 1));
   const order = bagGroup === 'champion'
     ? (a,b)=>earned.get(b[0].x.champion) - earned.get(a[0].x.champion) || a[0].x.champion.localeCompare(b[0].x.champion)
-    : (a,b)=>BADGE_ORDER[a[0].b.id] - BADGE_ORDER[b[0].b.id];
+    : (a,b)=>badgeOrder(a[0].b.id) - badgeOrder(b[0].b.id);
   return [...stacks.values()].sort(order).map(st=>scItem(st[0], '', st.length)).join('');
 }
 function bagTools(onDisplay){
-  const n = bagFiltered().length, badge = bagGroup === 'badge' && bagStack && BADGES.find(([id])=>id === bagStack);
-  const open = !bagStack ? '' : badge ? `${badge[1]} ${esc(badge[2])}` : esc(bagStack);
+  const n = bagFiltered().length, badge = bagGroup === 'badge' && bagStack && BADGES.find(b=>b.id === bagStack);
+  const open = !bagStack ? '' : badge ? `${badge.ic} ${esc(badge.name)}` : esc(bagStack);
   return `${open ? `<button class="bagback" data-bag-back>← All badges<span>${open} · ${n}</span></button>` : ''}
     ${n ? `<button class="ghost" data-bag-tip>${bagFiltering() ? `Tip these ${n} out` : 'Tip it all out'}</button>` : ''}
     ${onDisplay ? '<button class="ghost" data-bag-sweep>Put everything back</button>' : ''}`;
@@ -292,10 +291,7 @@ function badgeStory(it, m){
   // which game of the day this was, among the games you saved
   const day = dayOf(m.start), ofDay = recentGames(lastData.players).map(g=>g.x).filter(g=>dayOf(g.start) === day).sort((a,b)=>a.start-b.start);
   const nth = ofDay.findIndex(g=>String(g.matchId) === String(m.matchId)) + 1;
-  const best = bestDamage(lastData.players);
-  const mateOf = r => { const t = m.teams.find(t=>t.players.some(o=>o.player === r.player));
-    return t ? t.players.find(o=>o.player != null && o.player !== r.player) : null; };
-  const allBadges = rows.filter(r=>r.player != null).map(r=>({r, list: gameBadges(r, {best: best[r.riotId.toLowerCase()], name: r.name, mate: mateOf(r)})}));
+  const allBadges = rows.filter(r=>r.player != null).map(r=>({r, list: gameBadges(r)}));
   const mk = MULTIKILL_BADGES.filter(([k])=>me[k]).map(([k,cls,label])=>`<span class="mkb ${cls}">${label}<i>${me[k]}</i></span>`).join('');
   const stat = (v, k, sub) => `<div class="bsstat"><b>${v}</b><span>${k}</span>${sub ? `<small>${sub}</small>` : ''}</div>`;
   const won = myTeam ? myTeam.win : me.win;
