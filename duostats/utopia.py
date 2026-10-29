@@ -26,7 +26,7 @@ even when a new season starts. A wild fire duck does
 nothing until it's caught: lure it with the sweet treat for its champion's class (TREATS), and a wild fire duck of that
 class, picked at random, eats it and is caught. Caught fire ducks soak in the volcano's pools, collect breadcrumbs and
 heat the Spa. The aim: catch them all.
-The Training Grounds: a new win on one of your five defenders earns it a challenge, and they add up. Challenge
+The Training Grounds: a new win on any champion earns it a challenge (a defender or not), and they add up. Challenge
 the boss there, a one-on-one fight scaled to the defender's level (boss_fight()); beat it and the defender goes up a
 level for good. Win or lose, the challenge is used up.
 The Spa (once built): recovery soaks. A defender soaks in a pool with bath salts at one of three temperatures (SALTS,
@@ -740,8 +740,8 @@ class DuckUtopia:
                 if r.get("win"):
                     s["crumbs"] += WIN_CRUMBS * boost
                     got.insert(0, f"{round(WIN_CRUMBS * boost)} breadcrumbs")
-                    if r["champion"] in [d["champion"] for d in squad] and s["ranks"].get(r["champion"], 0) < MAX_RANK:
-                        s["challenges"].append(r["champion"])   # a win on a defender: a boss challenge in the Training Grounds
+                    if s["ranks"].get(r["champion"], 0) < MAX_RANK:
+                        s["challenges"].append(r["champion"])   # a win on any champion: a boss challenge in the Training Grounds
                         got.append("a Training Grounds challenge")
                 if got:
                     self._note(s, now, f"{'Won' if r.get('win') else 'Played'} on {r['champion']}: {', '.join(got)}.")
@@ -940,7 +940,7 @@ class DuckUtopia:
         if action == "challenge":   # the Training Grounds: one defender against its boss
             c = body.get("champion")
             if c not in s["challenges"]:
-                raise ValueError(f"{c} has no challenge waiting: win a game on it while it's one of your defenders.")
+                raise ValueError(f"{c} has no challenge waiting: win a game on it to earn one.")
             if c not in recs:
                 raise ValueError("Only champions you've played together can fight here.")
             if s["ranks"].get(c, 0) >= MAX_RANK:
@@ -1062,6 +1062,7 @@ class DuckUtopia:
                 continue
             recs = champion_records(rows.get(p.key, []))
             lv = s["levels"]
+            squad = [{**d, "boss": boss(d), "maxRank": d["rank"] >= MAX_RANK} for d in self._squad(s, recs, classes)]
             out.append({
                 **{k: s[k] for k in ("riotId", "feathers", "levels", "lost", "spawned", "hats", "pond", "edge", "golden", "boost",
                                      "champs", "fire", "caught", "raids", "raidWins", "training", "ranks", "challenges", "bossFights", "soaks", "perks",
@@ -1083,7 +1084,10 @@ class DuckUtopia:
                 "buildings": {b: {"level": lv[b], "name": building_name(b, lv[b]) if lv[b] else None,
                                   "next": building_name(b, lv[b] + 1) if upgrade_cost(b, lv[b]) is not None else None,
                                   "cost": upgrade_cost(b, lv[b])} for b in BUILDINGS},
-                "squad": [{**d, "boss": boss(d), "maxRank": d["rank"] >= MAX_RANK} for d in self._squad(s, recs, classes)],
+                "squad": squad,
+                "challengers": [{**d, "boss": boss(d), "maxRank": d["rank"] >= MAX_RANK}   # champions off the squad with a challenge waiting
+                                for d in (self._defender(s, c, recs, classes) for c in dict.fromkeys(s["challenges"])
+                                          if c in recs and c not in {x["champion"] for x in squad})],
                 "champions": sorted(({"champion": c, "cls": classes.get(c, "fighter"), "games": r["games"]}
                                      for c, r in recs.items()), key=lambda x: (-x["games"], x["champion"])),
             })

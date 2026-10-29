@@ -554,14 +554,18 @@ class GameTests(TempStorageCase):
         with self.assertRaises(ValueError):   # not a champion played together
             self.game.act({"owner": "duo one#na1", "action": "spar", "champion": "Teemo"}, viewer=False, now=1000)
 
-    def test_a_loss_or_a_champion_off_the_squad_earns_no_challenge(self):
+    def test_a_win_off_the_squad_earns_a_challenge_too_but_a_loss_doesnt(self):
         self.game.state(viewer=False, now=1000)
         # five defenders: Annie, then the most played; Zed, played once, is left out
         self.rows["duo one#na1"][:0] = [row(f"{c}{i}", 10, win=False, champion=c) for c in "BCDE" for i in range(3)]
         self.rows["duo one#na1"][:0] = [row("Z", 20, champion="Zed"), row("A", 20, win=False)]
         p = self.game.state(viewer=False, now=2000)["players"][0]
         self.assertNotIn("Zed", [d["champion"] for d in p["squad"]])
-        self.assertEqual(p["challenges"], [])
+        self.assertEqual(p["challenges"], ["Zed"])   # the losses (Annie's included) earn nothing
+        self.assertEqual([(d["champion"], d["boss"]["name"]) for d in p["challengers"]], [("Zed", "Sergeant Honk")])
+        out = self.game.act({"owner": "duo one#na1", "action": "challenge", "champion": "Zed"}, viewer=False, now=3000)
+        p = out["players"][0]
+        self.assertEqual((p["challenges"], p["challengers"], p["ranks"].get("Zed", 0)), ([], [], 1 if out["result"]["fight"]["win"] else 0))
 
     def spa(self, level=1, crumbs=10000):
         self.game.state(viewer=False, now=1000)

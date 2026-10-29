@@ -291,7 +291,7 @@ function renderRaids(){
 }
 $('#raids').addEventListener('click', e=>{ if(e.target.closest('[data-practice]')) act({action: 'practice'}, true); });
 
-// ---- the Training Grounds: a win on a defender earns it a challenge; beat the boss for a level ----
+// ---- the Training Grounds: a win on any champion earns it a challenge; beat the boss for a level ----
 function fightReport(f, i){
   return `<div class="urep ${f.win ? '' : 'lost'}" style="--c:${COLORS[i] || COLORS[0]}">
     <h3><span class="who">${esc(f.champion)} vs ${esc(f.boss.name)}</span><span class="r">${f.win ? 'Level up!' : 'Beaten'}</span></h3>
@@ -302,16 +302,19 @@ function fightReport(f, i){
 }
 function renderGrounds(){
   const p = U.players[viewing], own = mine(), waiting = c => p.challenges.filter(x=>x === c).length;
-  const rows = p.squad.map(d=>{
+  const row = d=>{
     const b = d.boss, n = d.maxRank ? 0 : waiting(d.champion), can = n > 0;
     const state = d.maxRank ? 'beat every boss' : can ? `${n > 1 ? `${n} challenges` : 'challenge'} ready: ${esc(b.name)} · ${b.hp} HP · ${b.atk} ATK` : 'win a game on it to earn a challenge';
     return `<div class="udef">${pic('duck-' + d.cls, 'duck pix')}${champIcon(d.champion)}
       <div class="t"><b>${esc(d.champion)}</b><span>Lv ${d.level}${d.rank ? ` (+${d.rank} from bosses)` : ''} · ${state}</span></div>
       ${own ? `<div class="ubtns">${can ? `<button data-challenge="${esc(d.champion)}">Challenge${n > 1 ? ` (${n})` : ''}</button>` : ''}<button class="ghost" data-spar="${esc(d.champion)}" title="A practice fight against the same boss: nothing won or lost">Test fight</button></div>` : ''}</div>`;
-  }).join('');
+  };
+  const others = p.challengers || [];   // champions off the squad with a challenge waiting
+  const rows = p.squad.map(row).join('')
+    + (others.length ? `<h3 class="uspah">Not defending</h3>${others.map(row).join('')}` : '');
   const last = p.bossFights[0];
-  $('#grounds').innerHTML = `<p class="unote" style="margin-top:0">Win a game together on one of your five defenders and it earns a challenge here. Challenges add up, so two wins on the same defender mean two fights.
-      Each challenge is a one-on-one fight against a boss built for that defender's level: win and it goes up a level for good; win or lose, the challenge is used up.</p>
+  $('#grounds').innerHTML = `<p class="unote" style="margin-top:0">Win a game together on any champion and it earns a challenge here, whether it's one of your five defenders or not. Challenges add up, so two wins on the same champion mean two fights.
+      Each challenge is a one-on-one fight against a boss built for that champion's level: win and it goes up a level for good; win or lose, the challenge is used up. Champions you aren't defending with show under Not defending while they have a challenge waiting.</p>
     ${p.squad.length ? rows : '<p class="uempty">No defenders yet: play a game together first.</p>'}
     ${last ? `<h3 style="margin:14px 0 8px;font-size:14px">Latest boss fight</h3><div class="uraids">${fightReport(last, viewing)}</div>
       ${last.steps ? '<div class="ubtns"><button class="ghost" data-replay>Watch it again</button></div>' : ''}` : ''}`;
