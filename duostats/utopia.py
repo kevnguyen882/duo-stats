@@ -149,9 +149,19 @@ def catch_up(mine: int, best: int) -> float:
 
 def crumb_rate(s: dict) -> float:
     """Breadcrumbs a minute."""
-    base = (s["pond"] * DUCK_RATE + s["golden"] * GOLDEN_RATE + len(s["champs"]) * CHAMPION_RATE
-            + len(s["caught"]) * FIRE_RATE)
-    return base * (1 + BAKERY_BONUS * s["levels"]["bakery"]) * (1 + s["boost"])
+    return rate_breakdown(s)["total"]
+
+
+def rate_breakdown(s: dict) -> dict:
+    """Where the breadcrumbs a minute come from: each kind of duck (how many, and how much each collects), then the
+    bakery's bonus and the multikill boost, which multiply them all."""
+    sources = [("pond", "Ducks in the pond", s["pond"], DUCK_RATE), ("golden", "Golden ducks (Penta Plaza)", s["golden"], GOLDEN_RATE),
+               ("champion", "Champion ducks (Champion Quarter)", len(s["champs"]), CHAMPION_RATE),
+               ("fire", "Caught fire ducks (in the Spa)", len(s["caught"]), FIRE_RATE)]
+    base = sum(n * each for _, _, n, each in sources)
+    bakery = BAKERY_BONUS * s["levels"]["bakery"]
+    return {"sources": [{"id": k, "name": name, "count": n, "each": each, "perMin": n * each} for k, name, n, each in sources],
+            "base": base, "bakery": bakery, "boost": s["boost"], "total": base * (1 + bakery) * (1 + s["boost"])}
 
 
 # ---- the duck pipeline over time ----
@@ -1099,7 +1109,7 @@ class DuckUtopia:
                                      "log", "founding", "founded")},
                 "crumbs": round(s["crumbs"], 2), "ducklings": sorted(s["ducklings"]),
                 "score": scores[i], "catchUp": catch_up(scores[i], best), "leading": len(scores) > 1 and scores[i] == best and scores.count(best) == 1,
-                "rate": round(crumb_rate(s), 3), "heat": heat(s), "nestSpace": nest_space(lv["nests"]), "pondSpace": pond_space(lv["pond"]),
+                "rate": round(crumb_rate(s), 3), "rateFrom": rate_breakdown(s), "heat": heat(s), "nestSpace": nest_space(lv["nests"]), "pondSpace": pond_space(lv["pond"]),
                 "districts": districts(s), "boostFrom": boost_breakdown(s, rows.get(p.key, [])),
                 "plaza": penta_plaza(s, rows.get(p.key, [])), "volcano": fire_ducks(s, rows.get(p.key, []), classes),
                 "lab": {"spawnCost": spawn_cost(s["spawned"]), "grow": grow_minutes(lv["incubation"]),
@@ -1123,7 +1133,7 @@ class DuckUtopia:
                 "champions": sorted(({"champion": c, "cls": classes.get(c, "fighter"), "games": r["games"]}
                                      for c, r in recs.items()), key=lambda x: (-x["games"], x["champion"])),
             })
-        return {"now": now, "me": 1 if viewer else 0, "players": out, "goldenRate": GOLDEN_RATE, "fireRate": FIRE_RATE,
+        return {"now": now, "me": 1 if viewer else 0, "players": out, "goldenRate": GOLDEN_RATE, "fireRate": FIRE_RATE, "winCrumbs": WIN_CRUMBS,
                 "hatShop": [{"id": h, "name": n, "cost": c} for h, (n, c) in HATS.items()],
                 "salts": [{"id": k, "name": n, "does": does} for k, (n, does) in SALTS.items()],
                 "temps": [{"id": k, "name": n, "cost": c, "minutes": m, "power": pw} for k, (n, c, m, pw) in TEMPS.items()],
