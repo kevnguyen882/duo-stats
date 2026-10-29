@@ -24,8 +24,9 @@ function streakTiles(games){
   </div>`;
 }
 
-// Your share of your team's kills and damage, over every game together. The team's totals come from each row's kill
-// participation and damage share (whichever of you has one: a player with no kills or assists has a kp of 0).
+// Your share of your team's kills and damage (the two of you against the rest of your team), over every game together.
+// The team's totals come from each row's kill participation and damage share (whichever of you has one: a player
+// with no kills or assists has a kp of 0).
 function duoShare(p1, p2, theirs){
   const t = {k1:0, k2:0, k:0, d1:0, d2:0, d:0};
   p1.games.filter(x=>!x.remake).forEach(x=>{ const y = theirs[x.matchId]; if(!y) return;
@@ -35,15 +36,15 @@ function duoShare(p1, p2, theirs){
   });
   const row = (label, a, b, total) => {
     if(!total) return '';
-    const x = a/total, y = b/total;
+    const us = (a+b)/total;
     return `<div class="sharerow"><div class="m">${label}</div>
-      <div class="bar share"><i style="width:${x*100}%;background:var(--p1)" title="${esc(shortName(p1.riotId))}: ${pct(x)}"></i><i style="width:${y*100}%;background:var(--p2)" title="${esc(shortName(p2.riotId))}: ${pct(y)}"></i></div>
-      <div class="v">${pct(x+y)}</div>
-      <div class="split"><span style="color:var(--p1)">${esc(shortName(p1.riotId))} ${pct(x)}</span> · <span style="color:var(--p2)">${esc(shortName(p2.riotId))} ${pct(y)}</span></div></div>`;
+      <div class="bar share"><i class="us" style="width:${us*100}%"></i><i class="rest" style="width:${(1-us)*100}%"></i></div>
+      <div class="v">${pct(us)}</div>
+      <div class="split"><span class="us">You two ${pct(us)}</span> · <span>Rest of the team ${pct(1-us)}</span></div></div>`;
   };
   const rows = row('Kills', t.k1, t.k2, t.k) + row('Damage', t.d1, t.d2, t.d);
   return rows ? `<h2 style="margin-top:20px">Your share of the team</h2>${rows}
-    <div class="note">Of your team's kills and damage to champions, across every game together. An even split between five would be 40%.</div>` : '';
+    <div class="note">The two of you against the other three on your team: kills and damage to champions, across every game together. An even split between five would be 40%.</div>` : '';
 }
 
 function togetherTab(p1, p2){
