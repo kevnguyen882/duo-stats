@@ -151,6 +151,29 @@ class InfirmaryTests(unittest.TestCase):
         self.assertEqual(grow_minutes(0), 8 * 60)
         self.assertLess(grow_minutes(5), grow_minutes(0))
 
+    def test_the_top_incubation_level_grows_a_duckling_in_half_an_hour(self):
+        self.assertAlmostEqual(grow_minutes(10), 30)
+
+    def test_ducklings_cost_more_with_a_bigger_flock_and_merging_brings_it_down(self):
+        s = new_utopia("A#1", 0)
+        self.assertEqual(spawn_cost(utopia.flock(s)), utopia.SPAWN_COST)   # the 5 starting ducks are free of it
+        s["pond"] = 6
+        expensive = spawn_cost(utopia.flock(s))
+        utopia.merge_birds(s, 0)
+        self.assertLess(spawn_cost(utopia.flock(s)), expensive)
+
+    def test_some_ducklings_hatch_as_mallards(self):
+        s = empty()
+        s["levels"]["pond"] = 12
+        s["levels"]["nests"] = 12
+        s["levels"]["science"] = 15   # (it doesn't touch growing, only the odds: 5% + 1% a level, up to 20%)
+        self.assertEqual(utopia.lucky_chance(s), utopia.MAX_LUCKY)
+        s["lost"] = utopia.pond_space(12)
+        advance(s, 0)
+        advance(s, 2 * utopia.GROW_MINUTES * MIN)   # two nestfuls
+        self.assertEqual(s["pond"] + s["birds"][0], utopia.pond_space(12))
+        self.assertTrue(0 < s["birds"][0] < 25)   # about a fifth of the 50 came out as mallards
+
     def test_old_utopias_lose_the_timer_but_keep_waiting_ducklings(self):
         s = new_utopia("A#1", 0)
         s.update(held=2, nextSpawn=5)
@@ -407,7 +430,8 @@ class GameTests(TempStorageCase):
         self.rows["duo two#na2"].insert(0, row("3", 3, champion="Garen"))
         v = self.game.state(viewer=False, now=2000)
         one, two = v["players"]
-        self.assertEqual(len(one["ducklings"]), 0)   # no duckling for a win: they come from the infirmary
+        self.assertEqual(len(one["ducklings"]), utopia.WIN_EGGS)   # a win lays two eggs, straight into free nests
+        self.assertIn("2 eggs in the infirmary", one["log"][-1 if not one["raids"] else 1]["text"])
         self.assertIn(f"{round(rate * utopia.WIN_MINUTES):,} breadcrumbs", one["log"][-1 if not one["raids"] else 1]["text"])   # half an hour's worth
         self.assertEqual(one["raids"][0]["matchId"], "3")
         self.assertEqual(one["raids"][0]["geese"], two["raids"][0]["geese"])   # the same wave
@@ -444,14 +468,14 @@ class GameTests(TempStorageCase):
         spawn = {"owner": "duo one#na1", "action": "spawn"}
         p = self.game.act(spawn, viewer=False, now=1)["players"][0]
         self.assertEqual((p["ducklings"], p["spawned"], p["crumbs"]), ([1 + 8 * 60 * MIN], 1, 10000 - utopia.SPAWN_COST))
-        self.assertEqual(p["lab"]["spawnCost"], spawn_cost(1))
+        self.assertEqual(p["lab"]["spawnCost"], spawn_cost(utopia.STARTING_DUCKS + 1))   # by the flock: 5 ducks and this one
         for _ in range(utopia.nest_space(1) - 1):
             self.game.act(spawn, viewer=False, now=1)
         with self.assertRaises(ValueError):   # the nests are full
             self.game.act(spawn, viewer=False, now=1)
         p = self.game.state(viewer=False, now=1 + 8 * 60 * MIN)["players"][0]
         room = utopia.pond_space(1) - utopia.STARTING_DUCKS
-        self.assertEqual((len(p["ducklings"]), p["pond"], p["edge"]), (0, utopia.pond_space(1), utopia.nest_space(1) - room))   # grown; the rest wait
+        self.assertEqual((len(p["ducklings"]), p["pondUsed"], p["edge"]), (0, utopia.pond_space(1), utopia.nest_space(1) - room))   # grown; the rest wait
 
     def test_incubation_upgrade_speeds_up_growing_ducklings(self):
         self.game.state(viewer=False, now=1)
@@ -746,6 +770,13 @@ class GameTests(TempStorageCase):
         out = self.game.act({"owner": "duo one#na1", "action": "challenge", "champion": "Annie"}, viewer=False, now=2000)
         self.assertEqual(out["result"]["fight"]["perk"]["salt"], "chili")
         self.assertEqual(out["players"][0]["perks"], {})
+
+    def test_every_game_together_lays_an_egg(self):
+        self.game.state(viewer=False, now=1000)
+        self.rows["duo one#na1"].insert(0, row("3", 3, win=False))
+        p = self.game.state(viewer=False, now=2000)["players"][0]
+        self.assertEqual(len(p["ducklings"]), utopia.GAME_EGGS)   # a loss: one egg
+        self.assertIn("1 egg in the infirmary", p["log"][-1 if not p["raids"] else 1]["text"])
 
     def test_merging_in_the_marsh(self):
         self.game.state(viewer=False, now=1000)

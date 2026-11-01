@@ -127,7 +127,7 @@ function renderResources(){
     <div>${pic('duck-plain')}<b>${p.pondUsed}/${p.pondSpace}</b><span>${p.pondUsed > p.pond ? 'ducks and birds' : 'ducks'} in the pond</span></div>
     ${p.edge ? `<div class="warn">${pic('duck-plain')}<b>${p.edge}</b><span>waiting at the pond's edge (upgrade the pond)</span></div>` : ''}
     <div>${pic('duckling')}<b>${p.ducklings.length}/${p.nestSpace}</b><span>ducklings growing in the infirmary${p.ducklings.length ? ` · next grows in <span id="grow">${growLeft(p)}</span>` : ''}</span></div>
-    ${p.lost ? `<div class="warn">${pic('duckling')}<b>${p.lost}</b><span>in the lost and found (upgrade the nests)</span></div>` : ''}
+    ${p.lost ? `<div class="warn">${pic('duckling')}<b>${p.lost}</b><span>egg${p.lost === 1 ? '' : 's'} waiting for a free nest (upgrade the nests for more)</span></div>` : ''}
 
     ${p.boost ? `<div class="utipped" tabindex="0" data-tip-html="${esc(boostTip(p))}"><b>+${pctOf(p.boost)}</b><span>multikill boost</span></div>` : ''}`;
 }
@@ -181,14 +181,15 @@ function renderLab(){
   const free = p.nestSpace - p.ducklings.length - p.lost, full = free <= 0;
   $('#labBuild').innerHTML = `<div class="ubld">${pic('duckling')}<div class="t"><b>Spawn a duckling</b>
       <span>${full ? 'The nests are full: upgrade the nests, or wait for a duckling to grow' : `Into a free nest (${free} free), where it grows for ${fmtMin(L.grow)}`}.
-        Each one costs a little more (${p.spawned} spawned so far).</span></div>
+        The price goes up with your flock (${L.flock} ducks and birds), so merging in the Mystic Marsh brings it down.
+        ${Math.round(L.lucky * 100)}% hatch as mallards.</span></div>
       <button data-spawn data-cost="${L.spawnCost}" data-full="${full ? 1 : ''}" ${own && !full ? '' : 'disabled'}>${pic('icon-breadcrumb')}${fmt(L.spawnCost)}</button></div>`
     + buildRow('nests', bs.nests, p, own, 'lab-chamber', `Room for ${p.nestSpace} ducklings to grow, one per chamber`, bs.nests.cost != null ? `room for ${L.nestSpaceNext}` : '')
     + buildRow('incubation', bs.incubation, p, own, 'egg', `Ducklings grow into ducks in ${fmtMin(L.grow)}`, L.growNext ? fmtMin(L.growNext) : '')
     + buildRow('science', bs.science, p, own, 'duck-mage', `Each pond duck collects ${perMin(duckEach(p))} breadcrumbs a minute (×${U.scienceBoost} a level)`,
                bs.science.cost != null ? `${perMin(duckEach(p) * U.scienceBoost)} a minute each` : '')
     + (own ? '' : `<p class="unote">Only ${esc(shortName(p.riotId))} can use this infirmary.</p>`);
-  $('#labNote').textContent = `Spawn ducklings into the infirmary's nests for breadcrumbs. Each one grows in its fluid chamber for ${fmtMin(L.grow)}, then joins the pond. While every nest is full you can't spawn more: upgrade the nests for room, and the incubation time to grow them faster. Duck Science makes every pond duck collect more.`;
+  $('#labNote').textContent = `Spawn ducklings into the infirmary's nests for breadcrumbs, and every game you play together lays a free egg (a win, ${L.winEggs}). Each one grows in its fluid chamber for ${fmtMin(L.grow)}, then joins the pond; now and then one hatches as a mallard. While every nest is full you can't spawn more: upgrade the nests for room, and the incubation time to grow them faster. Duck Science makes every pond duck collect more, and raises the chance of a mallard.`;
   affordable();
 }
 $('#labBuild').addEventListener('click', e=>{
@@ -859,7 +860,7 @@ const scene = (()=>{
       for(let i = 0; i < n; i++) sprite('duck-plain', b.cx - n * 7 + i * 14, y + (i % 2) * 2, 16);
       label(`${p.edge} waiting for room in the pond`, b.cx, y + 19, 'center', '#ffd8a8');
     }
-    // the Duck Infirmary, where ducklings grow, and the lost and found box
+    // the Duck Infirmary, where ducklings grow, and eggs waiting for a nest
     const S = PLACE_SIZE, at = id => PLACES[id];
     let [x, y] = at('lab');
     sprite('building-infirmary', x, y, S);
