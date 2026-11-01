@@ -130,7 +130,7 @@ function renderResources(){
     ${p.lost ? `<div class="warn">${pic('duckling')}<b>${p.lost}</b><span>egg${p.lost === 1 ? '' : 's'} waiting for a free nest (upgrade the nests for more)</span></div>` : ''}
 
     ${p.boost ? `<div class="utipped" tabindex="0" data-tip-html="${esc(boostTip(p))}"><b>+${pctOf(p.boost)}</b><span>multikill boost</span></div>` : ''}
-    ${p.crates ? `<div class="ucrates">${pic('special-delivery')}<b>${p.crates}</b><span>special deliver${p.crates === 1 ? 'y' : 'ies'} from wins</span>${mine() ? '<button data-crate>Open</button>' : ''}</div>` : ''}`;
+    ${p.crates ? `<div class="ucrates">${pic('mailman-duck')}<b>${p.crates}</b><span>special deliver${p.crates === 1 ? 'y' : 'ies'} from wins</span>${mine() ? '<button data-crate>Open</button>' : ''}</div>` : ''}`;
 }
 $('#resources').addEventListener('click', e=>{ if(e.target.closest('[data-crate]')) openCrate(); });
 const pctOf = v => `${+(v * 100).toFixed(1)}%`;
@@ -938,9 +938,10 @@ const scene = (()=>{
     [x, y] = at('spa');
     if(p.levels.spa){ sprite(BUILD_INFO.spa[0](p.levels.spa), x, y, S); names(x, y, p.levels.spa >= 2 ? 'Hot springs' : 'Spa', p.soaks.length ? `${p.soaks.length} soaking` : ''); }
     else lot(x, y, 'Spa plot');
-    if(p.crates){   // special deliveries waiting to be opened, bobbing near the pond
+    if(p.crates){   // special deliveries waiting to be opened: the mailman duck has brought them, and hops to get your attention
       const hop = Math.round(Math.abs(Math.sin(now / 350)) * 3);
-      sprite('special-delivery', CRATE_SPOT.x, CRATE_SPOT.y - hop, CRATE_SPOT.s);
+      sprite('mailman-duck', CRATE_SPOT.x, CRATE_SPOT.y - hop, CRATE_SPOT.s);
+      sprite('special-delivery', CRATE_SPOT.x + CRATE_SPOT.s - 6, CRATE_SPOT.y + CRATE_SPOT.s - 16, 16);   // the parcel at its feet
       label(`${p.crates} deliver${p.crates === 1 ? 'y' : 'ies'}${mine() ? ': open!' : ''}`, CRATE_SPOT.x + CRATE_SPOT.s / 2, CRATE_SPOT.y + CRATE_SPOT.s + 2, 'center', '#ffe066');
     }
     [x, y] = at('marsh');   // the Mystic Marsh, where the Mystic zaps pairs of birds into bigger ones

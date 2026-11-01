@@ -340,6 +340,11 @@ function buildArt(){
     px(0, 96, 40, 16, '#5c636a'); px(0, 96, 40, 2, '#adb5bd'); px(4, 102, 32, 6, '#343a40');
     px(3, 10, 2, 86, 'rgba(220,240,255,.55)'); px(35, 10, 2, 86, 'rgba(220,240,255,.55)'); px(8, 14, 2, 70, 'rgba(255,255,255,.35)');
   });
+  ART['mailman-duck'] = fromMap(overlay(recolour((ch, x, y)=>y >= 7 && y <= 12 && ch === 'B' ? 'L' : y >= 7 && ch === 'S' ? 'M' : null),   // a postal uniform
+    [...line(8, 0, 3, 'C'), ...line(7, 1, 5, 'C'), [9, 1, 'Y'], ...line(10, 2, 3, 'D'),                    // a mail cap with a badge and brim
+     [10, 7, 'T'], [9, 8, 'T'], [8, 9, 'T'], [7, 10, 'T'],                                                   // the satchel's strap
+     ...line(2, 10, 5, 'T'), ...line(2, 11, 5, 'U'), ...line(2, 12, 5, 'U'), [3, 9, 'W'], [4, 9, 'W'], [5, 9, 'W']]),   // the satchel, a letter peeking out
+    {...DUCK_PAL, L: '#a5d8ff', M: '#74c0fc', C: '#1c3d7a', D: '#111111', Y: '#fcc419', T: '#8b5a2b', U: '#6b4423', W: '#ffffff'}, 2);
   ART['special-delivery'] = chunky(48, px=>{
     px(3, 8, 18, 14, '#a0652e'); px(3, 8, 18, 2, '#c8843f'); px(3, 20, 18, 2, '#7a4a20');   // the box
     px(4, 12, 16, 1, '#7a4a20'); px(4, 16, 16, 1, '#7a4a20');                                // planks
