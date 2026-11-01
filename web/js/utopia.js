@@ -27,7 +27,7 @@ const BUILD_INFO = {   // building -> (art for its level, what it does)
     : p.levels.spa ? 'A pool for recovery soaks (see the Spa panel); the Hot springs add a second' : 'Recovery soaks that refresh your defenders with perks, and a big boost to your Ductopia Score'],
   fence: [()=>'tile-mud', (p)=>p.levels.fence ? `Geese bite ${Math.round(Math.min(.06 * p.levels.fence, .5) * 100)}% softer in raids` : 'Goose defences: geese bite 6% softer a level in raids'],
 };
-const LAB = ['nests', 'incubation', 'science'];   // the Duck Lab's upgrades, shown in its lab rather than under Build
+const LAB = ['nests', 'incubation', 'science', 'autonest'];   // the Duck Lab's upgrades, shown in its lab rather than under Build
 const bakeryPct = lvl => `+${Math.round((1.25 ** lvl - 1) * 100).toLocaleString()}%`;   // bakery levels compound: x1.25 each
 const ROOMS = [...LAB, 'bakery'];      // ... and the bakery's, in the Bakery
 const fmtMin = m => { m = Math.round(m); return m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}` : `${m} min`; };
@@ -175,6 +175,18 @@ function renderBuild(){
     + '<p class="unote">The nests, spawning ducklings and Duck Science are in the Duck Lab, and the bakery and its machines in the Bakery: click them in your Ductopia.</p>';
   affordable();
 }
+function autoRow(p, own){   // the Auto-nester: needs Duck Science, then fills empty nests by itself (and can be paused)
+  const L = p.lab, x = p.buildings.autonest;
+  if(!x.level){
+    const locked = p.levels.science < L.autoScience;
+    return `<div class="ubld">${pic('lab-chamber')}<div class="t"><b>Auto-nester (not built)</b>
+      <span>Spawns a duckling into any empty nest by itself, at the normal price, whenever you have the breadcrumbs. ${locked ? `Needs Duck Science level ${L.autoScience}.` : ''}</span></div>
+      <button data-build="autonest" data-cost="${x.cost}" ${own && !locked ? '' : 'disabled'} ${locked ? 'data-full="1"' : ''}>${pic('icon-breadcrumb')}${fmt(x.cost)}</button></div>`;
+  }
+  return `<div class="ubld">${pic('lab-chamber')}<div class="t"><b>Auto-nester · ${L.autoOn ? 'on' : 'paused'}</b>
+      <span>${L.autoOn ? 'Fills empty nests by itself whenever you have the breadcrumbs' : 'Paused: nests stay empty until you spawn ducklings'}. ${plural(L.autoSpawned, 'duckling')} spawned by it so far.</span></div>
+      ${own ? `<button class="ghost" data-auto="${L.autoOn ? '' : 1}">${L.autoOn ? 'Pause' : 'Turn on'}</button>` : ''}</div>`;
+}
 const duckEach = p => p.rateFrom.sources.find(x=>x.id === 'pond').each;   // what one pond duck collects, with Duck Science
 function renderLab(){
   const p = U.players[viewing], own = mine(), L = p.lab, bs = p.buildings;
@@ -191,6 +203,7 @@ function renderLab(){
     + buildRow('incubation', bs.incubation, p, own, 'egg', `Ducklings grow into ducks in ${fmtMin(L.grow)}`, L.growNext ? fmtMin(L.growNext) : '')
     + buildRow('science', bs.science, p, own, 'duck-mage', `Each pond duck collects ${perMin(duckEach(p))} breadcrumbs a minute (×${U.scienceBoost} a level)`,
                bs.science.cost != null ? `${perMin(duckEach(p) * U.scienceBoost)} a minute each` : '')
+    + autoRow(p, own)
     + (own ? '' : `<p class="unote">Only ${esc(shortName(p.riotId))} can use this Duck Lab.</p>`);
   $('#labNote').textContent = `Spawn ducklings into the Duck Lab's nests for breadcrumbs, and every game you play together lays a free egg (a win, ${L.winEggs}). Each one grows in its fluid chamber for ${fmtMin(L.grow)}, then joins the pond; now and then one hatches as a mallard. While every nest is full you can't spawn more: upgrade the nests for room, and the incubation time to grow them faster. Duck Science makes every pond duck collect more, and raises the chance of a mallard.`;
   affordable();
@@ -198,6 +211,7 @@ function renderLab(){
 $('#labBuild').addEventListener('click', e=>{
   if(e.target.closest('[data-spawn]')) return act({action: 'spawn'});
   if(e.target.closest('[data-clutch]')) return act({action: 'clutch'});
+  const auto = e.target.closest('[data-auto]'); if(auto) return act({action: 'autonest', on: !!auto.dataset.auto});
   const b = e.target.closest('[data-build]'); if(b) act({action: 'upgrade', building: b.dataset.build});
 });
 function affordable(){   // build buttons light up as breadcrumbs come in

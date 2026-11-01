@@ -17,7 +17,8 @@ Marsh brings it back down; never while the nests are full), and every game toget
 GAME_EGGS), which waits for a free nest ("lost", from the old lost and found box). It grows there for grow_minutes(),
 then moves to the pond, or waits at its edge if it's full; now and then one hatches as a mallard (lucky_chance()).
 Only ducks in the pond collect breadcrumbs (golden, champion and caught fire ducks collect wherever they are). The
-Duck Lab's upgrades: more nests, a shorter incubation time, and Duck Science (each level: pond ducks collect x1.5).
+Duck Lab's upgrades: more nests, a shorter incubation time, Duck Science (each level: pond ducks collect x1.5), and
+from Duck Science level AUTONEST_SCIENCE the Auto-nester, which spawns into empty nests by itself (auto_nest()).
 
 The Mystic Marsh: the Mystic, a wizard toad, zaps two pond birds of the same kind into one of the next kind up
 (BIRDS: duck, mallard, wood duck, baker, finance chad, firefighter, police, raver and DJ ducks, swan, black swan,
@@ -98,8 +99,10 @@ BUILDINGS = {
     "fence":  (600, 1.7, 9, [(1, "Fences"), (4, "Scarecrows"), (7, "Honk-proof walls")]),
     "incubation": (500, 2.0, 10, [(1, "Incubation time")]),   # in the Duck Lab
     "science": (1000, 3.0, 15, [(1, "Duck Science")]),          # in the Duck Lab: what each pond duck collects
+    "autonest": (20000, 1.0, 1, [(1, "Auto-nester")]),          # in the Duck Lab, from Duck Science AUTONEST_SCIENCE: fills empty nests
 }
-START_LEVELS = {"nests": 1, "pond": 1, "bakery": 0, "spa": 0, "fence": 0, "incubation": 0, "science": 0}
+START_LEVELS = {"nests": 1, "pond": 1, "bakery": 0, "spa": 0, "fence": 0, "incubation": 0, "science": 0, "autonest": 0}
+AUTONEST_SCIENCE = 3   # the Duck Science level the Auto-nester needs
 
 
 def grow_minutes(level: int) -> float:
@@ -268,11 +271,15 @@ def advance(s: dict, now: int):
     t = s["tick"]
     while True:
         _fill_nests(s, t)
+        auto_nest(s, t)
         due = min(s["ducklings"]) if s["ducklings"] else None
         end = due if due is not None and due <= now else now
+        wait = _autonest_wait(s)   # the Auto-nester can afford its next duckling then: stop there to buy it
+        if wait is not None and t + wait < end:
+            end = t + wait
         s["crumbs"] += crumb_rate(s) * max(0, end - t) / 60000
         t = end
-        if due is None or due > now:
+        if t >= now and (due is None or due > now):
             break
         for i, due_at in enumerate(r for r in s["ducklings"] if r <= t):
             if pond_used(s) >= pond_space(s["levels"]["pond"]):
@@ -283,6 +290,25 @@ def advance(s: dict, now: int):
                 s["pond"] += 1
         s["ducklings"] = [r for r in s["ducklings"] if r > t]
     s["tick"] = max(s["tick"], now)
+
+
+def auto_nest(s: dict, t: int):
+    """The Auto-nester: a duckling into every empty nest it can pay for, at the normal price, at time t."""
+    if not (s["levels"]["autonest"] and s.get("autoOn", True)):
+        return
+    while free_nests(s) and s["crumbs"] >= spawn_cost(flock(s)):
+        s["crumbs"] -= spawn_cost(flock(s))
+        s["spawned"] += 1
+        s["autoSpawned"] = s.get("autoSpawned", 0) + 1
+        s["ducklings"].append(t + round(grow_minutes(s["levels"]["incubation"]) * 60000))
+
+
+def _autonest_wait(s: dict):
+    """Milliseconds until the Auto-nester can pay for a duckling in an empty nest; None if it isn't waiting on that."""
+    if not (s["levels"]["autonest"] and s.get("autoOn", True) and free_nests(s)):
+        return None
+    short, rate = spawn_cost(flock(s)) - s["crumbs"], crumb_rate(s)
+    return None if short <= 0 or rate <= 0 else max(1, math.ceil(short / rate * 60000))
 
 
 def _fill_nests(s: dict, t: int):
@@ -987,6 +1013,8 @@ class DuckUtopia:
             cost = upgrade_cost(b, s["levels"][b])
             if cost is None:
                 raise ValueError("That's already as big as it gets.")
+            if b == "autonest" and s["levels"]["science"] < AUTONEST_SCIENCE:
+                raise ValueError(f"The Auto-nester needs Duck Science level {AUTONEST_SCIENCE}.")
             if s["crumbs"] < cost:
                 raise ValueError(f"Not enough breadcrumbs: {cost:,} needed.")
             s["crumbs"] -= cost
@@ -999,6 +1027,7 @@ class DuckUtopia:
                 _fill_pond(s)
             if b == "nests":
                 _fill_nests(s, now)
+            auto_nest(s, now)   # a new Auto-nester, or more nests for it, fills them straight away
             name, level = building_name(b, s["levels"][b]), s["levels"][b]
             self._note(s, now, f"Built the {name}." if level == 1 or name != building_name(b, level - 1)
                        else f"Upgraded the {name} to level {level}.")
@@ -1013,6 +1042,13 @@ class DuckUtopia:
             s["spawned"] += 1
             s["ducklings"].append(now + round(grow_minutes(s["levels"]["incubation"]) * 60000))
             return {"spawned": s["spawned"]}
+        if action == "autonest":   # turn the Auto-nester on or off
+            if not s["levels"]["autonest"]:
+                raise ValueError("Build the Auto-nester first.")
+            s["autoOn"] = bool(body.get("on"))
+            if s["autoOn"]:
+                auto_nest(s, now)
+            return {"autoOn": s["autoOn"]}
         if action == "clutch":   # a duckling in every free nest at once, a little cheaper
             n, cost = free_nests(s), clutch_cost(s)
             if n < 1:
@@ -1242,7 +1278,7 @@ class DuckUtopia:
                 "rate": round(crumb_rate(s), 3), "rateFrom": rate_breakdown(s), "heat": heat(s), "nestSpace": nest_space(lv["nests"]), "pondSpace": pond_space(lv["pond"]), "pondUsed": pond_used(s), "discovered": discovered(s),
                 "districts": districts(s), "boostFrom": boost_breakdown(s, rows.get(p.key, [])),
                 "plaza": penta_plaza(s, rows.get(p.key, [])), "volcano": fire_ducks(s, rows.get(p.key, []), classes),
-                "lab": {"spawnCost": spawn_cost(flock(s)), "clutchCost": clutch_cost(s), "freeNests": free_nests(s), "clutchDiscount": CLUTCH_DISCOUNT, "flock": flock(s), "lucky": lucky_chance(s), "gameEggs": GAME_EGGS, "winEggs": WIN_EGGS,
+                "lab": {"spawnCost": spawn_cost(flock(s)), "clutchCost": clutch_cost(s), "freeNests": free_nests(s), "clutchDiscount": CLUTCH_DISCOUNT, "autoOn": s.get("autoOn", True), "autoSpawned": s.get("autoSpawned", 0), "autoScience": AUTONEST_SCIENCE, "flock": flock(s), "lucky": lucky_chance(s), "gameEggs": GAME_EGGS, "winEggs": WIN_EGGS,
                         "grow": grow_minutes(lv["incubation"]),
                         "growNext": grow_minutes(lv["incubation"] + 1) if upgrade_cost("incubation", lv["incubation"]) is not None else None,
                         "nestSpaceNext": nest_space(lv["nests"] + 1)},
