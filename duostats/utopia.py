@@ -125,7 +125,9 @@ def nest_space(level: int) -> int:
 
 
 def pond_space(level: int) -> int:
-    return 5 * level * (level + 1) // 2   # 5, 15, 30, 50 ...
+    """Kept small, so room is worth making in the Mystic Marsh: 6, 10, 14 ... 50 at level 12. A pond already holding more
+    (from when it held 5, 15, 30, 50 ... 390) keeps every duck; new ones wait at the edge until there's room."""
+    return 2 + 4 * level
 
 
 def upgrade_cost(building: str, level: int):
