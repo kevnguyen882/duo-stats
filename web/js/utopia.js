@@ -129,8 +129,10 @@ function renderResources(){
     <div>${pic('duckling')}<b>${p.ducklings.length}/${p.nestSpace}</b><span>ducklings growing in the Duck Lab${p.ducklings.length ? ` · next grows in <span id="grow">${growLeft(p)}</span>` : ''}</span></div>
     ${p.lost ? `<div class="warn">${pic('duckling')}<b>${p.lost}</b><span>egg${p.lost === 1 ? '' : 's'} waiting for a free nest (upgrade the nests for more)</span></div>` : ''}
 
-    ${p.boost ? `<div class="utipped" tabindex="0" data-tip-html="${esc(boostTip(p))}"><b>+${pctOf(p.boost)}</b><span>multikill boost</span></div>` : ''}`;
+    ${p.boost ? `<div class="utipped" tabindex="0" data-tip-html="${esc(boostTip(p))}"><b>+${pctOf(p.boost)}</b><span>multikill boost</span></div>` : ''}
+    ${p.crates ? `<div class="ucrates">${pic('mailman-duck')}<b>${p.crates}</b><span>special deliver${p.crates === 1 ? 'y' : 'ies'} from wins</span>${mine() ? '<button data-crate>Open</button>' : ''}</div>` : ''}`;
 }
+$('#resources').addEventListener('click', e=>{ if(e.target.closest('[data-crate]')) openCrate(); });
 const pctOf = v => `${+(v * 100).toFixed(1)}%`;
 const perMin = v => v >= 1000 ? fmt(v) : String(+v.toFixed(1));   // keep a decimal (champion ducks collect 1.5), so the rows add up
 // the breadcrumbs' hover card: what each kind of duck collects a minute, then the bonuses that multiply it all
@@ -679,6 +681,32 @@ const bakeryRoom = (()=>{
   return {reset, size};
 })();
 
+// ---- opening a special delivery: it shakes, bursts, and shows what was inside (rolled on the Mac running the app) ----
+const RARITY = {common: '#adb5bd', uncommon: '#51cf66', rare: '#4dabf7', legendary: '#fcc419'};
+async function openCrate(){
+  if(busy || !mine() || !U.players[U.me].crates) return;
+  busy = true;
+  const box = $('#crateBox'), calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  box.innerHTML = `<div class="box ucrate"><h2 id="crateTitle">Special delivery</h2><div class="ucrate-stage"><div class="ucrate-pic shake">${pic('special-delivery')}</div></div>
+    <p class="ucrate-loot" aria-live="polite">Opening…</p><div class="ubtns"></div></div>`;
+  box.classList.remove('hidden');
+  try{
+    const [s] = await Promise.all([api('/api/utopia', {action: 'openCrate', owner: U.players[U.me].riotId.toLowerCase()}), new Promise(r=>setTimeout(r, calm ? 0 : 900))]);
+    const loot = s.result.loot, left = s.result.crates, c = RARITY[loot.rarity];
+    box.querySelector('.ucrate-stage').innerHTML = `<div class="ucrate-burst" style="--c:${c}"></div><div class="ucrate-pic pop">${pic(loot.icon)}</div>`;
+    box.querySelector('.ucrate-loot').innerHTML = `<span class="ucrate-rarity" style="color:${c}">${loot.rarity}</span><b>${esc(loot.name.replace(/^./, x=>x.toUpperCase()))}</b>`;
+    box.querySelector('.ubtns').innerHTML = (left ? `<button data-crate-again>Open another (${left} left)</button>` : '') + `<button class="${left ? 'ghost' : ''}" data-crate-close>${left ? 'Later' : 'Nice!'}</button>`;
+    box.querySelector('.ubtns button').focus();
+    accept(s);
+  }catch(e){ box.querySelector('.ucrate-loot').textContent = e.message; box.querySelector('.ubtns').innerHTML = '<button data-crate-close>Close</button>'; }
+  finally{ busy = false; }
+}
+$('#crateBox').addEventListener('click', e=>{
+  if(e.target.closest('[data-crate-again]')) openCrate();
+  else if(e.target.closest('[data-crate-close]') || e.target === $('#crateBox')){ $('#crateBox').classList.add('hidden'); $('#crateBox').innerHTML = ''; }
+});
+$('#crateBox').addEventListener('keydown', e=>{ if(e.key === 'Escape'){ $('#crateBox').classList.add('hidden'); $('#crateBox').innerHTML = ''; } });
+
 // ---- a boss fight, played back round by round (from the fight's steps) ----
 const MOVE_NOTE = {ult: 'Pentakill ultimate!', first: 'Strikes first from the shadows!', double: 'Double hit!'};
 const MOVE_POP = {ult: 'Penta ult!', first: 'Ambush!', double: 'Double!'};   // short, to fit over the duck
@@ -805,6 +833,7 @@ const W = 480, H = 280;
 // where each place sits on the map (its picture's top-left; all PLACE_SIZE square), round the pond in the middle: the
 // Duck Lab and the Volcano Spa down the left, the Bakery and Spa top right, the Plaza and Quarter bottom right
 const PLACE_SIZE = 44;
+const CRATE_SPOT = {x: 270, y: 28, s: 32};   // where special deliveries sit on the map
 const PLACES = {lab: [16, 8], marsh: [16, 100], volcano: [16, 192], bakery: [350, 8], spa: [422, 8], plaza: [350, 192], quarter: [422, 192]};
 const scene = (()=>{
   const cv = $('#scene'), g = cv.getContext('2d');
@@ -909,6 +938,12 @@ const scene = (()=>{
     [x, y] = at('spa');
     if(p.levels.spa){ sprite(BUILD_INFO.spa[0](p.levels.spa), x, y, S); names(x, y, p.levels.spa >= 2 ? 'Hot springs' : 'Spa', p.soaks.length ? `${p.soaks.length} soaking` : ''); }
     else lot(x, y, 'Spa plot');
+    if(p.crates){   // special deliveries waiting to be opened: the mailman duck has brought them, and hops to get your attention
+      const hop = Math.round(Math.abs(Math.sin(now / 350)) * 3);
+      sprite('mailman-duck', CRATE_SPOT.x, CRATE_SPOT.y - hop, CRATE_SPOT.s);
+      sprite('special-delivery', CRATE_SPOT.x + CRATE_SPOT.s - 6, CRATE_SPOT.y + CRATE_SPOT.s - 16, 16);   // the parcel at its feet
+      label(`${p.crates} deliver${p.crates === 1 ? 'y' : 'ies'}${mine() ? ': open!' : ''}`, CRATE_SPOT.x + CRATE_SPOT.s / 2, CRATE_SPOT.y + CRATE_SPOT.s + 2, 'center', '#ffe066');
+    }
     [x, y] = at('marsh');   // the Mystic Marsh, where the Mystic zaps pairs of birds into bigger ones
     sprite('district-mystic-marsh', x, y, S); names(x, y, 'Mystic Marsh', p.birds.some(n=>n) ? plural(p.birds.reduce((a, n)=>a + n, 0), 'bird') : 'no birds yet');
     // districts: unlocked by real achievements only
@@ -928,8 +963,13 @@ const scene = (()=>{
     const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * W / r.width, y = (e.clientY - r.top) * H / r.height;
     return SPOTS.find(o=>x >= o.x && x < o.x + o.w && y >= o.y && y < o.y + o.h);
   };
-  cv.addEventListener('mousemove', e=>cv.classList.toggle('go', !!spotAt(e)));
-  cv.addEventListener('click', e=>{ const o = spotAt(e); if(o) show(o.view); });
+  const onCrate = e => {   // the special deliveries on the map, while there are some to open
+    if(!U || !mine() || !U.players[viewing].crates) return false;
+    const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * W / r.width, y = (e.clientY - r.top) * H / r.height;
+    return x >= CRATE_SPOT.x - 4 && x < CRATE_SPOT.x + CRATE_SPOT.s + 4 && y >= CRATE_SPOT.y - 6 && y < CRATE_SPOT.y + CRATE_SPOT.s + 14;
+  };
+  cv.addEventListener('mousemove', e=>cv.classList.toggle('go', !!spotAt(e) || onCrate(e)));
+  cv.addEventListener('click', e=>{ if(onCrate(e)) return openCrate(); const o = spotAt(e); if(o) show(o.view); });
   window.addEventListener('resize', size);
   size(); requestAnimationFrame(draw);
   return {reset, size};
