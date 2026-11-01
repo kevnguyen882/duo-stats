@@ -772,6 +772,17 @@ class GameTests(TempStorageCase):
         self.assertEqual(out["result"]["fight"]["perk"]["salt"], "chili")
         self.assertEqual(out["players"][0]["perks"], {})
 
+    def test_the_ladder_shows_only_the_birds_youve_made(self):
+        p = self.game.state(viewer=False, now=1000)["players"][0]
+        self.assertEqual(p["discovered"], 0)   # only ducks so far: the mallard is the mystery
+        p = self.game.act({"owner": "duo one#na1", "action": "mergeAll"}, viewer=False, now=1000)["players"][0]
+        self.assertEqual(p["discovered"], 2)   # 5 ducks: two mallards, then a wood duck
+        self.assertIn("a new bird! Two mallards became a wood duck", p["log"][0]["text"])
+        data = self.game._load()   # merged away, it stays discovered
+        data["players"]["duo one#na1"]["birds"] = [0] * (len(utopia.BIRDS) - 1)
+        self.storage.write_json(self.game.path, data)
+        self.assertEqual(self.game.state(viewer=False, now=1000)["players"][0]["discovered"], 2)
+
     def test_every_game_together_lays_an_egg(self):
         self.game.state(viewer=False, now=1000)
         self.rows["duo one#na1"].insert(0, row("3", 3, win=False))

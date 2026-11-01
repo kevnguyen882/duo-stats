@@ -1500,12 +1500,16 @@ function renderMarsh(){
   const canPair = U.marshBirds.some((_, i)=>i < last && birdCount(p, i) >= 2);
   $('#marshNote').textContent = 'Two birds of a kind go into the mist and the Mystic zaps them into one of the next kind up. It collects 10% more than the two did '
     + 'and takes one pond spot, so merging makes room to hatch more. Drag a bird onto a matching one, or tap one and then another. Golden, champion and fire ducks stay as they are.';
-  $('#marshDetail').innerHTML = U.marshBirds.map((b, i)=>{
+  // the ladder up to the best bird made so far, then the next one as a mystery; anything beyond stays hidden
+  const known = p.discovered, next = known < last ? U.marshBirds[known + 1] : null;
+  $('#marshDetail').innerHTML = U.marshBirds.slice(0, known + 1).map((b, i)=>{
     const n = birdCount(p, i);
     return `<div class="udef">${pic(birdArt(b.id), 'duck pix')}<span></span><div class="t"><b>${esc(b.name)} <span class="ucount">${n}</span></b>
       <span>${perMin(birdEach(p, i))} breadcrumbs a minute each${i ? ` · from 2 ${esc(U.marshBirds[i - 1].name.toLowerCase())}s` : ' · from the Duck Lab'}</span></div>
       ${own && i < last ? `<button class="ghost" data-zap="${i}" ${n >= 2 ? '' : 'disabled'}>Zap a pair</button>` : ''}</div>`;
-  }).join('') + (own ? `<div class="ubtns"><button data-zap-all ${canPair ? '' : 'disabled'}>Send every pair in</button></div>`
+  }).join('') + (next ? `<div class="udef umystery">${pic('duck-plain', 'duck pix')}<span></span><div class="t"><b>???</b>
+      <span>Zap two ${esc(U.marshBirds[known].name.toLowerCase())}s to find out what comes out of the mist.</span></div></div>`
+      : '<p class="unote">Every bird in the marsh discovered.</p>') + (own ? `<div class="ubtns"><button data-zap-all ${canPair ? '' : 'disabled'}>Send every pair in</button></div>`
     : `<p class="unote">Only ${esc(shortName(p.riotId))} can send birds into their marsh.</p>`);
 }
 $('#marshDetail').addEventListener('click', e=>{

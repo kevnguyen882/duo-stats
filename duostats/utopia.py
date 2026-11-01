@@ -131,6 +131,12 @@ def bird_rate(tier: int, science: int = 0) -> float:
     return DUCK_RATE * MARSH_STEP ** tier * SCIENCE_BOOST ** science
 
 
+def discovered(s: dict) -> int:
+    """The biggest kind of bird this player has ever made (0: only ducks). The marsh's ladder shows up to it, and the
+    next one as a mystery; the rest stay hidden."""
+    return max(s.get("discovered", 0), max((i + 1 for i, n in enumerate(s["birds"]) if n), default=0))
+
+
 def pond_used(s: dict) -> int:
     """Pond spots taken: plain ducks and every bird from the Mystic Marsh, one spot each."""
     return s["pond"] + sum(s["birds"])
@@ -292,6 +298,7 @@ def migrate(s: dict):
     # saved before new ducks joined the ladder below the swans: each bird keeps its place, and so its worth (a swan made
     # from 8 ducks becomes a baker duck, a black swan a finance chad duck, and so on)
     s["birds"] += [0] * (len(BIRDS) - 1 - len(s["birds"]))
+    s["discovered"] = discovered(s)   # (and remembers a lucky mallard from growing ducklings)
     s["bakes"] = {t: u if isinstance(u, list) else [u] for t, u in s["bakes"].items()}   # one batch per machine, from before extra machines
 
 
@@ -1175,10 +1182,14 @@ class DuckUtopia:
             self._note(s, now, f"Started baking {name.lower()} ({', '.join(f'{n} {BADGE_INFO[b][1]}' for b, n in recipe.items())}).")
             return {"baking": t, "until": until}
         if action in ("merge", "mergeAll"):   # the Mystic Marsh: two of a kind in, one of the next kind out
+            before = discovered(s)
             made = merge_birds(s, body.get("tier"), action == "mergeAll")
             _fill_pond(s)   # merging frees pond spots: ducks waiting at the edge move in
+            s["discovered"] = discovered(s)
             if action == "mergeAll" and made:
                 self._note(s, now, f"The Mystic zapped {sum(made.values())} pair{'s' if sum(made.values()) != 1 else ''} in the Mystic Marsh.")
+            for t in range(before + 1, s["discovered"] + 1):   # newest first in the log: these go on top
+                self._note(s, now, f"The Mystic Marsh: a new bird! Two {BIRDS[t - 1][1].lower()}s became a {BIRDS[t][1].lower()}.")
             return {"made": made}
         raise ValueError("Unknown action.")
 
@@ -1204,7 +1215,7 @@ class DuckUtopia:
                                      "log", "founding", "founded")},
                 "crumbs": round(s["crumbs"], 2), "ducklings": sorted(s["ducklings"]),
                 "score": scores[i], "catchUp": catch_up(scores[i], best), "leading": len(scores) > 1 and scores[i] == best and scores.count(best) == 1,
-                "rate": round(crumb_rate(s), 3), "rateFrom": rate_breakdown(s), "heat": heat(s), "nestSpace": nest_space(lv["nests"]), "pondSpace": pond_space(lv["pond"]), "pondUsed": pond_used(s),
+                "rate": round(crumb_rate(s), 3), "rateFrom": rate_breakdown(s), "heat": heat(s), "nestSpace": nest_space(lv["nests"]), "pondSpace": pond_space(lv["pond"]), "pondUsed": pond_used(s), "discovered": discovered(s),
                 "districts": districts(s), "boostFrom": boost_breakdown(s, rows.get(p.key, [])),
                 "plaza": penta_plaza(s, rows.get(p.key, [])), "volcano": fire_ducks(s, rows.get(p.key, []), classes),
                 "lab": {"spawnCost": spawn_cost(flock(s)), "flock": flock(s), "lucky": lucky_chance(s), "gameEggs": GAME_EGGS, "winEggs": WIN_EGGS,
