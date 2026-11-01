@@ -1560,7 +1560,7 @@ function renderMarsh(){
   const p = U.players[viewing], own = mine(), last = U.marshBirds.length - 1;
   const canPair = U.marshBirds.some((_, i)=>i < last && birdCount(p, i) >= 2);
   $('#marshNote').textContent = 'Two birds of a kind go into the mist and the Mystic zaps them into one of the next kind up. It collects 10% more than the two did '
-    + 'and takes one pond spot, so merging makes room to hatch more. Drag a bird onto a matching one, or tap one and then another. Golden, champion and fire ducks stay as they are.';
+    + 'and takes one pond spot, so merging makes room to hatch more. Click the Mystic to zap your lowest pair, drag a bird onto a matching one, or tap one and then another. Golden, champion and fire ducks stay as they are.';
   // the ladder up to the best bird made so far, then the next one as a mystery; anything beyond stays hidden
   const known = p.discovered, next = known < last ? U.marshBirds[known + 1] : null;
   $('#marshDetail').innerHTML = U.marshBirds.slice(0, known + 1).map((b, i)=>{
@@ -1573,10 +1573,17 @@ function renderMarsh(){
       : '<p class="unote">Every bird in the marsh discovered.</p>') + (own ? `<div class="ubtns"><button data-zap-all ${canPair ? '' : 'disabled'}>Send every pair in</button></div>`
     : `<p class="unote">Only ${esc(shortName(p.riotId))} can send birds into their marsh.</p>`);
 }
-$('#marshDetail').addEventListener('click', e=>{
-  const z = e.target.closest('[data-zap]');
-  if(z){ marshRoom.zap(+z.dataset.zap); return act({action: 'merge', tier: +z.dataset.zap}); }
-  if(e.target.closest('[data-zap-all]')){ marshRoom.zapAll(); act({action: 'mergeAll'}); }
+$('#marshDetail').addEventListener('click', async e=>{
+  const z = e.target.closest('[data-zap]'), all = e.target.closest('[data-zap-all]');
+  if(!z && !all) return;
+  const r = $('#marshScene').getBoundingClientRect();
+  if(r.top < 0 || r.bottom > innerHeight){   // bring the marsh into view first, so the zap is seen
+    const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    $('#marshScene').scrollIntoView({behavior: calm ? 'auto' : 'smooth', block: 'center'});
+    if(!calm) await new Promise(res=>setTimeout(res, 450));
+  }
+  if(z){ marshRoom.zap(+z.dataset.zap); act({action: 'merge', tier: +z.dataset.zap}); }
+  else { marshRoom.zapAll(); act({action: 'mergeAll'}); }
 });
 
 const MW = 480, MH = 260, MCX = 240, MCY = 132, MRX = 214, MRY = 104, LILY = {x: 74, y: 214}, MARSH_SHOWN = 40;
@@ -1708,11 +1715,18 @@ const marshRoom = (()=>{
     return best;
   }
   const onToad = p => Math.abs(p.x - LILY.x) < 30 && p.y > LILY.y - 60 && p.y < LILY.y - 4;
+  function toadClick(){   // in your own marsh the Mystic zaps your lowest pair (so you see it, wherever the ladder's scrolled to)
+    const q = U.players[viewing], low = U.marshBirds.findIndex((_, i)=>i < U.marshBirds.length - 1 && birdCount(q, i) >= 2);
+    if(mine() && low >= 0){ zap(low); act({action: 'merge', tier: low}); return; }   // (the new bird's name pops up over it)
+    cast = performance.now();
+    $('#msg').className = 'msg';
+    $('#msg').textContent = `The Mystic: “${mine() ? 'No pairs to zap. Bring me two of a kind.' : LINES[line++ % LINES.length]}”`;
+  }
   const LINES = ['Ribbit. Bring me two of a kind.', 'Two go in, one comes out. That is the way of the marsh.', 'Mind the mist. It tickles.',
     'I have been turning ducks into swans since before you hatched.', 'A royal swan? Patience, little one. Patience.'];
   cv.addEventListener('pointerdown', e=>{
     const p = at(e), b = mine() && birdAt(p);
-    if(!b){ if(onToad(p)){ cast = performance.now(); $('#msg').className = 'msg'; $('#msg').textContent = `The Mystic: “${LINES[line++ % LINES.length]}”`; } return; }
+    if(!b){ if(onToad(p)) toadClick(); return; }
     cv.setPointerCapture(e.pointerId);
     drag = {b, sx: p.x, sy: p.y, ox: b.x, oy: b.y, moved: false, target: null, ok: false};
   });
