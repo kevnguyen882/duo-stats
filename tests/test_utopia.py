@@ -54,7 +54,28 @@ class PipelineTests(unittest.TestCase):
         s = new_utopia("A#1", 0)
         s.update(pond=10, boost=0.5)
         s["levels"]["bakery"] = 2
-        self.assertAlmostEqual(crumb_rate(s), 10 * (1 + 2 * utopia.BAKERY_BONUS) * 1.5)
+        self.assertAlmostEqual(crumb_rate(s), 10 * 1.25 ** 2 * 1.5)   # bakery levels compound
+
+    def test_bakery_compounds(self):
+        s = new_utopia("A#1", 0)
+        s["pond"] = 10
+        s["levels"]["bakery"] = 10
+        self.assertAlmostEqual(crumb_rate(s), 10 * 1.25 ** 10)   # x9.3, where +25% a level gave x3.5
+
+    def test_duck_science_multiplies_pond_ducks_only(self):
+        s = new_utopia("A#1", 0)
+        s.update(pond=10, golden=1)
+        s["levels"]["science"] = 2
+        self.assertAlmostEqual(crumb_rate(s), 10 * 1.5 ** 2 + utopia.GOLDEN_RATE)
+        self.assertEqual(utopia.upgrade_cost("science", 0), 1000)
+        self.assertEqual(utopia.upgrade_cost("science", 2), 9000)
+
+    def test_win_rewards_grow_with_income(self):
+        s = new_utopia("A#1", 0)
+        s["pond"] = 1
+        self.assertEqual(utopia.win_crumbs(s), utopia.WIN_CRUMBS)   # early on: the flat amount
+        s["pond"] = 100
+        self.assertEqual(utopia.win_crumbs(s), crumb_rate(s) * utopia.WIN_MINUTES)   # later: half an hour of breadcrumbs
 
     def test_rate_breakdown_adds_up(self):
         s = new_utopia("A#1", 0)
@@ -325,13 +346,13 @@ class GameTests(TempStorageCase):
         self.assertTrue(two["leading"] or one["leading"])
 
     def test_a_new_win_gives_breadcrumbs_and_raids_both(self):
-        self.game.state(viewer=False, now=1000)
+        rate = self.game.state(viewer=False, now=1000)["players"][0]["rate"]
         self.rows["duo one#na1"].insert(0, row("3", 3))
         self.rows["duo two#na2"].insert(0, row("3", 3, champion="Garen"))
         v = self.game.state(viewer=False, now=2000)
         one, two = v["players"]
         self.assertEqual(len(one["ducklings"]), 0)   # no duckling for a win: they come from the infirmary
-        self.assertIn(f"{utopia.WIN_CRUMBS} breadcrumbs", one["log"][-1 if not one["raids"] else 1]["text"])
+        self.assertIn(f"{round(rate * utopia.WIN_MINUTES):,} breadcrumbs", one["log"][-1 if not one["raids"] else 1]["text"])   # half an hour's worth
         self.assertEqual(one["raids"][0]["matchId"], "3")
         self.assertEqual(one["raids"][0]["geese"], two["raids"][0]["geese"])   # the same wave
         again = self.game.state(viewer=False, now=3000)

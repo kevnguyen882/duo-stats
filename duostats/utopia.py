@@ -15,8 +15,8 @@ The duck pipeline: new ducks come from the Duck Infirmary, a lab whose nests are
 duckling into a free nest for breadcrumbs (spawn_cost(), a little more after each one; never while the nests are
 full). It grows there for grow_minutes(), then moves to the pond, or waits at its edge if it's full. Only ducks in
 the pond collect breadcrumbs (golden, champion and caught fire ducks collect wherever they are). The infirmary's upgrades:
-more nests, and a shorter incubation time. Wins used to give ducklings; any still in the old lost and found box move
-to nests.
+more nests, a shorter incubation time, and Duck Science (each level: pond ducks collect x1.5). Wins used to give
+ducklings; any still in the old lost and found box move to nests.
 
 The Champion Quarter is a lounge where your five defenders rest; there you can see each one's stats and buy it hats
 (just for looks: HATS). Hats belong to the champion, so they stay if it leaves the squad and comes back.
@@ -59,13 +59,17 @@ DUCK_RATE = 1.0              # breadcrumbs a minute for each duck in the pond
 GOLDEN_RATE = 3.0            # ... for each golden duck (pentakills)
 CHAMPION_RATE = 1.5          # ... for each champion duck (S- or S on a champion)
 FIRE_RATE = 2.0              # ... for each caught fire duck (S+)
-BAKERY_BONUS = 0.25          # +25% breadcrumbs per bakery level
+BAKERY_BONUS = 0.25          # each bakery level multiplies breadcrumbs by 1.25 (compounding: x9.3 at level 10)
+SCIENCE_BOOST = 1.5          # each Duck Science level multiplies what every pond duck collects by 1.5
 TRIPLE_BOOST, QUADRA_BOOST = 0.005, 0.015   # permanent breadcrumb boost per triple / quadra kill
 GROW_MINUTES = 8 * 60        # how long a duckling takes to grow in its nest, before incubation upgrades
 INCUBATION_SPEEDUP = 0.8     # each incubation time level: 20% less time in the nest
 SPAWN_COST = 100             # breadcrumbs for the first duckling spawned ...
 SPAWN_GROWTH = 1.05          # ... and 5% more for each one after (slow at first, then steep)
-WIN_CRUMBS = 100              # bonus breadcrumbs for a new win (catch-up boost applies)
+WIN_CRUMBS = 100              # bonus breadcrumbs for a new win, at least (catch-up boost applies) ...
+WIN_MINUTES = 30             # ... or this many minutes of breadcrumbs, whichever is more, so wins keep mattering
+RAID_MINUTES = 15            # a raid win: 30 breadcrumbs a goose, or this many minutes of breadcrumbs if that's more
+STEAL_MINUTES = 10           # a raid loss: 15% of breadcrumbs, up to 500 or this many minutes of breadcrumbs
 MAX_REPORTS, MAX_LOG = 10, 30
 
 # hat -> (name, breadcrumbs), cheapest first
@@ -83,8 +87,9 @@ BUILDINGS = {
     "spa":    (20000, 4.0, 2, [(1, "Spa"), (2, "Hot springs")]),
     "fence":  (600, 1.7, 9, [(1, "Fences"), (4, "Scarecrows"), (7, "Honk-proof walls")]),
     "incubation": (500, 2.0, 10, [(1, "Incubation time")]),   # in the Duck Infirmary
+    "science": (1000, 3.0, 15, [(1, "Duck Science")]),          # in the Duck Infirmary: what each pond duck collects
 }
-START_LEVELS = {"nests": 1, "pond": 1, "bakery": 0, "spa": 0, "fence": 0, "incubation": 0}
+START_LEVELS = {"nests": 1, "pond": 1, "bakery": 0, "spa": 0, "fence": 0, "incubation": 0, "science": 0}
 
 
 def grow_minutes(level: int) -> float:
@@ -121,7 +126,7 @@ def score(s: dict) -> int:
     ducks = s["pond"] + s["edge"] + len(s["ducklings"]) + s["lost"]
     lv = s["levels"]
     return (10 * ducks + 50 * s["golden"] + 40 * len(s["champs"]) + 50 * len(s["caught"])
-            + 20 * (lv["nests"] + lv["pond"]) + 25 * lv["bakery"] + 60 * lv["spa"] + 15 * lv["fence"]
+            + 20 * (lv["nests"] + lv["pond"]) + 25 * (lv["bakery"] + lv["science"]) + 60 * lv["spa"] + 15 * lv["fence"]
             + 100 * len(districts(s)) + 30 * s["raidWins"])
 
 
@@ -153,15 +158,20 @@ def crumb_rate(s: dict) -> float:
 
 
 def rate_breakdown(s: dict) -> dict:
-    """Where the breadcrumbs a minute come from: each kind of duck (how many, and how much each collects), then the
-    bakery's bonus and the multikill boost, which multiply them all."""
-    sources = [("pond", "Ducks in the pond", s["pond"], DUCK_RATE), ("golden", "Golden ducks (Penta Plaza)", s["golden"], GOLDEN_RATE),
+    """Where the breadcrumbs a minute come from: each kind of duck (how many, and how much each collects; Duck Science
+    raises what pond ducks collect), then the bakery's bonus and the multikill boost, which multiply them all."""
+    sources = [("pond", "Ducks in the pond", s["pond"], DUCK_RATE * SCIENCE_BOOST ** s["levels"]["science"]), ("golden", "Golden ducks (Penta Plaza)", s["golden"], GOLDEN_RATE),
                ("champion", "Champion ducks (Champion Quarter)", len(s["champs"]), CHAMPION_RATE),
                ("fire", "Caught fire ducks (in the Spa)", len(s["caught"]), FIRE_RATE)]
     base = sum(n * each for _, _, n, each in sources)
-    bakery = BAKERY_BONUS * s["levels"]["bakery"]
+    bakery = (1 + BAKERY_BONUS) ** s["levels"]["bakery"] - 1
     return {"sources": [{"id": k, "name": name, "count": n, "each": each, "perMin": n * each} for k, name, n, each in sources],
             "base": base, "bakery": bakery, "boost": s["boost"], "total": base * (1 + bakery) * (1 + s["boost"])}
+
+
+def win_crumbs(s: dict) -> float:
+    """A win's breadcrumbs, before the catch-up boost: WIN_MINUTES of breadcrumbs, or WIN_CRUMBS early on."""
+    return max(WIN_CRUMBS, crumb_rate(s) * WIN_MINUTES)
 
 
 # ---- the duck pipeline over time ----
@@ -765,8 +775,9 @@ class DuckUtopia:
                 recs = champion_records(rows.get(key, []))
                 squad = self._squad(s, recs, classes)
                 if r.get("win"):
-                    s["crumbs"] += WIN_CRUMBS * boost
-                    got.insert(0, f"{round(WIN_CRUMBS * boost)} breadcrumbs")
+                    won = win_crumbs(s) * boost
+                    s["crumbs"] += won
+                    got.insert(0, f"{round(won):,} breadcrumbs")
                     if s["ranks"].get(r["champion"], 0) < MAX_RANK:
                         s["challenges"].append(r["champion"])   # a win on any champion: a boss challenge in the Training Grounds
                         got.append("a Training Grounds challenge")
@@ -780,8 +791,8 @@ class DuckUtopia:
                         s["perks"].pop(d["champion"], None)
                     rep.update(matchId=mid, t=now, champion=r["champion"])
                     s["raids"] = ([rep] + s["raids"])[:MAX_REPORTS]
-                    self._note(s, now, "Goose raid: " + (f"won! +{rep['reward']['crumbs']} breadcrumbs, +{rep['reward']['feathers']} feathers"
-                                                         if rep["win"] else f"lost. The geese took {rep['stolen']} breadcrumbs."))
+                    self._note(s, now, "Goose raid: " + (f"won! +{rep['reward']['crumbs']:,} breadcrumbs, +{rep['reward']['feathers']} feathers"
+                                                         if rep["win"] else f"lost. The geese took {rep['stolen']:,} breadcrumbs."))
                 _fill_nests(s, now)
                 scores[key] = score(s)
         for p in players:   # grades that came in after their game was counted still earn their ducks
@@ -853,12 +864,12 @@ class DuckUtopia:
         """golden: the bonus from defenders with golden spa salts (0.6 = +60%)."""
         if rep["win"]:
             s["raidWins"] += 1
-            crumbs, feathers = round(30 * rep["total"] * boost * (1 + golden)), round((1 + rep["wave"] // 5) * boost * (1 + golden))
+            crumbs, feathers = round(max(30 * rep["total"], crumb_rate(s) * RAID_MINUTES) * boost * (1 + golden)), round((1 + rep["wave"] // 5) * boost * (1 + golden))
             s["crumbs"] += crumbs
             s["feathers"] += feathers
             rep["reward"], rep["stolen"] = {"crumbs": crumbs, "feathers": feathers}, 0
         else:
-            stolen = round(min(s["crumbs"] * 0.15, 500))
+            stolen = round(min(s["crumbs"] * 0.15, max(500, crumb_rate(s) * STEAL_MINUTES)))
             s["crumbs"] -= stolen
             rep["reward"], rep["stolen"] = {"crumbs": 0, "feathers": 0}, stolen
 
@@ -1133,7 +1144,8 @@ class DuckUtopia:
                 "champions": sorted(({"champion": c, "cls": classes.get(c, "fighter"), "games": r["games"]}
                                      for c, r in recs.items()), key=lambda x: (-x["games"], x["champion"])),
             })
-        return {"now": now, "me": 1 if viewer else 0, "players": out, "goldenRate": GOLDEN_RATE, "fireRate": FIRE_RATE, "winCrumbs": WIN_CRUMBS,
+        return {"now": now, "me": 1 if viewer else 0, "players": out, "goldenRate": GOLDEN_RATE, "fireRate": FIRE_RATE, "winCrumbs": WIN_CRUMBS, "winMinutes": WIN_MINUTES, "raidMinutes": RAID_MINUTES,
+                "scienceBoost": SCIENCE_BOOST,
                 "hatShop": [{"id": h, "name": n, "cost": c} for h, (n, c) in HATS.items()],
                 "salts": [{"id": k, "name": n, "does": does} for k, (n, does) in SALTS.items()],
                 "temps": [{"id": k, "name": n, "cost": c, "minutes": m, "power": pw} for k, (n, c, m, pw) in TEMPS.items()],

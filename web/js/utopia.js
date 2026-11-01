@@ -17,16 +17,18 @@ async function api(path, body){
   return j;
 }
 const shortName = id => String(id).split('#')[0];
-const fmt = n => n >= 1e6 ? (n/1e6).toFixed(n >= 1e7 ? 0 : 1) + 'M' : n >= 1e4 ? (n/1e3).toFixed(n >= 1e5 ? 0 : 1) + 'k' : Math.floor(n).toLocaleString();
+const fmt = n => n >= 1e12 ? (n/1e12).toFixed(n >= 1e13 ? 0 : 1) + 'T' : n >= 1e9 ? (n/1e9).toFixed(n >= 1e10 ? 0 : 1) + 'B'
+  : n >= 1e6 ? (n/1e6).toFixed(n >= 1e7 ? 0 : 1) + 'M' : n >= 1e4 ? (n/1e3).toFixed(n >= 1e5 ? 0 : 1) + 'k' : Math.floor(n).toLocaleString();
 const COLORS = ['var(--p1)', 'var(--p2)'];
 const BUILD_INFO = {   // building -> (art for its level, what it does)
   pond: [l=>`pond-${l >= 7 ? '3-lagoon' : l >= 4 ? '2-lake' : '1-pond'}`, (p)=>`Room for ${p.pondSpace} ducks; only ducks in the pond collect breadcrumbs`],
-  bakery: [l=>`bakery-${Math.min(3, Math.max(1, Math.ceil(l / 3)))}`, (p)=>p.levels.bakery ? `+${p.levels.bakery * 25}% breadcrumbs (+25% a level)` : 'Makes breadcrumbs faster: +25% a level'],
+  bakery: [l=>`bakery-${Math.min(3, Math.max(1, Math.ceil(l / 3)))}`, (p)=>p.levels.bakery ? `${bakeryPct(p.levels.bakery)} breadcrumbs (×1.25 a level, compounding)` : 'Makes breadcrumbs faster: ×1.25 a level, compounding'],
   spa: [l=>l >= 2 ? 'spa-2-hotsprings' : 'spa-1-spa', (p)=>p.levels.spa >= 2 ? 'Two pools for recovery soaks (see the Spa panel), and a big boost to your Ductopia Score'
     : p.levels.spa ? 'A pool for recovery soaks (see the Spa panel); the Hot springs add a second' : 'Recovery soaks that refresh your defenders with perks, and a big boost to your Ductopia Score'],
   fence: [()=>'tile-mud', (p)=>p.levels.fence ? `Geese bite ${Math.round(Math.min(.06 * p.levels.fence, .5) * 100)}% softer in raids` : 'Goose defences: geese bite 6% softer a level in raids'],
 };
-const LAB = ['nests', 'incubation'];   // the Duck Infirmary's upgrades, shown in its lab rather than under Build
+const LAB = ['nests', 'incubation', 'science'];   // the Duck Infirmary's upgrades, shown in its lab rather than under Build
+const bakeryPct = lvl => `+${Math.round((1.25 ** lvl - 1) * 100).toLocaleString()}%`;   // bakery levels compound: x1.25 each
 const ROOMS = [...LAB, 'bakery'];      // ... and the bakery's, in the Bakery
 const fmtMin = m => { m = Math.round(m); return m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}` : `${m} min`; };
 const clock = ms => { const m = Math.floor(Math.max(0, ms) / 60000), sec = Math.floor(Math.max(0, ms) / 1000) % 60; return `${m}:${String(sec).padStart(2, '0')}`; };
@@ -141,7 +143,7 @@ function rateTip(p){
     <table class="utip"><tr class="${r.bakery ? '' : 'sub'}"><td>Bakery <span>${p.levels.bakery ? `level ${p.levels.bakery}, +${pctOf(r.bakery)}` : 'not built yet'}</span></td><td>${times(r.bakery)}</td></tr>
       <tr class="${r.boost ? '' : 'sub'}"><td>Multikill boost <span>+${pctOf(r.boost)}, from triples and quadras</span></td><td>${times(r.boost)}</td></tr>
       <tr><td><b>Total</b></td><td>${perMin(r.total)}/min</td></tr></table>
-    <p>Wild fire ducks collect nothing until they're caught. On top of this, each game together brings ${U.winCrumbs || 100} breadcrumbs for a win, and whatever your defenders win in the goose raid.</p>`;
+    <p>Wild fire ducks collect nothing until they're caught. On top of this, each win together brings ${U.winMinutes} minutes' worth of breadcrumbs (at least ${U.winCrumbs}), and a goose raid win ${U.raidMinutes} minutes' worth or more.</p>`;
 }
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 function kills(t, q){ return [t && plural(t, 'triple'), q && plural(q, 'quadra')].filter(Boolean).join(', '); }
@@ -161,7 +163,7 @@ function boostTip(p){
 function buildRow(b, x, p, own, img, what, next){
   const btn = x.cost == null ? '<span class="max">Fully upgraded</span>'
     : `<button data-build="${b}" ${own ? '' : 'disabled'} data-cost="${x.cost}">${pic('icon-breadcrumb')}${fmt(x.cost)}</button>`;
-  return `<div class="ubld">${pic(img)}<div class="t"><b>${esc(x.level ? `${x.name} · level ${x.level}` : b === 'incubation' ? `${x.next} · not upgraded yet` : `${x.next} (not built)`)}</b>
+  return `<div class="ubld">${pic(img)}<div class="t"><b>${esc(x.level ? `${x.name} · level ${x.level}` : b === 'incubation' || b === 'science' ? `${x.next} · not upgraded yet` : `${x.next} (not built)`)}</b>
     <span>${esc(what)}${next ? `. Next: ${esc(next)}` : ''}</span></div>${btn}</div>`;
 }
 function renderBuild(){
@@ -170,9 +172,10 @@ function renderBuild(){
     const [img, what] = BUILD_INFO[b];
     return buildRow(b, x, p, own, img(Math.max(1, x.level)), what(p), x.next && x.level ? (x.next === x.name ? `level ${x.level + 1}` : x.next) : '');
   }).join('') + (own ? '' : `<p class="unote">Only ${esc(shortName(p.riotId))} can build here.</p>`)
-    + '<p class="unote">The nests and spawning ducklings are in the Duck Infirmary, and the bakery and its machines in the Bakery: click them in your Ductopia.</p>';
+    + '<p class="unote">The nests, spawning ducklings and Duck Science are in the Duck Infirmary, and the bakery and its machines in the Bakery: click them in your Ductopia.</p>';
   affordable();
 }
+const duckEach = p => p.rateFrom.sources.find(x=>x.id === 'pond').each;   // what one pond duck collects, with Duck Science
 function renderLab(){
   const p = U.players[viewing], own = mine(), L = p.lab, bs = p.buildings;
   const free = p.nestSpace - p.ducklings.length - p.lost, full = free <= 0;
@@ -182,8 +185,10 @@ function renderLab(){
       <button data-spawn data-cost="${L.spawnCost}" data-full="${full ? 1 : ''}" ${own && !full ? '' : 'disabled'}>${pic('icon-breadcrumb')}${fmt(L.spawnCost)}</button></div>`
     + buildRow('nests', bs.nests, p, own, 'lab-chamber', `Room for ${p.nestSpace} ducklings to grow, one per chamber`, bs.nests.cost != null ? `room for ${L.nestSpaceNext}` : '')
     + buildRow('incubation', bs.incubation, p, own, 'egg', `Ducklings grow into ducks in ${fmtMin(L.grow)}`, L.growNext ? fmtMin(L.growNext) : '')
+    + buildRow('science', bs.science, p, own, 'duck-mage', `Each pond duck collects ${perMin(duckEach(p))} breadcrumbs a minute (×${U.scienceBoost} a level)`,
+               bs.science.cost != null ? `${perMin(duckEach(p) * U.scienceBoost)} a minute each` : '')
     + (own ? '' : `<p class="unote">Only ${esc(shortName(p.riotId))} can use this infirmary.</p>`);
-  $('#labNote').textContent = `Spawn ducklings into the infirmary's nests for breadcrumbs. Each one grows in its fluid chamber for ${fmtMin(L.grow)}, then joins the pond. While every nest is full you can't spawn more: upgrade the nests for room, and the incubation time to grow them faster.`;
+  $('#labNote').textContent = `Spawn ducklings into the infirmary's nests for breadcrumbs. Each one grows in its fluid chamber for ${fmtMin(L.grow)}, then joins the pond. While every nest is full you can't spawn more: upgrade the nests for room, and the incubation time to grow them faster. Duck Science makes every pond duck collect more.`;
   affordable();
 }
 $('#labBuild').addEventListener('click', e=>{
@@ -502,7 +507,7 @@ function renderBakery(){
   $('#bakeryNote').textContent = 'Bake sweet treats here, one for each class. Each machine is unlocked by your bakery level; a treat costs breadcrumbs and badges, '
     + 'and takes a while to bake. Badges spent here only leave Ductopia: they stay in your badge showcase. Treats lure wild fire ducks at the Volcano Spa: each class\'s treat, that class\'s fire ducks.';
   let html = buildRow('bakery', bs.bakery, p, own, BUILD_INFO.bakery[0](Math.max(1, lvl)),
-    `${lvl ? `+${lvl * 25}% breadcrumbs` : 'Makes breadcrumbs faster'} (+25% a level), and unlocks machines and their speed upgrades`,
+    `${lvl ? `${bakeryPct(lvl)} breadcrumbs` : 'Makes breadcrumbs faster'} (×1.25 a level, compounding), and unlocks machines and their speed upgrades`,
     bs.bakery.cost != null ? `level ${lvl + 1}${nextUnlock ? `, unlocks the ${nextUnlock.machine.toLowerCase()}` : ''}${nextSpeedLevel}` : '');
   html += `<h3 class="uspah">Badges to spend</h3><div class="ubadges">${Object.keys(U.badgeInfo).map(id=>{
     const left = B.badges[id] || 0, earned = B.earned[id] || 0;
