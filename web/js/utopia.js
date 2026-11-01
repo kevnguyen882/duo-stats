@@ -834,6 +834,7 @@ const W = 480, H = 280;
 // Duck Lab and the Volcano Spa down the left, the Bakery and Spa top right, the Plaza and Quarter bottom right
 const PLACE_SIZE = 44;
 const CRATE_SPOT = {x: 270, y: 28, s: 32};   // where special deliveries sit on the map
+const EGGS = {x: 70, y: 14};                  // eggs waiting for a nest, beside the Duck Lab
 const PLACES = {lab: [16, 8], marsh: [16, 100], volcano: [16, 192], bakery: [350, 8], spa: [422, 8], plaza: [350, 192], quarter: [422, 192]};
 const scene = (()=>{
   const cv = $('#scene'), g = cv.getContext('2d');
@@ -924,9 +925,9 @@ const scene = (()=>{
       const hop = Math.abs(Math.sin(now / 300 + i)) * 2;
       sprite('duckling', x - 4 + (i % 4) * 13, y + S + 25 + Math.floor(i / 4) * 11 - hop, 11);
     }
-    if(p.lost){
-      g.fillStyle = '#a47148'; g.fillRect(x + S + 8, y + 16, 20, 16); g.fillStyle = '#6b4423'; g.fillRect(x + S + 8, y + 16, 20, 3); g.fillRect(x + S + 17, y + 16, 2, 16);
-      label(`Lost & found: ${p.lost}`, x + S + 18, y + 34, 'center', '#ffd8a8');
+    if(p.lost){   // eggs waiting for a free nest, stacked beside the Duck Lab (clicking them opens it)
+      for(let i = 0; i < Math.min(p.lost, 6); i++) sprite('egg', EGGS.x + (i % 3) * 10, EGGS.y + 10 - Math.floor(i / 3) * 9, 10);
+      label(`${plural(p.lost, 'egg')}`, EGGS.x + 15, EGGS.y + 22, 'center', '#ffd8a8');
     }
     // bakery and spa (an empty plot until built)
     [x, y] = at('bakery');
@@ -947,15 +948,15 @@ const scene = (()=>{
       const hop = Math.round(Math.abs(Math.sin(now / 350)) * 3);
       sprite('mailman-duck', CRATE_SPOT.x, CRATE_SPOT.y - hop, CRATE_SPOT.s);
       sprite('special-delivery', CRATE_SPOT.x + CRATE_SPOT.s - 6, CRATE_SPOT.y + CRATE_SPOT.s - 16, 16);   // the parcel at its feet
-      label(`${p.crates} deliver${p.crates === 1 ? 'y' : 'ies'}${mine() ? ': open!' : ''}`, CRATE_SPOT.x + CRATE_SPOT.s / 2, CRATE_SPOT.y + CRATE_SPOT.s + 2, 'center', '#ffe066');
+      label(`${p.crates} deliver${p.crates === 1 ? 'y' : 'ies'}${mine() ? ': open!' : ''}`, CRATE_SPOT.x + CRATE_SPOT.s / 2, CRATE_SPOT.y - 14, 'center', '#ffe066');   // above, clear of the pond's label
     }
     [x, y] = at('marsh');   // the Mystic Marsh, where the Mystic zaps pairs of birds into bigger ones
     sprite('district-mystic-marsh', x, y, S); names(x, y, 'Mystic Marsh', p.birds.some(n=>n) ? plural(p.birds.reduce((a, n)=>a + n, 0), 'bird') : 'no birds yet');
     // districts: unlocked by real achievements only
-    const D = [['penta', 'plaza', 'district-penta-plaza', 'Plaza', 'a penta', `${p.golden} golden`, 'duck-golden'],
-               ['champion', 'quarter', 'district-champion-quarter', 'Quarter', 'an S', `${Object.keys(p.champs).length} champs`, 'duck-fighter'],
-               ['volcano', 'volcano', 'district-volcano-spa', 'Volcano', 'an S+', `${p.caught.length}/${(p.volcano || []).length} caught`, 'duck-fire']];
-    D.forEach(([id, place, img, name, need, more, duck])=>{
+    const D = [['penta', 'plaza', 'district-penta-plaza', 'Plaza', 'penta', `${p.golden} golden`, 'duck-golden'],
+               ['champion', 'quarter', 'district-champion-quarter', 'Quarter', 'S', `${Object.keys(p.champs).length} champs`, 'duck-fighter'],
+               ['volcano', 'volcano', 'district-volcano-spa', 'Volcano', 'S+', `${p.caught.length}/${(p.volcano || []).length} caught`, 'duck-fire']];
+    D.forEach(([id, place, img, name, need, more, duck])=>{   // (lock hints kept short: the bottom places sit close together)
       const [x, y] = at(place), open = p.districts.includes(id);
       g.globalAlpha = open ? 1 : .35; sprite(img, x, y, S); g.globalAlpha = 1;
       if(open){ sprite(duck, x + S * .62, y + S * .62, 14); names(x, y, name, more); }
@@ -973,8 +974,13 @@ const scene = (()=>{
     const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * W / r.width, y = (e.clientY - r.top) * H / r.height;
     return x >= CRATE_SPOT.x - 4 && x < CRATE_SPOT.x + CRATE_SPOT.s + 4 && y >= CRATE_SPOT.y - 6 && y < CRATE_SPOT.y + CRATE_SPOT.s + 14;
   };
-  cv.addEventListener('mousemove', e=>cv.classList.toggle('go', !!spotAt(e) || onCrate(e)));
-  cv.addEventListener('click', e=>{ if(onCrate(e)) return openCrate(); const o = spotAt(e); if(o) show(o.view); });
+  const onEggs = e => {   // the eggs waiting beside the Duck Lab
+    if(!U || !U.players[viewing].lost) return false;
+    const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * W / r.width, y = (e.clientY - r.top) * H / r.height;
+    return x >= EGGS.x - 2 && x < EGGS.x + 34 && y >= EGGS.y - 2 && y < EGGS.y + 34;
+  };
+  cv.addEventListener('mousemove', e=>cv.classList.toggle('go', !!spotAt(e) || onCrate(e) || onEggs(e)));
+  cv.addEventListener('click', e=>{ if(onCrate(e)) return openCrate(); if(onEggs(e)) return show('lab'); const o = spotAt(e); if(o) show(o.view); });
   window.addEventListener('resize', size);
   size(); requestAnimationFrame(draw);
   return {reset, size};
