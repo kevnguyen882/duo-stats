@@ -1611,9 +1611,11 @@ const marshRoom = (()=>{
   const inMarsh = (x, y) => ((x - MCX) / (MRX - 26)) ** 2 + ((y - MCY) / (MRY - 22)) ** 2 <= 1;
   const nearPad = (x, y) => Math.hypot(x - LILY.x, y - (LILY.y - 26)) < 52;
   function spot(){ for(let i = 0; i < 200; i++){ const x = MCX - MRX + Math.random() * MRX * 2, y = MCY - MRY + Math.random() * MRY * 2; if(inMarsh(x, y) && !nearPad(x, y)) return {x, y}; } return {x: MCX, y: MCY}; }
-  function shown(p){   // how many of each kind to draw: the bigger birds first, up to MARSH_SHOWN in all
-    let left = MARSH_SHOWN; const out = U.marshBirds.map(()=>0);
-    for(let i = U.marshBirds.length - 1; i >= 0; i--){ out[i] = Math.min(birdCount(p, i), left); left -= out[i]; }
+  function shown(p){   // how many of each kind to draw, up to MARSH_SHOWN in all: first up to two of every kind (so any pair
+    // the Mystic can zap is on screen), then the rest, bigger birds first
+    const out = U.marshBirds.map((_, i)=>Math.min(birdCount(p, i), 2));
+    let left = MARSH_SHOWN - out.reduce((a, n)=>a + n, 0);
+    for(let i = U.marshBirds.length - 1; i >= 0 && left > 0; i--){ const more = Math.min(birdCount(p, i) - out[i], left); out[i] += more; left -= more; }
     return out;
   }
   function reset(){   // match the birds drawn to the saved counts, keeping where the ones still here are swimming
@@ -1652,11 +1654,15 @@ const marshRoom = (()=>{
     fx.push({kind: 'zap', t: now, x: n.x, y: n.y - 16 * scale(t) / 3, seed: Math.random()}, {kind: 'fog', t: now + 120, x: n.x, y: n.y}, {kind: 'bubbles', t: now + 60, x: n.x, y: n.y + 6, seed: Math.random()},
             {kind: 'pop', t: now + 220, x: n.x, y: n.y - 8 * scale(t) - 4, text: `${U.marshBirds[t].name}!`});
   }
-  function zap(t){ const two = birds.filter(b=>b.tier === t).slice(0, 2); if(two.length === 2) transform(two[0], two[1]); }
+  function zap(t){   // (if the pair isn't on screen, it swims into view for the zap)
+    const two = birds.filter(b=>b.tier === t).slice(0, 2);
+    while(two.length < 2){ const b = {tier: t, ...spot(), born: 0, phase: Math.random() * 6}; birds.push(b); two.push(b); }
+    transform(two[0], two[1]);
+  }
   function merge(a, b){
     if(a.tier !== b.tier){ $('#msg').className = 'msg err'; $('#msg').textContent = `Only matching birds go in together: a ${U.marshBirds[a.tier].name.toLowerCase()} needs another.`; return false; }
     if(a.tier === U.marshBirds.length - 1) return false;
-    transform(a, b); act({action: 'merge', tier: a.tier}); return true;
+    transform(a, b); inTurn(()=>act({action: 'merge', tier: a.tier})); return true;
   }
   function draw(now){
     requestAnimationFrame(draw);
@@ -1725,9 +1731,19 @@ const marshRoom = (()=>{
     return best;
   }
   const onToad = p => Math.abs(p.x - LILY.x) < 30 && p.y > LILY.y - 60 && p.y < LILY.y - 4;
+  // merges are saved one at a time: a click while one is still saving waits its turn, rather than being dropped (act()
+  // ignores a request while another is in flight), so every click counts and each zap matches what's saved
+  let queue = Promise.resolve();
+  const inTurn = task => { queue = queue.then(async ()=>{ while(busy) await new Promise(r=>setTimeout(r, 40)); await task(); }).catch(()=>{}); };
   function toadClick(){   // in your own marsh the Mystic zaps your lowest pair (so you see it, wherever the ladder's scrolled to)
-    const q = U.players[viewing], low = U.marshBirds.findIndex((_, i)=>i < U.marshBirds.length - 1 && birdCount(q, i) >= 2);
-    if(mine() && low >= 0){ zap(low); act({action: 'merge', tier: low}); return; }   // (the new bird's name pops up over it)
+    if(mine()) return inTurn(async ()=>{
+      const q = U.players[viewing], low = U.marshBirds.findIndex((_, i)=>i < U.marshBirds.length - 1 && birdCount(q, i) >= 2);   // as saved so far
+      if(low < 0) return noPairs();
+      zap(low); await act({action: 'merge', tier: low});   // (the new bird's name pops up over it)
+    });
+    noPairs();
+  }
+  function noPairs(){
     cast = performance.now();
     $('#msg').className = 'msg';
     $('#msg').textContent = `The Mystic: “${mine() ? 'No pairs to zap. Bring me two of a kind.' : LINES[line++ % LINES.length]}”`;
@@ -1735,8 +1751,10 @@ const marshRoom = (()=>{
   const LINES = ['Ribbit. Bring me two of a kind.', 'Two go in, one comes out. That is the way of the marsh.', 'Mind the mist. It tickles.',
     'I have been turning ducks into swans since before you hatched.', 'A royal swan? Patience, little one. Patience.'];
   cv.addEventListener('pointerdown', e=>{
-    const p = at(e), b = mine() && birdAt(p);
-    if(!b){ if(onToad(p)) toadClick(); return; }
+    const p = at(e);
+    if(onToad(p)) return toadClick();   // the Mystic first, even with a bird swimming close by
+    const b = mine() && birdAt(p);
+    if(!b) return;
     cv.setPointerCapture(e.pointerId);
     drag = {b, sx: p.x, sy: p.y, ox: b.x, oy: b.y, moved: false, target: null, ok: false};
   });
