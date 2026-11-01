@@ -184,6 +184,9 @@ function renderLab(){
         The price goes up with your flock (${L.flock} ducks and birds), so merging in the Mystic Marsh brings it down.
         ${Math.round(L.lucky * 100)}% hatch as mallards.</span></div>
       <button data-spawn data-cost="${L.spawnCost}" data-full="${full ? 1 : ''}" ${own && !full ? '' : 'disabled'}>${pic('icon-breadcrumb')}${fmt(L.spawnCost)}</button></div>`
+    + (L.freeNests >= 2 ? `<div class="ubld">${pic('egg')}<div class="t"><b>Hatch a clutch</b>
+      <span>A duckling in every free nest at once (${L.freeNests}), ${Math.round(L.clutchDiscount * 100)}% off what they'd cost one by one.</span></div>
+      <button data-clutch data-cost="${L.clutchCost}" ${own ? '' : 'disabled'}>${pic('icon-breadcrumb')}${fmt(L.clutchCost)}</button></div>` : '')
     + buildRow('nests', bs.nests, p, own, 'lab-chamber', `Room for ${p.nestSpace} ducklings to grow, one per chamber`, bs.nests.cost != null ? `room for ${L.nestSpaceNext}` : '')
     + buildRow('incubation', bs.incubation, p, own, 'egg', `Ducklings grow into ducks in ${fmtMin(L.grow)}`, L.growNext ? fmtMin(L.growNext) : '')
     + buildRow('science', bs.science, p, own, 'duck-mage', `Each pond duck collects ${perMin(duckEach(p))} breadcrumbs a minute (×${U.scienceBoost} a level)`,
@@ -194,12 +197,13 @@ function renderLab(){
 }
 $('#labBuild').addEventListener('click', e=>{
   if(e.target.closest('[data-spawn]')) return act({action: 'spawn'});
+  if(e.target.closest('[data-clutch]')) return act({action: 'clutch'});
   const b = e.target.closest('[data-build]'); if(b) act({action: 'upgrade', building: b.dataset.build});
 });
 function affordable(){   // build buttons light up as breadcrumbs come in
   if(!mine()) return;
   const have = crumbsNow(U.players[viewing]);
-  document.querySelectorAll('[data-build], [data-spawn], [data-hatbuy], [data-soak], [data-machine], [data-speed], [data-extra], [data-bake]').forEach(b=>{ b.disabled = busy || have < +b.dataset.cost || !!b.dataset.full; });
+  document.querySelectorAll('[data-build], [data-spawn], [data-clutch], [data-hatbuy], [data-soak], [data-machine], [data-speed], [data-extra], [data-bake]').forEach(b=>{ b.disabled = busy || have < +b.dataset.cost || !!b.dataset.full; });
 }
 $('#build').addEventListener('click', e=>{
   const b = e.target.closest('[data-build]'); if(b) act({action: 'upgrade', building: b.dataset.build});
