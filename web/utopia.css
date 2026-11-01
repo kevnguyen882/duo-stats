@@ -43,6 +43,7 @@
 #marshDetail .duck{filter:drop-shadow(1px 0 0 rgba(20,24,30,.45)) drop-shadow(-1px 0 0 rgba(20,24,30,.45)) drop-shadow(0 1px 0 rgba(20,24,30,.45)) drop-shadow(0 -1px 0 rgba(20,24,30,.45))}   /* white swans on a light panel */
 #marshDetail .umystery .duck{filter:brightness(0) opacity(.35)}   /* a dark shape: the next bird stays a mystery */
 #marshDetail .umystery b{font-family:ui-monospace,Menlo,monospace;letter-spacing:.15em}
+.ufull{color:#e8590c;font-weight:600;margin-top:0}
 .ucount{font:800 13px ui-monospace,Menlo,monospace;color:var(--gold);margin-left:4px}
 .umarsh .uplaza-scene canvas.over{cursor:grab}
 .umarsh .uplaza-scene canvas.drag{cursor:grabbing}

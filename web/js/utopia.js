@@ -191,7 +191,9 @@ const duckEach = p => p.rateFrom.sources.find(x=>x.id === 'pond').each;   // wha
 function renderLab(){
   const p = U.players[viewing], own = mine(), L = p.lab, bs = p.buildings;
   const free = p.nestSpace - p.ducklings.length - p.lost, full = free <= 0;
-  $('#labBuild').innerHTML = `<div class="ubld">${pic('duckling')}<div class="t"><b>Spawn a duckling</b>
+  $('#labBuild').innerHTML = (p.pondUsed >= p.pondSpace ? `<p class="unote ufull">Your pond is full (${p.pondUsed}/${p.pondSpace}): ducklings that grow up now will waddle off to find another pond.
+      Merge birds in the Mystic Marsh or upgrade the pond to keep them${p.levels.autonest && p.lab.autoOn ? ', or pause the Auto-nester' : ''}.</p>` : '')
+    + `<div class="ubld">${pic('duckling')}<div class="t"><b>Spawn a duckling</b>
       <span>${full ? 'The nests are full: upgrade the nests, or wait for a duckling to grow' : `Into a free nest (${free} free), where it grows for ${fmtMin(L.grow)}`}.
         The price goes up with your flock (${L.flock} ducks and birds), so merging in the Mystic Marsh brings it down.
         ${Math.round(L.lucky * 100)}% hatch as mallards.</span></div>
