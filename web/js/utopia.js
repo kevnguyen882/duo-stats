@@ -842,6 +842,7 @@ const scene = (()=>{
     const css = cv.clientWidth || W, dpr = window.devicePixelRatio || 1;
     cv.width = Math.round(css * dpr); cv.height = Math.round(css * dpr * H / W);
   }
+  const SWIM = {x: .8, y: .7};   // ducks swim within this much of the pond's width and height
   function pondBox(p){
     const lvl = Math.min(p.levels.pond, 12), rx = Math.min(60 + 7 * lvl, 130), ry = Math.round(rx * .55);
     return {cx: 190, cy: 150, rx, ry};
@@ -851,8 +852,8 @@ const scene = (()=>{
     const p = U.players[viewing], b = pondBox(p);
     const kinds = [...p.birds.flatMap((n, i)=>Array(n).fill(U.marshBirds[i + 1].id)).reverse(), ...Array(p.pond).fill('duck')].slice(0, 36);   // marsh birds first
     ducks = kinds.map(kind=>{
-      const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * .75;
-      return {art: birdArt(kind), x: b.cx + Math.cos(a) * b.rx * r, y: b.cy + Math.sin(a) * b.ry * r, vx: (Math.random() < .5 ? -1 : 1) * (4 + Math.random() * 6), phase: Math.random() * 6};
+      const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * .95;   // inside where they swim (see SWIM)
+      return {art: birdArt(kind), x: b.cx + Math.cos(a) * b.rx * SWIM.x * r, y: b.cy + Math.sin(a) * b.ry * SWIM.y * r, vx: (Math.random() < .5 ? -1 : 1) * (4 + Math.random() * 6), phase: Math.random() * 6};
     });
   }
   function label(text, x, y, align = 'center', color = '#fff'){
@@ -893,8 +894,12 @@ const scene = (()=>{
     sprite(BUILD_INFO.pond[0](p.levels.pond), b.cx - b.rx, b.cy - b.ry, b.rx * 2, b.ry * 2);
     ducks.forEach(d=>{
       d.x += d.vx * dt;
-      const ex = (d.x - b.cx) / (b.rx * .8), ey = (d.y - b.cy) / (b.ry * .7);
-      if(ex * ex + ey * ey > 1){ d.vx = -d.vx; d.x += d.vx * dt * 2; }
+      const ex = (d.x - b.cx) / (b.rx * SWIM.x), ey = (d.y - b.cy) / (b.ry * SWIM.y);
+      if(ex * ex + ey * ey > 1){   // at the edge: turn back towards the middle (not just around, or a duck outside flips every frame)
+        if(Math.abs(ey) > .95) d.y = b.cy + Math.sign(ey) * .95 * b.ry * SWIM.y;
+        d.vx = Math.abs(d.vx) * (d.x < b.cx ? 1 : -1);
+        d.x += d.vx * dt * 2;
+      }
       if(Math.random() < .002) d.vx = -d.vx;
       const bob = Math.sin(now / 400 + d.phase) * 1;
       g.save();
