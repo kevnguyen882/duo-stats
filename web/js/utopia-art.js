@@ -82,6 +82,14 @@ const MARSH_BIRDS = {
   wood: [recolour((ch, x, y)=>(y === 2 && ch === 'B' && x > 8 ? 'W' : HEAD(ch, x, y))), {N: '#5f3dc4', W: '#ffffff', B: '#c4874f', S: '#7f4f24', O: '#e03131'}],
   swan: [SWAN, {B: '#ffffff', S: '#b9c6d3', O: '#f08c00'}],
   black: [SWAN, {B: '#2f3237', S: '#17181b', K: '#f8f9fa', O: '#e03131'}],
+  baker: [overlay(DUCK, [...line(6, 0, 7, 'T'), [8, 0, 'P'], [10, 0, 'P'], ...line(6, 1, 7, 'T'), [7, 1, 'P'], [9, 1, 'P'], [11, 1, 'P'],
+                         ...line(7, 2, 5, 'U'), ...line(8, 5, 4, 'R'), [9, 6, 'R'], [10, 6, 'R']]), {T: '#ffffff', P: '#dee2e6', U: '#868e96', R: '#e03131'}],   // chef's hat, neckerchief
+  chad: [overlay(recolour((ch, x, y)=>y >= 8 && y <= 11 && ch === 'B' && x >= 3 && x <= 11 ? 'V' : null),   // fleece vest, shirt collar, slicked hair
+                 [...line(9, 0, 3, 'Q'), [10, 1, 'Q'], [11, 1, 'Q'], ...line(8, 8, 4, 'Z', 0, 1), [5, 9, 'L'], [8, 6, 'W'], [9, 6, 'W'], [8, 7, 'W'], [9, 7, 'W']]),
+         {V: '#3f454d', Z: '#adb5bd', L: '#f8f9fa', Q: '#e9c46a', W: '#a5d8ff'}],
+  firefighter: [overlay(recolour((ch, x, y)=>y >= 7 && ch === 'B' ? (y === 10 ? 'Z' : 'C') : y >= 7 && ch === 'S' ? 'D' : null),   // helmet, turnout coat
+                        [...line(8, 0, 3, 'R'), ...line(7, 1, 5, 'R'), ...line(5, 2, 8, 'R'), [10, 1, 'Y'], [11, 1, 'Y'], [10, 0, 'Y']]),
+                {R: '#c92a2a', Y: '#fcc419', C: '#c9a227', D: '#8f7419', Z: '#e9ecef'}],
   royal: [overlay(SWAN, [[9, 0, 'Y'], [11, 0, 'Y'], ...line(9, 1, 3, 'Y')]), {B: '#ffffff', S: '#f2d27a', Y: '#fcc419', O: '#f08c00'}],   // crowned
 };
 // the Mystic: the Mystic Marsh's wizard toad, in a starry hat with its wand raised
