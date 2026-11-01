@@ -478,6 +478,25 @@ class GameTests(TempStorageCase):
         room = utopia.pond_space(1) - utopia.STARTING_DUCKS
         self.assertEqual((len(p["ducklings"]), p["pondUsed"], p["edge"]), (0, utopia.pond_space(1), utopia.nest_space(1) - room))   # grown; the rest wait
 
+    def test_hatching_a_clutch_fills_every_free_nest_for_less(self):
+        self.game.state(viewer=False, now=1)
+        self.give(10000)
+        s = self.game._load()["players"]["duo one#na1"]
+        one_by_one = sum(spawn_cost(utopia.flock(s) + i) for i in range(utopia.nest_space(1)))
+        self.assertEqual(utopia.clutch_cost(s), round(one_by_one * 0.9))
+        out = self.game.act({"owner": "duo one#na1", "action": "clutch"}, viewer=False, now=1)
+        p = out["players"][0]
+        self.assertEqual((out["result"]["clutch"], len(p["ducklings"]), p["lab"]["freeNests"]), (utopia.nest_space(1), utopia.nest_space(1), 0))
+        self.assertEqual(p["crumbs"], 10000 - round(one_by_one * 0.9))
+        with self.assertRaises(ValueError):   # every nest is taken now
+            self.game.act({"owner": "duo one#na1", "action": "clutch"}, viewer=False, now=1)
+
+    def test_a_clutch_needs_the_breadcrumbs_for_all_of_it(self):
+        self.game.state(viewer=False, now=1)
+        self.give(150)
+        with self.assertRaises(ValueError):
+            self.game.act({"owner": "duo one#na1", "action": "clutch"}, viewer=False, now=1)
+
     def test_incubation_upgrade_speeds_up_growing_ducklings(self):
         self.game.state(viewer=False, now=1)
         self.give(10000)

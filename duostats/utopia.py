@@ -73,6 +73,7 @@ GROW_MINUTES = 8 * 60        # how long a duckling takes to grow in its nest, be
 INCUBATION_SPEEDUP = (30 / GROW_MINUTES) ** (1 / 10)   # each incubation level: ~24% less time, 30 min at the top (10)
 SPAWN_COST = 100             # breadcrumbs for the first duckling spawned ...
 SPAWN_GROWTH = 1.05          # ... and 5% more for each duck or bird in your flock past the first STARTING_DUCKS
+CLUTCH_DISCOUNT = 0.1       # hatching a clutch (every free nest at once, 2 or more): 10% off
 GAME_EGGS, WIN_EGGS = 1, 2   # free eggs laid in the Duck Lab by each new game together, and by a win
 LUCKY_EGG, LUCKY_SCIENCE, MAX_LUCKY = 0.05, 0.01, 0.2   # chance a duckling hatches as a mallard: 5%, +1% a Duck Science level
 WIN_CRUMBS = 100              # bonus breadcrumbs for a new win, at least (catch-up boost applies) ...
@@ -109,6 +110,18 @@ def spawn_cost(flock: int) -> int:
     """A duckling's price, by how many ducks and birds you have now (flock()): 100 up to STARTING_DUCKS, then 5% more
     for each one (163 with 15, 1,147 with 55). Merging two birds into one in the Mystic Marsh makes it cheaper again."""
     return round(SPAWN_COST * SPAWN_GROWTH ** max(0, flock - STARTING_DUCKS))
+
+
+def free_nests(s: dict) -> int:
+    return max(0, nest_space(s["levels"]["nests"]) - len(s["ducklings"]) - s["lost"])
+
+
+def clutch_cost(s: dict) -> int:
+    """Breadcrumbs to fill every free nest at once: each duckling priced as if spawned one after another (each one makes
+    the flock bigger), with CLUTCH_DISCOUNT off when it's two or more."""
+    n, f = free_nests(s), flock(s)
+    total = sum(spawn_cost(f + i) for i in range(n))
+    return round(total * (1 - CLUTCH_DISCOUNT)) if n >= 2 else total
 
 
 def flock(s: dict) -> int:
@@ -1000,6 +1013,17 @@ class DuckUtopia:
             s["spawned"] += 1
             s["ducklings"].append(now + round(grow_minutes(s["levels"]["incubation"]) * 60000))
             return {"spawned": s["spawned"]}
+        if action == "clutch":   # a duckling in every free nest at once, a little cheaper
+            n, cost = free_nests(s), clutch_cost(s)
+            if n < 1:
+                raise ValueError("The nests are full: upgrade the nests, or wait for a duckling to grow.")
+            if s["crumbs"] < cost:
+                raise ValueError(f"Not enough breadcrumbs: {cost:,} needed for a clutch of {n}.")
+            s["crumbs"] -= cost
+            s["spawned"] += n
+            s["ducklings"] += [now + round(grow_minutes(s["levels"]["incubation"]) * 60000)] * n
+            self._note(s, now, f"Hatched a clutch of {n} duckling{'s' if n > 1 else ''} in the Duck Lab.")
+            return {"spawned": s["spawned"], "clutch": n}
         if action == "hat":   # buy a hat for a champion, put one on, or take it off
             c, hat, op = body.get("champion"), body.get("hat"), body.get("op")
             if c not in recs:
@@ -1218,7 +1242,7 @@ class DuckUtopia:
                 "rate": round(crumb_rate(s), 3), "rateFrom": rate_breakdown(s), "heat": heat(s), "nestSpace": nest_space(lv["nests"]), "pondSpace": pond_space(lv["pond"]), "pondUsed": pond_used(s), "discovered": discovered(s),
                 "districts": districts(s), "boostFrom": boost_breakdown(s, rows.get(p.key, [])),
                 "plaza": penta_plaza(s, rows.get(p.key, [])), "volcano": fire_ducks(s, rows.get(p.key, []), classes),
-                "lab": {"spawnCost": spawn_cost(flock(s)), "flock": flock(s), "lucky": lucky_chance(s), "gameEggs": GAME_EGGS, "winEggs": WIN_EGGS,
+                "lab": {"spawnCost": spawn_cost(flock(s)), "clutchCost": clutch_cost(s), "freeNests": free_nests(s), "clutchDiscount": CLUTCH_DISCOUNT, "flock": flock(s), "lucky": lucky_chance(s), "gameEggs": GAME_EGGS, "winEggs": WIN_EGGS,
                         "grow": grow_minutes(lv["incubation"]),
                         "growNext": grow_minutes(lv["incubation"] + 1) if upgrade_cost("incubation", lv["incubation"]) is not None else None,
                         "nestSpaceNext": nest_space(lv["nests"] + 1)},
