@@ -888,7 +888,7 @@ const scene = (()=>{
     if(p.levels.spa){ sprite(BUILD_INFO.spa[0](p.levels.spa), x, y, S); names(x, y, p.levels.spa >= 2 ? 'Hot springs' : 'Spa', p.soaks.length ? `${p.soaks.length} soaking` : ''); }
     else lot(x, y, 'Spa plot');
     [x, y] = at('marsh');   // the Mystic Marsh, where the Mystic zaps pairs of birds into bigger ones
-    sprite('district-mystic-marsh', x, y, S); names(x, y, 'Marsh', p.birds.some(n=>n) ? plural(p.birds.reduce((a, n)=>a + n, 0), 'bird') : 'the Mystic');
+    sprite('district-mystic-marsh', x, y, S); names(x, y, 'Mystic Marsh', p.birds.some(n=>n) ? plural(p.birds.reduce((a, n)=>a + n, 0), 'bird') : 'no birds yet');
     // districts: unlocked by real achievements only
     const D = [['penta', 'plaza', 'district-penta-plaza', 'Plaza', 'a penta', `${p.golden} golden`, 'duck-golden'],
                ['champion', 'quarter', 'district-champion-quarter', 'Quarter', 'an S', `${Object.keys(p.champs).length} champs`, 'duck-fighter'],
@@ -1538,7 +1538,7 @@ const marshRoom = (()=>{
     p(LILY.x + 30, LILY.y + 6, 6, 4, '#e64980'); p(LILY.x + 32, LILY.y + 4, 2, 2, '#ffc9de');
   });
   const MIST = Array.from({length: 7}, (_, i)=>({x: (i * 83) % MW, y: MCY - MRY + 20 + (i * 37) % (MRY * 2 - 30), w: 60 + (i * 17) % 50, v: 4 + (i % 3) * 3}));
-  const scale = t => t < 3 ? 2 : 3;   // whole-number sizes: ducks at 2x, swans at 3x
+  const scale = t => ['swan', 'black', 'royal'].includes(U.marshBirds[t].id) ? 3 : 2;   // whole-number sizes: ducks at 2x, swans at 3x
   const inMarsh = (x, y) => ((x - MCX) / (MRX - 26)) ** 2 + ((y - MCY) / (MRY - 22)) ** 2 <= 1;
   const nearPad = (x, y) => Math.hypot(x - LILY.x, y - (LILY.y - 26)) < 52;
   function spot(){ for(let i = 0; i < 200; i++){ const x = MCX - MRX + Math.random() * MRX * 2, y = MCY - MRY + Math.random() * MRY * 2; if(inMarsh(x, y) && !nearPad(x, y)) return {x, y}; } return {x: MCX, y: MCY}; }

@@ -109,18 +109,28 @@ class MarshTests(unittest.TestCase):
 
     def test_each_kind_collects_more_and_duck_science_multiplies_them(self):
         s = new_utopia("A#1", 0)
-        s.update(pond=2, birds=[1, 0, 1, 0, 0])
+        s.update(pond=2, birds=[1, 0, 1, 0, 0, 0, 0, 0])
         s["levels"]["science"] = 1
         self.assertAlmostEqual(crumb_rate(s), (2 + utopia.MARSH_STEP + utopia.MARSH_STEP ** 3) * utopia.SCIENCE_BOOST)
         self.assertAlmostEqual(utopia.bird_rate(1), 2 * 1.1)   # 10% more than the two ducks
 
     def test_birds_take_pond_spots(self):
         s = empty()
-        s["birds"] = [utopia.pond_space(1), 0, 0, 0, 0]   # a pond full of mallards
+        s["birds"] = [utopia.pond_space(1)] + [0] * (len(utopia.BIRDS) - 2)   # a pond full of mallards
         s["lost"] = 1
         advance(s, 0)
         advance(s, utopia.GROW_MINUTES * MIN)
         self.assertEqual((s["pond"], s["edge"]), (0, 1))   # no room: the new duck waits at the edge
+
+
+    def test_the_new_ducks_sit_below_the_swans_and_old_saves_keep_their_worth(self):
+        self.assertEqual([k for k, _ in utopia.BIRDS], ["duck", "mallard", "wood", "baker", "chad", "firefighter", "swan", "black", "royal"])
+        s = new_utopia("A#1", 0)
+        s["birds"] = [1, 0, 2, 0, 1]   # saved with the old ladder: a mallard, two swans and a royal swan
+        before = (score(s), crumb_rate(s))
+        migrate(s)
+        self.assertEqual(s["birds"], [1, 0, 2, 0, 1, 0, 0, 0])   # now a mallard, two baker ducks and a firefighter duck
+        self.assertEqual((score(s), crumb_rate(s)), before)
 
 
 class InfirmaryTests(unittest.TestCase):

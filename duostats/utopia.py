@@ -19,7 +19,7 @@ more nests, a shorter incubation time, and Duck Science (each level: pond ducks 
 ducklings; any still in the old lost and found box move to nests.
 
 The Mystic Marsh: the Mystic, a wizard toad, zaps two pond birds of the same kind into one of the next kind up
-(BIRDS: duck, mallard, wood duck, swan, black swan, royal swan). Each collects MARSH_STEP times the one below (10% more
+(BIRDS: duck, mallard, wood duck, baker duck, finance chad duck, firefighter duck, swan, black swan, royal swan). Each collects MARSH_STEP times the one below (10% more
 than the two it replaced) and takes one pond spot, so merging frees room. Duck Science multiplies them all.
 
 The Champion Quarter is a lounge where your five defenders rest; there you can see each one's stats and buy it hats
@@ -106,7 +106,8 @@ def spawn_cost(spawned: int) -> int:
 
 
 # the Mystic Marsh's birds, smallest first: plain pond ducks, then what two of the kind before turn into
-BIRDS = [("duck", "Duck"), ("mallard", "Mallard"), ("wood", "Wood duck"), ("swan", "Swan"), ("black", "Black swan"), ("royal", "Royal swan")]
+BIRDS = [("duck", "Duck"), ("mallard", "Mallard"), ("wood", "Wood duck"), ("baker", "Baker duck"), ("chad", "Finance Chad duck"),
+         ("firefighter", "Firefighter duck"), ("swan", "Swan"), ("black", "Black swan"), ("royal", "Royal swan")]
 
 
 def bird_rate(tier: int, science: int = 0) -> float:
@@ -268,6 +269,9 @@ def migrate(s: dict):
                  ("caught", []), ("seasonFire", {}), ("machineCount", {}),                          # Volcano Spa, Bakery
                  ("birds", [0] * (len(BIRDS) - 1))):                                                # Mystic Marsh
         s.setdefault(k, v)
+    # saved before the baker, finance chad and firefighter ducks joined the ladder (below the swans): each bird keeps its
+    # place, and so its worth, so a swan made from 8 ducks becomes a baker duck, a black swan a finance chad duck, and so on
+    s["birds"] += [0] * (len(BIRDS) - 1 - len(s["birds"]))
     s["bakes"] = {t: u if isinstance(u, list) else [u] for t, u in s["bakes"].items()}   # one batch per machine, from before extra machines
 
 
