@@ -59,12 +59,30 @@ const CLASS_KIT = {   // extra pixels on the plain duck for each League class
 // the Mystic Marsh's birds: the duck recoloured, smallest first after the plain duck (see BIRDS in duostats/utopia.py)
 const recolour = fn => DUCK.map((row, y)=>[...row].map((ch, x)=>fn(ch, x, y) || ch).join(''));
 const HEAD = (ch, x, y) => y >= 1 && y <= 4 && ch === 'B' ? 'N' : null;
+const SWAN = [   // the duck's body, with a long curved neck and the head held high
+  '................',
+  '.........BBB....',
+  '........BBKBOOO.',
+  '........BBB.....',
+  '.......BB.......',
+  '.......BB.......',
+  '........BB......',
+  '.B......BB......',
+  '.BB....BBBB.....',
+  '.BBBBBBBBBBBB...',
+  '.BBBBBBBBBBBBB..',
+  '..BSBBBBBBBBBB..',
+  '..BSSBBBBBBBB...',
+  '...SSSSSSSSS....',
+  '.....O....O.....',
+  '.....OO...OO....',
+];
 const MARSH_BIRDS = {
   mallard: [recolour((ch, x, y)=>HEAD(ch, x, y) || (y === 5 && ch === 'B' ? 'W' : null)), {N: '#2b8a3e', W: '#ffffff', B: '#b9a894', S: '#6f5a45'}],
   wood: [recolour((ch, x, y)=>(y === 2 && ch === 'B' && x > 8 ? 'W' : HEAD(ch, x, y))), {N: '#5f3dc4', W: '#ffffff', B: '#c4874f', S: '#7f4f24', O: '#e03131'}],
-  swan: [DUCK, {B: '#ffffff', S: '#b9c6d3', O: '#f08c00'}],
-  black: [DUCK, {B: '#2f3237', S: '#17181b', K: '#f8f9fa', O: '#e03131'}],
-  royal: [recolour((ch, x, y)=>(y === 0 && (x === 7 || x === 9 || x === 11)) || (y === 1 && x >= 7 && x <= 11) ? 'Y' : null), {B: '#ffffff', S: '#f2d27a', Y: '#fcc419', O: '#f08c00'}],
+  swan: [SWAN, {B: '#ffffff', S: '#b9c6d3', O: '#f08c00'}],
+  black: [SWAN, {B: '#2f3237', S: '#17181b', K: '#f8f9fa', O: '#e03131'}],
+  royal: [overlay(SWAN, [[9, 0, 'Y'], [11, 0, 'Y'], ...line(9, 1, 3, 'Y')]), {B: '#ffffff', S: '#f2d27a', Y: '#fcc419', O: '#f08c00'}],   // crowned
 };
 // the Mystic: the Mystic Marsh's wizard toad, in a starry hat with its wand raised
 const MYSTIC = [
