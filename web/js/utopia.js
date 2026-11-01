@@ -125,7 +125,7 @@ function renderResources(){
     <div class="utipped" tabindex="0" data-tip-html="${esc(rateTip(p))}">${pic('icon-breadcrumb')}<b id="crumbs">${fmt(crumbsNow(p))}</b><span>breadcrumbs · ${fmt(p.rate)}/min</span></div>
     <div>${pic('icon-feather')}<b>${p.feathers}</b><span>goose feathers</span></div>
     <div>${pic('duck-plain')}<b>${p.pondUsed}/${p.pondSpace}</b><span>${p.pondUsed > p.pond ? 'ducks and birds' : 'ducks'} in the pond</span></div>
-    ${p.edge ? `<div class="warn">${pic('duck-plain')}<b>${p.edge}</b><span>waiting at the pond's edge (upgrade the pond)</span></div>` : ''}
+    ${p.edge ? `<div class="warn">${pic('duck-plain')}<b>${p.edge}/${p.edgeSpace}</b><span>waiting at the pond's edge for a spot (any more waddle off)</span></div>` : ''}
     <div>${pic('duckling')}<b>${p.ducklings.length}/${p.nestSpace}</b><span>ducklings growing in the Duck Lab${p.ducklings.length ? ` · next grows in <span id="grow">${growLeft(p)}</span>` : ''}</span></div>
     ${p.lost ? `<div class="warn">${pic('duckling')}<b>${p.lost}</b><span>egg${p.lost === 1 ? '' : 's'} waiting for a free nest (upgrade the nests for more)</span></div>` : ''}
 
@@ -191,8 +191,9 @@ const duckEach = p => p.rateFrom.sources.find(x=>x.id === 'pond').each;   // wha
 function renderLab(){
   const p = U.players[viewing], own = mine(), L = p.lab, bs = p.buildings;
   const free = p.nestSpace - p.ducklings.length - p.lost, full = free <= 0;
-  $('#labBuild').innerHTML = (p.pondUsed >= p.pondSpace ? `<p class="unote ufull">Your pond is full (${p.pondUsed}/${p.pondSpace}): ducklings that grow up now will waddle off to find another pond.
-      Merge birds in the Mystic Marsh or upgrade the pond to keep them${p.levels.autonest && p.lab.autoOn ? ', or pause the Auto-nester' : ''}.</p>` : '')
+  $('#labBuild').innerHTML = (p.pondUsed >= p.pondSpace ? `<p class="unote ufull">Your pond is full (${p.pondUsed}/${p.pondSpace}): ducklings that grow up now ${p.edge >= p.edgeSpace
+      ? 'will waddle off to find another pond, since the edge is full too' : `wait at its edge (${p.edge} of ${p.edgeSpace} spots), and once that's full they waddle off`}.
+      Merge birds in the Mystic Marsh or upgrade the pond to make room${p.levels.autonest && p.lab.autoOn ? ', or pause the Auto-nester' : ''}.</p>` : '')
     + `<div class="ubld">${pic('duckling')}<div class="t"><b>Spawn a duckling</b>
       <span>${full ? 'The nests are full: upgrade the nests, or wait for a duckling to grow' : `Into a free nest (${free} free), where it grows for ${fmtMin(L.grow)}`}.
         The price goes up with your flock (${L.flock} ducks and birds), so merging in the Mystic Marsh brings it down.

@@ -42,18 +42,24 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual((len(s["ducklings"]), s["lost"]), (2, 0))
         advance(s, 2 * utopia.GROW_MINUTES * MIN)
         self.assertEqual((s["pond"], s["edge"]), (utopia.pond_space(1), 0))   # the pond holds 6: room for all of them
-        s["lost"] = 2
+        s["lost"] = utopia.nest_space(1)
         advance(s, 3 * utopia.GROW_MINUTES * MIN)
-        self.assertEqual((s["pond"], s["edge"], s["waddled"]), (6, 0, 2))   # now it's full: these two waddle off
-        self.assertIn("2 ducklings grew up with no room in the pond and waddled off", s["log"][0]["text"])
+        self.assertEqual((s["pond"], s["edge"]), (6, utopia.nest_space(1)))   # now it's full: a clutch's worth waits at the edge
+        s["lost"] = 2
+        advance(s, 4 * utopia.GROW_MINUTES * MIN)
+        self.assertEqual((s["edge"], s["waddled"]), (utopia.nest_space(1), 2))   # the edge is full too: these two waddle off
+        self.assertIn("2 ducklings grew up with no room in the pond or at its edge and waddled off", s["log"][0]["text"])
+        s["levels"]["pond"] = 2
+        advance(s, 4 * utopia.GROW_MINUTES * MIN + 1)
+        self.assertEqual((s["pond"], s["edge"]), (10, 0))   # a bigger pond: the ducks at the edge move in first
 
     def test_a_pond_already_over_its_size_keeps_its_ducks(self):
         s = empty()
-        s["pond"] = 40   # from when a level-1 pond's ducks could be merged into room for more
+        s.update(pond=40, edge=30)   # from before: more in the pond and at the edge than there's room for now
         s["lost"] = 1
         advance(s, 0)
         advance(s, utopia.GROW_MINUTES * MIN)
-        self.assertEqual((s["pond"], s["waddled"]), (40, 1))   # nobody already there leaves; the new duck waddles off
+        self.assertEqual((s["pond"], s["edge"], s["waddled"]), (40, 30, 1))   # nobody already there leaves; the new duck waddles off
 
     def test_new_pond_ducks_collect_from_when_they_arrive(self):
         s = empty()
@@ -132,8 +138,7 @@ class MarshTests(unittest.TestCase):
         s["lost"] = 1
         advance(s, 0)
         advance(s, utopia.GROW_MINUTES * MIN)
-        self.assertEqual((s["pond"], s["edge"], s["waddled"]), (0, 0, 1))   # no room: the new duck waddles off
-        self.assertIn("1 duckling grew up", s["log"][0]["text"])
+        self.assertEqual((s["pond"], s["edge"]), (0, 1))   # no room: the new duck waits at the edge
 
 
     def test_the_new_ducks_sit_below_the_swans_and_old_saves_keep_their_worth(self):
@@ -336,7 +341,7 @@ class RewardTests(unittest.TestCase):
         self.assertIsNone(upgrade_cost("spa", 2))
         self.assertIsNotNone(upgrade_cost("pond", 19))   # the lagoon goes to level 20 ...
         self.assertIsNone(upgrade_cost("pond", 20))
-        self.assertEqual(utopia.pond_space(20), 82)      # ... holding 82
+        self.assertEqual([utopia.pond_space(n) for n in (1, 12, 13, 20)], [6, 50, 65, 200])   # ... holding up to 200
 
 
 class RaidTests(unittest.TestCase):
@@ -520,8 +525,7 @@ class GameTests(TempStorageCase):
             self.game.act(spawn, viewer=False, now=1)
         p = self.game.state(viewer=False, now=1 + 8 * 60 * MIN)["players"][0]
         room = utopia.pond_space(1) - utopia.STARTING_DUCKS
-        self.assertEqual((len(p["ducklings"]), p["pondUsed"], p["edge"]), (0, utopia.pond_space(1), 0))   # grown; the rest waddled off
-        self.assertIn(f"{utopia.nest_space(1) - room} ducklings grew up with no room", p["log"][0]["text"])
+        self.assertEqual((len(p["ducklings"]), p["pondUsed"], p["edge"]), (0, utopia.pond_space(1), utopia.nest_space(1) - room))   # grown; the rest wait
 
     def test_the_auto_nester_needs_duck_science_and_can_be_switched(self):
         self.game.state(viewer=False, now=1)

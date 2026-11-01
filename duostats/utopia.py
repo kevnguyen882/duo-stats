@@ -15,8 +15,8 @@ The duck pipeline: new ducks come from the Duck Lab, whose nests are fluid chamb
 duckling into a free nest for breadcrumbs (spawn_cost(): more the bigger your flock is now, so merging in the Mystic
 Marsh brings it back down; never while the nests are full), and every game together lays a free egg (a win, two:
 GAME_EGGS), which waits for a free nest ("lost", from the old lost and found box). It grows there for grow_minutes(),
-then moves to the pond, or, if the pond is full, waddles off to find another (waddle_off(), which logs it; ducks
-already waiting at the edge from before still move in when there's room). Now and then one hatches as a mallard
+then moves to the pond. If the pond is full it waits at the edge, up to one full clutch (edge_space()), moving in first
+when there's room; beyond that it waddles off to find another pond (waddle_off(), which logs it). Now and then one hatches as a mallard
 (lucky_chance()). Only ducks in the pond collect breadcrumbs (golden, champion and caught fire ducks collect wherever they are). The
 Duck Lab's upgrades: more nests, a shorter incubation time, Duck Science (each level: pond ducks collect x1.5), and
 from Duck Science level AUTONEST_SCIENCE the Auto-nester, which spawns into empty nests by itself (auto_nest()).
@@ -163,10 +163,18 @@ def nest_space(level: int) -> int:
     return 2 + 2 * level
 
 
+LAGOON_SPACE = [65, 80, 95, 110, 130, 150, 175, 200]   # the lagoon's levels 13 to 20
+
+
 def pond_space(level: int) -> int:
-    """Kept small, so room is worth making in the Mystic Marsh: 6, 10, 14 ... 50 at level 12, 82 at the top (20). A pond already holding more
-    (from when it held 5, 15, 30, 50 ... 390) keeps every duck; new ones wait at the edge until there's room."""
-    return 2 + 4 * level
+    """Kept small at first, so room is worth making in the Mystic Marsh: 6, 10, 14 ... 50 at level 12, then the lagoon's
+    bigger steps up to 200 at the top (20). A pond already holding more keeps every duck."""
+    return 2 + 4 * level if level <= 12 else LAGOON_SPACE[min(level, 20) - 13]
+
+
+def edge_space(s: dict) -> int:
+    """Ducks that can wait at the pond's edge for a spot: one full clutch, a duck for each nest. Any more waddle off."""
+    return nest_space(s["levels"]["nests"])
 
 
 def upgrade_cost(building: str, level: int):
@@ -271,6 +279,7 @@ def advance(s: dict, now: int):
     """Bring a utopia up to `now`: breadcrumbs collected, ducklings grown and into the pond."""
     t, left = s["tick"], 0
     while True:
+        _fill_pond(s)   # ducks waiting at the edge go in first, whenever there's room
         _fill_nests(s, t)
         auto_nest(s, t)
         due = min(s["ducklings"]) if s["ducklings"] else None
@@ -282,9 +291,13 @@ def advance(s: dict, now: int):
         t = end
         if t >= now and (due is None or due > now):
             break
+        _fill_pond(s)   # (before the new ones)
         for i, due_at in enumerate(r for r in s["ducklings"] if r <= t):
             if pond_used(s) >= pond_space(s["levels"]["pond"]):
-                left += 1   # no room in the pond: it waddles off to find another
+                if s["edge"] < edge_space(s):
+                    s["edge"] += 1   # it waits at the edge for a spot
+                else:
+                    left += 1        # no room there either: it waddles off to find another pond
             elif random.Random(f"egg-{s['riotId']}-{due_at}-{i}").random() < lucky_chance(s):   # the same for both of you
                 s["birds"][0] += 1   # a lucky egg: a mallard
             else:
@@ -296,10 +309,10 @@ def advance(s: dict, now: int):
 
 
 def waddle_off(s: dict, n: int, now: int):
-    """Ducklings that grew up with no room in the pond: they leave, and the log says so (one line for all of them)."""
+    """Ducklings that grew up with no room in the pond or at its edge: they leave, and the log says so (one line for all)."""
     s["waddled"] = s.get("waddled", 0) + n
-    s["log"] = ([{"t": now, "text": f"{n} duckling{'s' if n > 1 else ''} grew up with no room in the pond and waddled off to find "
-                                   f"a new one. Merge birds in the Mystic Marsh or upgrade the pond to keep them."}] + s["log"])[:MAX_LOG]
+    s["log"] = ([{"t": now, "text": f"{n} duckling{'s' if n > 1 else ''} grew up with no room in the pond or at its edge and waddled off "
+                                   f"to find a new one. Merge birds in the Mystic Marsh or upgrade the pond to keep them."}] + s["log"])[:MAX_LOG]
 
 
 def auto_nest(s: dict, t: int):
@@ -1285,7 +1298,7 @@ class DuckUtopia:
                                      "log", "founding", "founded")},
                 "crumbs": round(s["crumbs"], 2), "ducklings": sorted(s["ducklings"]),
                 "score": scores[i], "catchUp": catch_up(scores[i], best), "leading": len(scores) > 1 and scores[i] == best and scores.count(best) == 1,
-                "rate": round(crumb_rate(s), 3), "rateFrom": rate_breakdown(s), "heat": heat(s), "nestSpace": nest_space(lv["nests"]), "pondSpace": pond_space(lv["pond"]), "pondUsed": pond_used(s), "discovered": discovered(s),
+                "rate": round(crumb_rate(s), 3), "rateFrom": rate_breakdown(s), "heat": heat(s), "nestSpace": nest_space(lv["nests"]), "pondSpace": pond_space(lv["pond"]), "pondUsed": pond_used(s), "edgeSpace": edge_space(s), "discovered": discovered(s),
                 "districts": districts(s), "boostFrom": boost_breakdown(s, rows.get(p.key, [])),
                 "plaza": penta_plaza(s, rows.get(p.key, [])), "volcano": fire_ducks(s, rows.get(p.key, []), classes),
                 "lab": {"spawnCost": spawn_cost(flock(s)), "clutchCost": clutch_cost(s), "freeNests": free_nests(s), "clutchDiscount": CLUTCH_DISCOUNT, "autoOn": s.get("autoOn", True), "autoSpawned": s.get("autoSpawned", 0), "autoScience": AUTONEST_SCIENCE, "flock": flock(s), "lucky": lucky_chance(s), "gameEggs": GAME_EGGS, "winEggs": WIN_EGGS,
