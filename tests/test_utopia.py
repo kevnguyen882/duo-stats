@@ -42,17 +42,24 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual((len(s["ducklings"]), s["lost"]), (2, 0))
         advance(s, 2 * utopia.GROW_MINUTES * MIN)
         self.assertEqual((s["pond"], s["edge"]), (utopia.pond_space(1), 0))   # the pond holds 6: room for all of them
-        s["lost"] = 2
+        s["lost"] = utopia.nest_space(1)
         advance(s, 3 * utopia.GROW_MINUTES * MIN)
-        self.assertEqual((s["pond"], s["edge"]), (6, 2))   # now it's full: these wait at the edge
+        self.assertEqual((s["pond"], s["edge"]), (6, utopia.nest_space(1)))   # now it's full: a clutch's worth waits at the edge
+        s["lost"] = 2
+        advance(s, 4 * utopia.GROW_MINUTES * MIN)
+        self.assertEqual((s["edge"], s["waddled"]), (utopia.nest_space(1), 2))   # the edge is full too: these two waddle off
+        self.assertIn("2 ducklings grew up with no room in the pond or at its edge and waddled off", s["log"][0]["text"])
+        s["levels"]["pond"] = 2
+        advance(s, 4 * utopia.GROW_MINUTES * MIN + 1)
+        self.assertEqual((s["pond"], s["edge"]), (10, 0))   # a bigger pond: the ducks at the edge move in first
 
     def test_a_pond_already_over_its_size_keeps_its_ducks(self):
         s = empty()
-        s["pond"] = 40   # from when a level-1 pond's ducks could be merged into room for more
+        s.update(pond=40, edge=30)   # from before: more in the pond and at the edge than there's room for now
         s["lost"] = 1
         advance(s, 0)
         advance(s, utopia.GROW_MINUTES * MIN)
-        self.assertEqual((s["pond"], s["edge"]), (40, 1))   # nobody leaves; the new duck waits
+        self.assertEqual((s["pond"], s["edge"], s["waddled"]), (40, 30, 1))   # nobody already there leaves; the new duck waddles off
 
     def test_new_pond_ducks_collect_from_when_they_arrive(self):
         s = empty()
@@ -143,6 +150,45 @@ class MarshTests(unittest.TestCase):
         migrate(s)
         self.assertEqual(s["birds"], [1, 0, 2, 0, 1] + [0] * (len(utopia.BIRDS) - 6))   # now a mallard, two baker ducks and a firefighter duck
         self.assertEqual((score(s), crumb_rate(s)), before)
+
+
+class AutoNesterTests(unittest.TestCase):
+    def nester(self, crumbs, pond=5):
+        s = new_utopia("A#1", 0)
+        s.update(crumbs=float(crumbs), pond=pond)
+        s["levels"]["autonest"] = 1
+        return s
+
+    def test_it_fills_empty_nests_when_it_can_pay(self):
+        s = self.nester(10000)
+        advance(s, 0)
+        self.assertEqual(len(s["ducklings"]), utopia.nest_space(1))
+        self.assertEqual(s["autoSpawned"], utopia.nest_space(1))
+        self.assertLess(s["crumbs"], 10000)
+
+    def test_it_refills_a_nest_as_soon_as_a_duckling_grows(self):
+        s = self.nester(10000, pond=0)
+        advance(s, 0)
+        grow = utopia.GROW_MINUTES * MIN
+        advance(s, grow + 5 * MIN)   # the first batch grew at `grow`: the nests filled again right then
+        self.assertEqual(s["pond"] + s["birds"][0], utopia.nest_space(1))
+        self.assertEqual(sorted(s["ducklings"]), [2 * grow] * utopia.nest_space(1))
+
+    def test_it_waits_until_it_can_afford_one(self):
+        s = self.nester(0)
+        s["pond"] = 10   # 10 a minute; a duckling costs spawn_cost(10)
+        advance(s, 0)
+        self.assertEqual(s["ducklings"], [])
+        cost = spawn_cost(utopia.flock(s))
+        advance(s, 60 * MIN)
+        first = min(s["ducklings"])
+        self.assertAlmostEqual(first - utopia.GROW_MINUTES * MIN, cost / 10 * MIN, delta=MIN)   # bought the moment it could
+
+    def test_it_can_be_turned_off(self):
+        s = self.nester(10000)
+        s["autoOn"] = False
+        advance(s, 0)
+        self.assertEqual(s["ducklings"], [])
 
 
 class DuckLabTests(unittest.TestCase):
@@ -293,6 +339,9 @@ class RewardTests(unittest.TestCase):
         self.assertGreater(upgrade_cost("pond", 2), 400)
         self.assertEqual(upgrade_cost("bakery", 0), 500)
         self.assertIsNone(upgrade_cost("spa", 2))
+        self.assertIsNotNone(upgrade_cost("pond", 19))   # the lagoon goes to level 20 ...
+        self.assertIsNone(upgrade_cost("pond", 20))
+        self.assertEqual([utopia.pond_space(n) for n in (1, 12, 13, 20)], [6, 50, 65, 200])   # ... holding up to 200
 
 
 class RaidTests(unittest.TestCase):
@@ -477,6 +526,20 @@ class GameTests(TempStorageCase):
         p = self.game.state(viewer=False, now=1 + 8 * 60 * MIN)["players"][0]
         room = utopia.pond_space(1) - utopia.STARTING_DUCKS
         self.assertEqual((len(p["ducklings"]), p["pondUsed"], p["edge"]), (0, utopia.pond_space(1), utopia.nest_space(1) - room))   # grown; the rest wait
+
+    def test_the_auto_nester_needs_duck_science_and_can_be_switched(self):
+        self.game.state(viewer=False, now=1)
+        self.give(100000)
+        build = {"owner": "duo one#na1", "action": "upgrade", "building": "autonest"}
+        with self.assertRaises(ValueError):   # needs Duck Science level 3
+            self.game.act(build, viewer=False, now=1)
+        data = self.game._load()
+        data["players"]["duo one#na1"]["levels"]["science"] = utopia.AUTONEST_SCIENCE
+        self.storage.write_json(self.game.path, data)
+        p = self.game.act(build, viewer=False, now=1)["players"][0]
+        self.assertEqual((p["levels"]["autonest"], len(p["ducklings"])), (1, utopia.nest_space(1)))   # filled the nests straight away
+        p = self.game.act({"owner": "duo one#na1", "action": "autonest", "on": False}, viewer=False, now=1)["players"][0]
+        self.assertFalse(p["lab"]["autoOn"])
 
     def test_hatching_a_clutch_fills_every_free_nest_for_less(self):
         self.game.state(viewer=False, now=1)
