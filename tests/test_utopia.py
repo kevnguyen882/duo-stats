@@ -54,17 +54,73 @@ class PipelineTests(unittest.TestCase):
         s = new_utopia("A#1", 0)
         s.update(pond=10, boost=0.5)
         s["levels"]["bakery"] = 2
-        self.assertAlmostEqual(crumb_rate(s), 10 * (1 + 2 * utopia.BAKERY_BONUS) * 1.5)
+        self.assertAlmostEqual(crumb_rate(s), 10 * 1.25 ** 2 * 1.5)   # bakery levels compound
+
+    def test_bakery_compounds(self):
+        s = new_utopia("A#1", 0)
+        s["pond"] = 10
+        s["levels"]["bakery"] = 10
+        self.assertAlmostEqual(crumb_rate(s), 10 * 1.25 ** 10)   # x9.3, where +25% a level gave x3.5
+
+    def test_duck_science_multiplies_pond_ducks_only(self):
+        s = new_utopia("A#1", 0)
+        s.update(pond=10, golden=1)
+        s["levels"]["science"] = 2
+        self.assertAlmostEqual(crumb_rate(s), 10 * 1.5 ** 2 + utopia.GOLDEN_RATE)
+        self.assertEqual(utopia.upgrade_cost("science", 0), 1000)
+        self.assertEqual(utopia.upgrade_cost("science", 2), 9000)
+
+    def test_win_rewards_grow_with_income(self):
+        s = new_utopia("A#1", 0)
+        s["pond"] = 1
+        self.assertEqual(utopia.win_crumbs(s), utopia.WIN_CRUMBS)   # early on: the flat amount
+        s["pond"] = 100
+        self.assertEqual(utopia.win_crumbs(s), crumb_rate(s) * utopia.WIN_MINUTES)   # later: half an hour of breadcrumbs
 
     def test_rate_breakdown_adds_up(self):
         s = new_utopia("A#1", 0)
         s.update(pond=10, golden=2, champs={"Lux": "S", "Nami": "S+"}, caught=["Nami"], boost=0.5)
         s["levels"]["bakery"] = 2
         b = utopia.rate_breakdown(s)
-        self.assertEqual([(x["id"], x["count"]) for x in b["sources"]], [("pond", 10), ("golden", 2), ("champion", 2), ("fire", 1)])
+        self.assertEqual([(x["id"], x["count"]) for x in b["sources"]], [("pond", 10), ("marsh", 0), ("golden", 2), ("champion", 2), ("fire", 1)])
         self.assertAlmostEqual(b["base"], sum(x["perMin"] for x in b["sources"]))
         self.assertAlmostEqual(b["total"], b["base"] * (1 + b["bakery"]) * (1 + b["boost"]))
         self.assertAlmostEqual(b["total"], crumb_rate(s))
+
+
+class MarshTests(unittest.TestCase):
+    def test_two_of_a_kind_become_one_of_the_next(self):
+        s = new_utopia("A#1", 0)
+        s["pond"] = 5
+        self.assertEqual(utopia.merge_birds(s, 0), {1: 1})
+        self.assertEqual((s["pond"], s["birds"][0], utopia.pond_used(s)), (3, 1, 4))   # a spot freed
+        with self.assertRaises(ValueError):   # only one mallard
+            utopia.merge_birds(s, 1)
+        with self.assertRaises(ValueError):   # royal swans are the top
+            utopia.merge_birds(s, len(utopia.BIRDS) - 1)
+
+    def test_merging_everything_cascades_and_keeps_the_score(self):
+        s = new_utopia("A#1", 0)
+        s["pond"] = 8
+        before = score(s)
+        self.assertEqual(utopia.merge_birds(s, None, every=True), {1: 4, 2: 2, 3: 1})   # 8 ducks -> 1 wood duck
+        self.assertEqual((s["pond"], s["birds"][:3]), (0, [0, 0, 1]))
+        self.assertEqual(score(s), before)   # a bird counts as the ducks that went into it
+
+    def test_each_kind_collects_more_and_duck_science_multiplies_them(self):
+        s = new_utopia("A#1", 0)
+        s.update(pond=2, birds=[1, 0, 1, 0, 0])
+        s["levels"]["science"] = 1
+        self.assertAlmostEqual(crumb_rate(s), (2 + utopia.MARSH_STEP + utopia.MARSH_STEP ** 3) * utopia.SCIENCE_BOOST)
+        self.assertAlmostEqual(utopia.bird_rate(1), 2 * 1.1)   # 10% more than the two ducks
+
+    def test_birds_take_pond_spots(self):
+        s = empty()
+        s["birds"] = [utopia.pond_space(1), 0, 0, 0, 0]   # a pond full of mallards
+        s["lost"] = 1
+        advance(s, 0)
+        advance(s, utopia.GROW_MINUTES * MIN)
+        self.assertEqual((s["pond"], s["edge"]), (0, 1))   # no room: the new duck waits at the edge
 
 
 class InfirmaryTests(unittest.TestCase):
@@ -325,13 +381,13 @@ class GameTests(TempStorageCase):
         self.assertTrue(two["leading"] or one["leading"])
 
     def test_a_new_win_gives_breadcrumbs_and_raids_both(self):
-        self.game.state(viewer=False, now=1000)
+        rate = self.game.state(viewer=False, now=1000)["players"][0]["rate"]
         self.rows["duo one#na1"].insert(0, row("3", 3))
         self.rows["duo two#na2"].insert(0, row("3", 3, champion="Garen"))
         v = self.game.state(viewer=False, now=2000)
         one, two = v["players"]
         self.assertEqual(len(one["ducklings"]), 0)   # no duckling for a win: they come from the infirmary
-        self.assertIn(f"{utopia.WIN_CRUMBS} breadcrumbs", one["log"][-1 if not one["raids"] else 1]["text"])
+        self.assertIn(f"{round(rate * utopia.WIN_MINUTES):,} breadcrumbs", one["log"][-1 if not one["raids"] else 1]["text"])   # half an hour's worth
         self.assertEqual(one["raids"][0]["matchId"], "3")
         self.assertEqual(one["raids"][0]["geese"], two["raids"][0]["geese"])   # the same wave
         again = self.game.state(viewer=False, now=3000)
@@ -668,6 +724,16 @@ class GameTests(TempStorageCase):
         out = self.game.act({"owner": "duo one#na1", "action": "challenge", "champion": "Annie"}, viewer=False, now=2000)
         self.assertEqual(out["result"]["fight"]["perk"]["salt"], "chili")
         self.assertEqual(out["players"][0]["perks"], {})
+
+    def test_merging_in_the_marsh(self):
+        self.game.state(viewer=False, now=1000)
+        out = self.game.act({"owner": "duo one#na1", "action": "merge", "tier": 0}, viewer=False, now=1000)
+        p = out["players"][0]
+        self.assertEqual((out["result"], p["pond"], p["birds"][0], p["pondUsed"]), ({"made": {1: 1}}, utopia.STARTING_DUCKS - 2, 1, utopia.STARTING_DUCKS - 1))
+        p = self.game.act({"owner": "duo one#na1", "action": "mergeAll"}, viewer=False, now=1000)["players"][0]
+        self.assertEqual((p["pond"], p["birds"][:2]), (1, [0, 1]))   # 3 ducks + a mallard -> 1 duck + a wood duck
+        with self.assertRaises(ValueError):
+            self.game.act({"owner": "duo one#na1", "action": "merge", "tier": 0}, viewer=False, now=1000)
 
     def test_score_counts_districts(self):
         s = new_utopia("A#1", 0)

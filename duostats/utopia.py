@@ -15,8 +15,12 @@ The duck pipeline: new ducks come from the Duck Infirmary, a lab whose nests are
 duckling into a free nest for breadcrumbs (spawn_cost(), a little more after each one; never while the nests are
 full). It grows there for grow_minutes(), then moves to the pond, or waits at its edge if it's full. Only ducks in
 the pond collect breadcrumbs (golden, champion and caught fire ducks collect wherever they are). The infirmary's upgrades:
-more nests, and a shorter incubation time. Wins used to give ducklings; any still in the old lost and found box move
-to nests.
+more nests, a shorter incubation time, and Duck Science (each level: pond ducks collect x1.5). Wins used to give
+ducklings; any still in the old lost and found box move to nests.
+
+The Mystic Marsh: the Mystic, a wizard toad, zaps two pond birds of the same kind into one of the next kind up
+(BIRDS: duck, mallard, wood duck, swan, black swan, royal swan). Each collects MARSH_STEP times the one below (10% more
+than the two it replaced) and takes one pond spot, so merging frees room. Duck Science multiplies them all.
 
 The Champion Quarter is a lounge where your five defenders rest; there you can see each one's stats and buy it hats
 (just for looks: HATS). Hats belong to the champion, so they stay if it leaves the squad and comes back.
@@ -59,13 +63,18 @@ DUCK_RATE = 1.0              # breadcrumbs a minute for each duck in the pond
 GOLDEN_RATE = 3.0            # ... for each golden duck (pentakills)
 CHAMPION_RATE = 1.5          # ... for each champion duck (S- or S on a champion)
 FIRE_RATE = 2.0              # ... for each caught fire duck (S+)
-BAKERY_BONUS = 0.25          # +25% breadcrumbs per bakery level
+BAKERY_BONUS = 0.25          # each bakery level multiplies breadcrumbs by 1.25 (compounding: x9.3 at level 10)
+SCIENCE_BOOST = 1.5          # each Duck Science level multiplies what every pond duck collects by 1.5
+MARSH_STEP = 2.2             # in the Mystic Marsh, 2 birds -> 1 of the next kind, collecting 2.2x (10% more than both)
 TRIPLE_BOOST, QUADRA_BOOST = 0.005, 0.015   # permanent breadcrumb boost per triple / quadra kill
 GROW_MINUTES = 8 * 60        # how long a duckling takes to grow in its nest, before incubation upgrades
 INCUBATION_SPEEDUP = 0.8     # each incubation time level: 20% less time in the nest
 SPAWN_COST = 100             # breadcrumbs for the first duckling spawned ...
 SPAWN_GROWTH = 1.05          # ... and 5% more for each one after (slow at first, then steep)
-WIN_CRUMBS = 100              # bonus breadcrumbs for a new win (catch-up boost applies)
+WIN_CRUMBS = 100              # bonus breadcrumbs for a new win, at least (catch-up boost applies) ...
+WIN_MINUTES = 30             # ... or this many minutes of breadcrumbs, whichever is more, so wins keep mattering
+RAID_MINUTES = 15            # a raid win: 30 breadcrumbs a goose, or this many minutes of breadcrumbs if that's more
+STEAL_MINUTES = 10           # a raid loss: 15% of breadcrumbs, up to 500 or this many minutes of breadcrumbs
 MAX_REPORTS, MAX_LOG = 10, 30
 
 # hat -> (name, breadcrumbs), cheapest first
@@ -83,8 +92,9 @@ BUILDINGS = {
     "spa":    (20000, 4.0, 2, [(1, "Spa"), (2, "Hot springs")]),
     "fence":  (600, 1.7, 9, [(1, "Fences"), (4, "Scarecrows"), (7, "Honk-proof walls")]),
     "incubation": (500, 2.0, 10, [(1, "Incubation time")]),   # in the Duck Infirmary
+    "science": (1000, 3.0, 15, [(1, "Duck Science")]),          # in the Duck Infirmary: what each pond duck collects
 }
-START_LEVELS = {"nests": 1, "pond": 1, "bakery": 0, "spa": 0, "fence": 0, "incubation": 0}
+START_LEVELS = {"nests": 1, "pond": 1, "bakery": 0, "spa": 0, "fence": 0, "incubation": 0, "science": 0}
 
 
 def grow_minutes(level: int) -> float:
@@ -93,6 +103,20 @@ def grow_minutes(level: int) -> float:
 
 def spawn_cost(spawned: int) -> int:
     return round(SPAWN_COST * SPAWN_GROWTH ** spawned)    # 100, 105, 110 ... 163 for the 11th, 1,147 for the 51st
+
+
+# the Mystic Marsh's birds, smallest first: plain pond ducks, then what two of the kind before turn into
+BIRDS = [("duck", "Duck"), ("mallard", "Mallard"), ("wood", "Wood duck"), ("swan", "Swan"), ("black", "Black swan"), ("royal", "Royal swan")]
+
+
+def bird_rate(tier: int, science: int = 0) -> float:
+    """Breadcrumbs a minute for one bird of a kind (0: a plain duck), with Duck Science."""
+    return DUCK_RATE * MARSH_STEP ** tier * SCIENCE_BOOST ** science
+
+
+def pond_used(s: dict) -> int:
+    """Pond spots taken: plain ducks and every bird from the Mystic Marsh, one spot each."""
+    return s["pond"] + sum(s["birds"])
 
 
 def nest_space(level: int) -> int:
@@ -118,10 +142,10 @@ def building_name(building: str, level: int) -> str:
 # ---- the race ----
 def score(s: dict) -> int:
     """The Ductopia Score: ducks, buildings, districts and raid wins."""
-    ducks = s["pond"] + s["edge"] + len(s["ducklings"]) + s["lost"]
+    ducks = s["pond"] + s["edge"] + len(s["ducklings"]) + s["lost"] + sum(n * 2 ** (i + 1) for i, n in enumerate(s["birds"]))   # merging never lowers it
     lv = s["levels"]
     return (10 * ducks + 50 * s["golden"] + 40 * len(s["champs"]) + 50 * len(s["caught"])
-            + 20 * (lv["nests"] + lv["pond"]) + 25 * lv["bakery"] + 60 * lv["spa"] + 15 * lv["fence"]
+            + 20 * (lv["nests"] + lv["pond"]) + 25 * (lv["bakery"] + lv["science"]) + 60 * lv["spa"] + 15 * lv["fence"]
             + 100 * len(districts(s)) + 30 * s["raidWins"])
 
 
@@ -153,15 +177,51 @@ def crumb_rate(s: dict) -> float:
 
 
 def rate_breakdown(s: dict) -> dict:
-    """Where the breadcrumbs a minute come from: each kind of duck (how many, and how much each collects), then the
-    bakery's bonus and the multikill boost, which multiply them all."""
-    sources = [("pond", "Ducks in the pond", s["pond"], DUCK_RATE), ("golden", "Golden ducks (Penta Plaza)", s["golden"], GOLDEN_RATE),
+    """Where the breadcrumbs a minute come from: each kind of duck (how many, and how much each collects; Duck Science
+    raises what pond ducks collect), then the bakery's bonus and the multikill boost, which multiply them all."""
+    sci, marsh = s["levels"]["science"], sum(n * bird_rate(i + 1, s["levels"]["science"]) for i, n in enumerate(s["birds"]))
+    sources = [("pond", "Ducks in the pond", s["pond"], bird_rate(0, sci)),
+               ("marsh", "Birds from the Mystic Marsh", sum(s["birds"]), marsh / sum(s["birds"]) if sum(s["birds"]) else 0), ("golden", "Golden ducks (Penta Plaza)", s["golden"], GOLDEN_RATE),
                ("champion", "Champion ducks (Champion Quarter)", len(s["champs"]), CHAMPION_RATE),
                ("fire", "Caught fire ducks (in the Spa)", len(s["caught"]), FIRE_RATE)]
     base = sum(n * each for _, _, n, each in sources)
-    bakery = BAKERY_BONUS * s["levels"]["bakery"]
+    bakery = (1 + BAKERY_BONUS) ** s["levels"]["bakery"] - 1
     return {"sources": [{"id": k, "name": name, "count": n, "each": each, "perMin": n * each} for k, name, n, each in sources],
             "base": base, "bakery": bakery, "boost": s["boost"], "total": base * (1 + bakery) * (1 + s["boost"])}
+
+
+def win_crumbs(s: dict) -> float:
+    """A win's breadcrumbs, before the catch-up boost: WIN_MINUTES of breadcrumbs, or WIN_CRUMBS early on."""
+    return max(WIN_CRUMBS, crumb_rate(s) * WIN_MINUTES)
+
+
+def merge_birds(s: dict, tier, every: bool = False) -> dict:
+    """The Mystic zaps a pair of `tier` (0: plain ducks) into one of the next kind; every: all pairs, smallest first
+    (so new mallards can pair up too). Returns {tier made: how many}."""
+    have = lambda t: s["pond"] if t == 0 else s["birds"][t - 1]
+    def take(t, n):
+        if t == 0:
+            s["pond"] -= n
+        else:
+            s["birds"][t - 1] -= n
+    made = {}
+    if every:
+        for t in range(len(BIRDS) - 1):
+            pairs = have(t) // 2
+            if pairs:
+                take(t, pairs * 2)
+                s["birds"][t] += pairs
+                made[t + 1] = pairs
+        return made
+    if not isinstance(tier, int) or not 0 <= tier < len(BIRDS):
+        raise ValueError("There's no such bird.")
+    if tier == len(BIRDS) - 1:
+        raise ValueError("A royal swan is as grand as birds get.")
+    if have(tier) < 2:
+        raise ValueError(f"The Mystic needs two {BIRDS[tier][1].lower()}s.")
+    take(tier, 2)
+    s["birds"][tier] += 1
+    return {tier + 1: 1}
 
 
 # ---- the duck pipeline over time ----
@@ -177,7 +237,7 @@ def advance(s: dict, now: int):
         if due is None or due > now:
             break
         for _ in [r for r in s["ducklings"] if r <= t]:
-            if s["pond"] < pond_space(s["levels"]["pond"]):
+            if pond_used(s) < pond_space(s["levels"]["pond"]):
                 s["pond"] += 1
             else:
                 s["edge"] += 1
@@ -205,13 +265,14 @@ def migrate(s: dict):
     s.setdefault("hats", {})
     for k, v in (("ranks", {}), ("challenges", []), ("bossFights", []), ("soaks", []), ("perks", {}),   # Training Grounds, Spa
                  ("machines", {}), ("bakes", {}), ("treats", {}), ("spentBadges", {}),               # Bakery
-                 ("caught", []), ("seasonFire", {}), ("machineCount", {})):                         # Volcano Spa, Bakery
+                 ("caught", []), ("seasonFire", {}), ("machineCount", {}),                          # Volcano Spa, Bakery
+                 ("birds", [0] * (len(BIRDS) - 1))):                                                # Mystic Marsh
         s.setdefault(k, v)
     s["bakes"] = {t: u if isinstance(u, list) else [u] for t, u in s["bakes"].items()}   # one batch per machine, from before extra machines
 
 
 def _fill_pond(s: dict):
-    take = max(0, min(pond_space(s["levels"]["pond"]) - s["pond"], s["edge"]))
+    take = max(0, min(pond_space(s["levels"]["pond"]) - pond_used(s), s["edge"]))
     s["pond"] += take
     s["edge"] -= take
 
@@ -594,7 +655,7 @@ def raid(defenders: list, seed, wave: int, fence: int, max_rounds: int = 15) -> 
 # ---- the game ----
 def new_utopia(riot_id: str, now: int) -> dict:
     return {"riotId": riot_id, "founded": now, "tick": now, "crumbs": float(FOUNDING_GIFT), "feathers": 0,
-            "levels": dict(START_LEVELS), "ducklings": [], "lost": 0, "spawned": 0, "hats": {}, "pond": STARTING_DUCKS, "edge": 0,
+            "levels": dict(START_LEVELS), "ducklings": [], "lost": 0, "spawned": 0, "hats": {}, "pond": STARTING_DUCKS, "birds": [0] * (len(BIRDS) - 1), "edge": 0,
             "golden": 0, "boost": 0.0, "champs": {}, "fire": 0, "graded": {}, "games": [], "raids": [], "raidWins": 0,
             "squad": [], "training": {}, "ranks": {}, "challenges": [], "bossFights": [], "soaks": [], "perks": {},
             "machines": {}, "machineCount": {}, "bakes": {}, "treats": {}, "spentBadges": {}, "caught": [], "seasonFire": {}, "log": [], "founding": None}
@@ -765,8 +826,9 @@ class DuckUtopia:
                 recs = champion_records(rows.get(key, []))
                 squad = self._squad(s, recs, classes)
                 if r.get("win"):
-                    s["crumbs"] += WIN_CRUMBS * boost
-                    got.insert(0, f"{round(WIN_CRUMBS * boost)} breadcrumbs")
+                    won = win_crumbs(s) * boost
+                    s["crumbs"] += won
+                    got.insert(0, f"{round(won):,} breadcrumbs")
                     if s["ranks"].get(r["champion"], 0) < MAX_RANK:
                         s["challenges"].append(r["champion"])   # a win on any champion: a boss challenge in the Training Grounds
                         got.append("a Training Grounds challenge")
@@ -780,8 +842,8 @@ class DuckUtopia:
                         s["perks"].pop(d["champion"], None)
                     rep.update(matchId=mid, t=now, champion=r["champion"])
                     s["raids"] = ([rep] + s["raids"])[:MAX_REPORTS]
-                    self._note(s, now, "Goose raid: " + (f"won! +{rep['reward']['crumbs']} breadcrumbs, +{rep['reward']['feathers']} feathers"
-                                                         if rep["win"] else f"lost. The geese took {rep['stolen']} breadcrumbs."))
+                    self._note(s, now, "Goose raid: " + (f"won! +{rep['reward']['crumbs']:,} breadcrumbs, +{rep['reward']['feathers']} feathers"
+                                                         if rep["win"] else f"lost. The geese took {rep['stolen']:,} breadcrumbs."))
                 _fill_nests(s, now)
                 scores[key] = score(s)
         for p in players:   # grades that came in after their game was counted still earn their ducks
@@ -853,12 +915,12 @@ class DuckUtopia:
         """golden: the bonus from defenders with golden spa salts (0.6 = +60%)."""
         if rep["win"]:
             s["raidWins"] += 1
-            crumbs, feathers = round(30 * rep["total"] * boost * (1 + golden)), round((1 + rep["wave"] // 5) * boost * (1 + golden))
+            crumbs, feathers = round(max(30 * rep["total"], crumb_rate(s) * RAID_MINUTES) * boost * (1 + golden)), round((1 + rep["wave"] // 5) * boost * (1 + golden))
             s["crumbs"] += crumbs
             s["feathers"] += feathers
             rep["reward"], rep["stolen"] = {"crumbs": crumbs, "feathers": feathers}, 0
         else:
-            stolen = round(min(s["crumbs"] * 0.15, 500))
+            stolen = round(min(s["crumbs"] * 0.15, max(500, crumb_rate(s) * STEAL_MINUTES)))
             s["crumbs"] -= stolen
             rep["reward"], rep["stolen"] = {"crumbs": 0, "feathers": 0}, stolen
 
@@ -1085,6 +1147,12 @@ class DuckUtopia:
             s["bakes"][t] = sorted(s["bakes"].get(t, []) + [until])
             self._note(s, now, f"Started baking {name.lower()} ({', '.join(f'{n} {BADGE_INFO[b][1]}' for b, n in recipe.items())}).")
             return {"baking": t, "until": until}
+        if action in ("merge", "mergeAll"):   # the Mystic Marsh: two of a kind in, one of the next kind out
+            made = merge_birds(s, body.get("tier"), action == "mergeAll")
+            _fill_pond(s)   # merging frees pond spots: ducks waiting at the edge move in
+            if action == "mergeAll" and made:
+                self._note(s, now, f"The Mystic zapped {sum(made.values())} pair{'s' if sum(made.values()) != 1 else ''} in the Mystic Marsh.")
+            return {"made": made}
         raise ValueError("Unknown action.")
 
     # ---- what the page gets ----
@@ -1104,12 +1172,12 @@ class DuckUtopia:
             lv = s["levels"]
             squad = [{**d, "boss": boss(d), "maxRank": d["rank"] >= MAX_RANK} for d in self._squad(s, recs, classes)]
             out.append({
-                **{k: s[k] for k in ("riotId", "feathers", "levels", "lost", "spawned", "hats", "pond", "edge", "golden", "boost",
+                **{k: s[k] for k in ("riotId", "feathers", "levels", "lost", "spawned", "hats", "pond", "birds", "edge", "golden", "boost",
                                      "champs", "fire", "caught", "raids", "raidWins", "training", "ranks", "challenges", "bossFights", "soaks", "perks",
                                      "log", "founding", "founded")},
                 "crumbs": round(s["crumbs"], 2), "ducklings": sorted(s["ducklings"]),
                 "score": scores[i], "catchUp": catch_up(scores[i], best), "leading": len(scores) > 1 and scores[i] == best and scores.count(best) == 1,
-                "rate": round(crumb_rate(s), 3), "rateFrom": rate_breakdown(s), "heat": heat(s), "nestSpace": nest_space(lv["nests"]), "pondSpace": pond_space(lv["pond"]),
+                "rate": round(crumb_rate(s), 3), "rateFrom": rate_breakdown(s), "heat": heat(s), "nestSpace": nest_space(lv["nests"]), "pondSpace": pond_space(lv["pond"]), "pondUsed": pond_used(s),
                 "districts": districts(s), "boostFrom": boost_breakdown(s, rows.get(p.key, [])),
                 "plaza": penta_plaza(s, rows.get(p.key, [])), "volcano": fire_ducks(s, rows.get(p.key, []), classes),
                 "lab": {"spawnCost": spawn_cost(s["spawned"]), "grow": grow_minutes(lv["incubation"]),
@@ -1133,7 +1201,8 @@ class DuckUtopia:
                 "champions": sorted(({"champion": c, "cls": classes.get(c, "fighter"), "games": r["games"]}
                                      for c, r in recs.items()), key=lambda x: (-x["games"], x["champion"])),
             })
-        return {"now": now, "me": 1 if viewer else 0, "players": out, "goldenRate": GOLDEN_RATE, "fireRate": FIRE_RATE, "winCrumbs": WIN_CRUMBS,
+        return {"now": now, "me": 1 if viewer else 0, "players": out, "goldenRate": GOLDEN_RATE, "fireRate": FIRE_RATE, "winCrumbs": WIN_CRUMBS, "winMinutes": WIN_MINUTES, "raidMinutes": RAID_MINUTES,
+                "scienceBoost": SCIENCE_BOOST, "marshBirds": [{"id": k, "name": n, "rate": bird_rate(i)} for i, (k, n) in enumerate(BIRDS)],
                 "hatShop": [{"id": h, "name": n, "cost": c} for h, (n, c) in HATS.items()],
                 "salts": [{"id": k, "name": n, "does": does} for k, (n, does) in SALTS.items()],
                 "temps": [{"id": k, "name": n, "cost": c, "minutes": m, "power": pw} for k, (n, c, m, pw) in TEMPS.items()],
