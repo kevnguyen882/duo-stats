@@ -130,7 +130,7 @@ function renderResources(){
     ${p.lost ? `<div class="warn">${pic('duckling')}<b>${p.lost}</b><span>egg${p.lost === 1 ? '' : 's'} waiting for a free nest (upgrade the nests for more)</span></div>` : ''}
 
     ${p.boost ? `<div class="utipped" tabindex="0" data-tip-html="${esc(boostTip(p))}"><b>+${pctOf(p.boost)}</b><span>multikill boost</span></div>` : ''}
-    ${p.crates ? `<div class="ucrates">${pic('victory-crate')}<b>${p.crates}</b><span>victory crate${p.crates === 1 ? '' : 's'} from wins</span>${mine() ? '<button data-crate>Open</button>' : ''}</div>` : ''}`;
+    ${p.crates ? `<div class="ucrates">${pic('special-delivery')}<b>${p.crates}</b><span>special deliver${p.crates === 1 ? 'y' : 'ies'} from wins</span>${mine() ? '<button data-crate>Open</button>' : ''}</div>` : ''}`;
 }
 $('#resources').addEventListener('click', e=>{ if(e.target.closest('[data-crate]')) openCrate(); });
 const pctOf = v => `${+(v * 100).toFixed(1)}%`;
@@ -681,13 +681,13 @@ const bakeryRoom = (()=>{
   return {reset, size};
 })();
 
-// ---- opening a victory crate: it shakes, bursts, and shows what was inside (rolled on the Mac running the app) ----
+// ---- opening a special delivery: it shakes, bursts, and shows what was inside (rolled on the Mac running the app) ----
 const RARITY = {common: '#adb5bd', uncommon: '#51cf66', rare: '#4dabf7', legendary: '#fcc419'};
 async function openCrate(){
   if(busy || !mine() || !U.players[U.me].crates) return;
   busy = true;
   const box = $('#crateBox'), calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  box.innerHTML = `<div class="box ucrate"><h2 id="crateTitle">Victory crate</h2><div class="ucrate-stage"><div class="ucrate-pic shake">${pic('victory-crate')}</div></div>
+  box.innerHTML = `<div class="box ucrate"><h2 id="crateTitle">Special delivery</h2><div class="ucrate-stage"><div class="ucrate-pic shake">${pic('special-delivery')}</div></div>
     <p class="ucrate-loot" aria-live="polite">Opening…</p><div class="ubtns"></div></div>`;
   box.classList.remove('hidden');
   try{
@@ -833,7 +833,7 @@ const W = 480, H = 280;
 // where each place sits on the map (its picture's top-left; all PLACE_SIZE square), round the pond in the middle: the
 // Duck Lab and the Volcano Spa down the left, the Bakery and Spa top right, the Plaza and Quarter bottom right
 const PLACE_SIZE = 44;
-const CRATE_SPOT = {x: 270, y: 28, s: 32};   // where victory crates sit on the map
+const CRATE_SPOT = {x: 270, y: 28, s: 32};   // where special deliveries sit on the map
 const PLACES = {lab: [16, 8], marsh: [16, 100], volcano: [16, 192], bakery: [350, 8], spa: [422, 8], plaza: [350, 192], quarter: [422, 192]};
 const scene = (()=>{
   const cv = $('#scene'), g = cv.getContext('2d');
@@ -938,10 +938,10 @@ const scene = (()=>{
     [x, y] = at('spa');
     if(p.levels.spa){ sprite(BUILD_INFO.spa[0](p.levels.spa), x, y, S); names(x, y, p.levels.spa >= 2 ? 'Hot springs' : 'Spa', p.soaks.length ? `${p.soaks.length} soaking` : ''); }
     else lot(x, y, 'Spa plot');
-    if(p.crates){   // victory crates waiting to be opened, bobbing near the pond
+    if(p.crates){   // special deliveries waiting to be opened, bobbing near the pond
       const hop = Math.round(Math.abs(Math.sin(now / 350)) * 3);
-      sprite('victory-crate', CRATE_SPOT.x, CRATE_SPOT.y - hop, CRATE_SPOT.s);
-      label(`${plural(p.crates, 'crate')}${mine() ? ': open!' : ''}`, CRATE_SPOT.x + CRATE_SPOT.s / 2, CRATE_SPOT.y + CRATE_SPOT.s + 2, 'center', '#ffe066');
+      sprite('special-delivery', CRATE_SPOT.x, CRATE_SPOT.y - hop, CRATE_SPOT.s);
+      label(`${p.crates} deliver${p.crates === 1 ? 'y' : 'ies'}${mine() ? ': open!' : ''}`, CRATE_SPOT.x + CRATE_SPOT.s / 2, CRATE_SPOT.y + CRATE_SPOT.s + 2, 'center', '#ffe066');
     }
     [x, y] = at('marsh');   // the Mystic Marsh, where the Mystic zaps pairs of birds into bigger ones
     sprite('district-mystic-marsh', x, y, S); names(x, y, 'Mystic Marsh', p.birds.some(n=>n) ? plural(p.birds.reduce((a, n)=>a + n, 0), 'bird') : 'no birds yet');
@@ -962,7 +962,7 @@ const scene = (()=>{
     const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * W / r.width, y = (e.clientY - r.top) * H / r.height;
     return SPOTS.find(o=>x >= o.x && x < o.x + o.w && y >= o.y && y < o.y + o.h);
   };
-  const onCrate = e => {   // the victory crates on the map, while there are some to open
+  const onCrate = e => {   // the special deliveries on the map, while there are some to open
     if(!U || !mine() || !U.players[viewing].crates) return false;
     const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * W / r.width, y = (e.clientY - r.top) * H / r.height;
     return x >= CRATE_SPOT.x - 4 && x < CRATE_SPOT.x + CRATE_SPOT.s + 4 && y >= CRATE_SPOT.y - 6 && y < CRATE_SPOT.y + CRATE_SPOT.s + 14;

@@ -886,7 +886,7 @@ class GameTests(TempStorageCase):
         self.storage.write_json(self.game.path, data)
         self.assertEqual(self.game.state(viewer=False, now=1000)["players"][0]["discovered"], 2)
 
-    def test_a_win_drops_a_victory_crate_to_open(self):
+    def test_a_win_drops_a_special_delivery_to_open(self):
         self.game.state(viewer=False, now=1000)
         crate = {"owner": "duo one#na1", "action": "openCrate"}
         with self.assertRaises(ValueError):   # none yet
@@ -897,7 +897,7 @@ class GameTests(TempStorageCase):
         out = self.game.act(crate, viewer=False, now=2000)
         self.assertIn(out["result"]["loot"]["rarity"], ("common", "uncommon", "rare", "legendary"))
         self.assertEqual(out["players"][0]["crates"], 0)
-        self.assertIn("Opened a victory crate", out["players"][0]["log"][0]["text"] + out["players"][0]["log"][1]["text"])
+        self.assertIn("Opened a special delivery", out["players"][0]["log"][0]["text"] + out["players"][0]["log"][1]["text"])
 
     def test_every_game_together_lays_an_egg(self):
         self.game.state(viewer=False, now=1000)

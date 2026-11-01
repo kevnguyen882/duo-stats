@@ -77,7 +77,7 @@ SPAWN_COST = 100             # breadcrumbs for the first duckling spawned ...
 SPAWN_GROWTH = 1.05          # ... and 5% more for each duck or bird in your flock past the first STARTING_DUCKS
 CLUTCH_DISCOUNT = 0.1       # hatching a clutch (every free nest at once, 2 or more): 10% off
 GAME_EGGS, WIN_EGGS = 1, 2
-# a victory crate, dropped by each new win and opened from the page: kind -> (rarity, chance out of 100)
+# a special delivery, dropped by each new win and opened from the page: kind -> (rarity, chance out of 100)
 CRATE_LOOT = {"crumbs": ("common", 55), "feathers": ("common", 15), "eggs": ("uncommon", 15), "mallards": ("uncommon", 8),
               "baker": ("rare", 5), "golden": ("legendary", 2)}
 CRATE_MINUTES, CRATE_MIN_CRUMBS, CRATE_FEATHERS = 60, 500, 5   # free eggs laid in the Duck Lab by each new game together, and by a win
@@ -121,7 +121,7 @@ def spawn_cost(flock: int) -> int:
 
 
 def open_crate(s: dict, now: int) -> dict:
-    """Open one victory crate: roll its loot (seeded by how many this player has opened, so reloading can't change it),
+    """Open one special delivery: roll its loot (seeded by how many this player has opened, so reloading can't change it),
     give it, and say what it was."""
     n = s.get("cratesOpened", 0)
     roll, total = random.Random(f"crate-{s['riotId']}-{n}").random() * 100, 0
@@ -957,7 +957,7 @@ class DuckUtopia:
                 got.append(f"{eggs} egg{'s' if eggs > 1 else ''} in the Duck Lab")
                 if r.get("win"):
                     s["crates"] = s.get("crates", 0) + 1
-                    got.append("a victory crate")
+                    got.append("a special delivery")
                 recs = champion_records(rows.get(key, []))
                 squad = self._squad(s, recs, classes)
                 if r.get("win"):
@@ -1104,13 +1104,13 @@ class DuckUtopia:
             s["spawned"] += 1
             s["ducklings"].append(now + round(grow_minutes(s["levels"]["incubation"]) * 60000))
             return {"spawned": s["spawned"]}
-        if action == "openCrate":   # a victory crate from a win: what's inside was settled when it dropped
+        if action == "openCrate":   # a special delivery from a win: what's inside was settled when it dropped
             if not s.get("crates"):
-                raise ValueError("No victory crates to open: win a game together to get one.")
+                raise ValueError("No special deliveries to open: win a game together to get one.")
             before = discovered(s)
             loot = open_crate(s, now)
             s["discovered"] = discovered(s)
-            self._note(s, now, f"Opened a victory crate: {loot['name']} ({loot['rarity']}).")
+            self._note(s, now, f"Opened a special delivery: {loot['name']} ({loot['rarity']}).")
             if s["discovered"] > before:
                 self._note(s, now, f"The Mystic Marsh: a new bird! A golden egg hatched into a {BIRDS[s['discovered']][1].lower()}.")
             return {"loot": loot, "crates": s["crates"]}

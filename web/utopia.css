@@ -44,7 +44,7 @@
 #marshDetail .umystery .duck{filter:brightness(0) opacity(.35)}   /* a dark shape: the next bird stays a mystery */
 #marshDetail .umystery b{font-family:ui-monospace,Menlo,monospace;letter-spacing:.15em}
 .ufull{color:#e8590c;font-weight:600;margin-top:0}
-/* victory crates */
+/* special deliveries */
 .ucrates{border-color:#f2c94c!important}
 .ucrates button{margin-left:auto;padding:5px 12px;font-size:13px}
 .ucrate{text-align:center}
