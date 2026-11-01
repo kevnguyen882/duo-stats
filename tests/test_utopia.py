@@ -135,16 +135,17 @@ class MarshTests(unittest.TestCase):
 
 
     def test_the_new_ducks_sit_below_the_swans_and_old_saves_keep_their_worth(self):
-        self.assertEqual([k for k, _ in utopia.BIRDS], ["duck", "mallard", "wood", "baker", "chad", "firefighter", "swan", "black", "royal"])
+        self.assertEqual([k for k, _ in utopia.BIRDS], ["duck", "mallard", "wood", "baker", "chad", "firefighter", "dj", "raver", "police",
+                                                         "swan", "black", "royal"])
         s = new_utopia("A#1", 0)
         s["birds"] = [1, 0, 2, 0, 1]   # saved with the old ladder: a mallard, two swans and a royal swan
         before = (score(s), crumb_rate(s))
         migrate(s)
-        self.assertEqual(s["birds"], [1, 0, 2, 0, 1, 0, 0, 0])   # now a mallard, two baker ducks and a firefighter duck
+        self.assertEqual(s["birds"], [1, 0, 2, 0, 1] + [0] * (len(utopia.BIRDS) - 6))   # now a mallard, two baker ducks and a firefighter duck
         self.assertEqual((score(s), crumb_rate(s)), before)
 
 
-class InfirmaryTests(unittest.TestCase):
+class DuckLabTests(unittest.TestCase):
     def test_costs_and_times(self):
         self.assertEqual(spawn_cost(0), utopia.SPAWN_COST)
         self.assertLess(spawn_cost(1) - spawn_cost(0), spawn_cost(50) - spawn_cost(49))   # slow at first, then steep
@@ -431,7 +432,7 @@ class GameTests(TempStorageCase):
         v = self.game.state(viewer=False, now=2000)
         one, two = v["players"]
         self.assertEqual(len(one["ducklings"]), utopia.WIN_EGGS)   # a win lays two eggs, straight into free nests
-        self.assertIn("2 eggs in the infirmary", one["log"][-1 if not one["raids"] else 1]["text"])
+        self.assertIn("2 eggs in the Duck Lab", one["log"][-1 if not one["raids"] else 1]["text"])
         self.assertIn(f"{round(rate * utopia.WIN_MINUTES):,} breadcrumbs", one["log"][-1 if not one["raids"] else 1]["text"])   # half an hour's worth
         self.assertEqual(one["raids"][0]["matchId"], "3")
         self.assertEqual(one["raids"][0]["geese"], two["raids"][0]["geese"])   # the same wave
@@ -776,7 +777,7 @@ class GameTests(TempStorageCase):
         self.rows["duo one#na1"].insert(0, row("3", 3, win=False))
         p = self.game.state(viewer=False, now=2000)["players"][0]
         self.assertEqual(len(p["ducklings"]), utopia.GAME_EGGS)   # a loss: one egg
-        self.assertIn("1 egg in the infirmary", p["log"][-1 if not p["raids"] else 1]["text"])
+        self.assertIn("1 egg in the Duck Lab", p["log"][-1 if not p["raids"] else 1]["text"])
 
     def test_merging_in_the_marsh(self):
         self.game.state(viewer=False, now=1000)

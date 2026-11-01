@@ -27,7 +27,7 @@ const BUILD_INFO = {   // building -> (art for its level, what it does)
     : p.levels.spa ? 'A pool for recovery soaks (see the Spa panel); the Hot springs add a second' : 'Recovery soaks that refresh your defenders with perks, and a big boost to your Ductopia Score'],
   fence: [()=>'tile-mud', (p)=>p.levels.fence ? `Geese bite ${Math.round(Math.min(.06 * p.levels.fence, .5) * 100)}% softer in raids` : 'Goose defences: geese bite 6% softer a level in raids'],
 };
-const LAB = ['nests', 'incubation', 'science'];   // the Duck Infirmary's upgrades, shown in its lab rather than under Build
+const LAB = ['nests', 'incubation', 'science'];   // the Duck Lab's upgrades, shown in its lab rather than under Build
 const bakeryPct = lvl => `+${Math.round((1.25 ** lvl - 1) * 100).toLocaleString()}%`;   // bakery levels compound: x1.25 each
 const ROOMS = [...LAB, 'bakery'];      // ... and the bakery's, in the Bakery
 const fmtMin = m => { m = Math.round(m); return m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}` : `${m} min`; };
@@ -126,7 +126,7 @@ function renderResources(){
     <div>${pic('icon-feather')}<b>${p.feathers}</b><span>goose feathers</span></div>
     <div>${pic('duck-plain')}<b>${p.pondUsed}/${p.pondSpace}</b><span>${p.pondUsed > p.pond ? 'ducks and birds' : 'ducks'} in the pond</span></div>
     ${p.edge ? `<div class="warn">${pic('duck-plain')}<b>${p.edge}</b><span>waiting at the pond's edge (upgrade the pond)</span></div>` : ''}
-    <div>${pic('duckling')}<b>${p.ducklings.length}/${p.nestSpace}</b><span>ducklings growing in the infirmary${p.ducklings.length ? ` · next grows in <span id="grow">${growLeft(p)}</span>` : ''}</span></div>
+    <div>${pic('duckling')}<b>${p.ducklings.length}/${p.nestSpace}</b><span>ducklings growing in the Duck Lab${p.ducklings.length ? ` · next grows in <span id="grow">${growLeft(p)}</span>` : ''}</span></div>
     ${p.lost ? `<div class="warn">${pic('duckling')}<b>${p.lost}</b><span>egg${p.lost === 1 ? '' : 's'} waiting for a free nest (upgrade the nests for more)</span></div>` : ''}
 
     ${p.boost ? `<div class="utipped" tabindex="0" data-tip-html="${esc(boostTip(p))}"><b>+${pctOf(p.boost)}</b><span>multikill boost</span></div>` : ''}`;
@@ -172,7 +172,7 @@ function renderBuild(){
     const [img, what] = BUILD_INFO[b];
     return buildRow(b, x, p, own, img(Math.max(1, x.level)), what(p), x.next && x.level ? (x.next === x.name ? `level ${x.level + 1}` : x.next) : '');
   }).join('') + (own ? '' : `<p class="unote">Only ${esc(shortName(p.riotId))} can build here.</p>`)
-    + '<p class="unote">The nests, spawning ducklings and Duck Science are in the Duck Infirmary, and the bakery and its machines in the Bakery: click them in your Ductopia.</p>';
+    + '<p class="unote">The nests, spawning ducklings and Duck Science are in the Duck Lab, and the bakery and its machines in the Bakery: click them in your Ductopia.</p>';
   affordable();
 }
 const duckEach = p => p.rateFrom.sources.find(x=>x.id === 'pond').each;   // what one pond duck collects, with Duck Science
@@ -188,8 +188,8 @@ function renderLab(){
     + buildRow('incubation', bs.incubation, p, own, 'egg', `Ducklings grow into ducks in ${fmtMin(L.grow)}`, L.growNext ? fmtMin(L.growNext) : '')
     + buildRow('science', bs.science, p, own, 'duck-mage', `Each pond duck collects ${perMin(duckEach(p))} breadcrumbs a minute (×${U.scienceBoost} a level)`,
                bs.science.cost != null ? `${perMin(duckEach(p) * U.scienceBoost)} a minute each` : '')
-    + (own ? '' : `<p class="unote">Only ${esc(shortName(p.riotId))} can use this infirmary.</p>`);
-  $('#labNote').textContent = `Spawn ducklings into the infirmary's nests for breadcrumbs, and every game you play together lays a free egg (a win, ${L.winEggs}). Each one grows in its fluid chamber for ${fmtMin(L.grow)}, then joins the pond; now and then one hatches as a mallard. While every nest is full you can't spawn more: upgrade the nests for room, and the incubation time to grow them faster. Duck Science makes every pond duck collect more, and raises the chance of a mallard.`;
+    + (own ? '' : `<p class="unote">Only ${esc(shortName(p.riotId))} can use this Duck Lab.</p>`);
+  $('#labNote').textContent = `Spawn ducklings into the Duck Lab's nests for breadcrumbs, and every game you play together lays a free egg (a win, ${L.winEggs}). Each one grows in its fluid chamber for ${fmtMin(L.grow)}, then joins the pond; now and then one hatches as a mallard. While every nest is full you can't spawn more: upgrade the nests for room, and the incubation time to grow them faster. Duck Science makes every pond duck collect more, and raises the chance of a mallard.`;
   affordable();
 }
 $('#labBuild').addEventListener('click', e=>{
@@ -782,7 +782,7 @@ setInterval(()=>{
 // ---- the scene: a little pixel picture of the utopia being viewed ----
 const W = 480, H = 280;
 // where each place sits on the map (its picture's top-left; all PLACE_SIZE square), round the pond in the middle: the
-// Duck Infirmary and the Volcano Spa down the left, the Bakery and Spa top right, the Plaza and Quarter bottom right
+// Duck Lab and the Volcano Spa down the left, the Bakery and Spa top right, the Plaza and Quarter bottom right
 const PLACE_SIZE = 44;
 const PLACES = {lab: [16, 8], marsh: [16, 100], volcano: [16, 192], bakery: [350, 8], spa: [422, 8], plaza: [350, 192], quarter: [422, 192]};
 const scene = (()=>{
@@ -860,11 +860,11 @@ const scene = (()=>{
       for(let i = 0; i < n; i++) sprite('duck-plain', b.cx - n * 7 + i * 14, y + (i % 2) * 2, 16);
       label(`${p.edge} waiting for room in the pond`, b.cx, y + 19, 'center', '#ffd8a8');
     }
-    // the Duck Infirmary, where ducklings grow, and eggs waiting for a nest
+    // the Duck Lab, where ducklings grow, and eggs waiting for a nest
     const S = PLACE_SIZE, at = id => PLACES[id];
     let [x, y] = at('lab');
     sprite('building-infirmary', x, y, S);
-    names(x, y, 'Infirmary', `${p.ducklings.length}/${p.nestSpace} growing`);
+    names(x, y, 'Duck Lab', `${p.ducklings.length}/${p.nestSpace} growing`);
     for(let i = 0; i < Math.min(p.ducklings.length, 8); i++){
       const hop = Math.abs(Math.sin(now / 300 + i)) * 2;
       sprite('duckling', x - 4 + (i % 4) * 13, y + S + 25 + Math.floor(i / 4) * 11 - hop, 11);
@@ -901,7 +901,7 @@ const scene = (()=>{
       else { label('🔒', x + S / 2, y + S / 3); names(x, y, name, `needs ${need}`, '#dee2e6'); }
     });
   }
-  // clicking the Duck Infirmary, the Bakery, the Spa or a district visits it
+  // clicking the Duck Lab, the Bakery, the Spa or a district visits it
   const SPOTS = Object.entries(PLACES).map(([view, [x, y]])=>({view, x: x - 8, y, w: PLACE_SIZE + 16, h: PLACE_SIZE + 24}));   // (with its labels)
   const spotAt = e => {
     const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * W / r.width, y = (e.clientY - r.top) * H / r.height;
@@ -1037,7 +1037,7 @@ const plaza = (()=>{
   size(); requestAnimationFrame(draw);
   return {reset, size};
 })();
-// ---- the Duck Infirmary: a lab whose nests are fluid chambers, one duckling growing in each ----
+// ---- the Duck Lab: a lab whose nests are fluid chambers, one duckling growing in each ----
 const LW = 480, LH = 200;
 const lab = (()=>{
   const cv = $('#labScene'), g = cv.getContext('2d');
@@ -1050,7 +1050,7 @@ const lab = (()=>{
   function reset(){
     if(!U) return;
     const p = U.players[viewing];
-    cv.setAttribute('aria-label', `Duck Infirmary: ${p.ducklings.length} of ${p.nestSpace} nests have a duckling growing`);
+    cv.setAttribute('aria-label', `Duck Lab: ${p.ducklings.length} of ${p.nestSpace} nests have a duckling growing`);
   }
   function label(text, x, y, color = '#fff', align = 'center'){
     g.font = 'bold 9px ui-monospace, Menlo, monospace'; g.textAlign = align; g.textBaseline = 'top';
@@ -1487,7 +1487,7 @@ function checkFireDucks(){
   });
 }
 
-// Penta Plaza, the Duck Infirmary, the Bakery, the Champion Quarter, the Spa and the Volcano Spa take the place of the utopia scene,
+// Penta Plaza, the Duck Lab, the Bakery, the Champion Quarter, the Spa and the Volcano Spa take the place of the utopia scene,
 // each with a button back
 
 // ---- the Mystic Marsh: the Mystic, a wizard toad, zaps two birds of a kind into one of the next kind up ----
@@ -1503,7 +1503,7 @@ function renderMarsh(){
   $('#marshDetail').innerHTML = U.marshBirds.map((b, i)=>{
     const n = birdCount(p, i);
     return `<div class="udef">${pic(birdArt(b.id), 'duck pix')}<span></span><div class="t"><b>${esc(b.name)} <span class="ucount">${n}</span></b>
-      <span>${perMin(birdEach(p, i))} breadcrumbs a minute each${i ? ` · from 2 ${esc(U.marshBirds[i - 1].name.toLowerCase())}s` : ' · from the Infirmary'}</span></div>
+      <span>${perMin(birdEach(p, i))} breadcrumbs a minute each${i ? ` · from 2 ${esc(U.marshBirds[i - 1].name.toLowerCase())}s` : ' · from the Duck Lab'}</span></div>
       ${own && i < last ? `<button class="ghost" data-zap="${i}" ${n >= 2 ? '' : 'disabled'}>Zap a pair</button>` : ''}</div>`;
   }).join('') + (own ? `<div class="ubtns"><button data-zap-all ${canPair ? '' : 'disabled'}>Send every pair in</button></div>`
     : `<p class="unote">Only ${esc(shortName(p.riotId))} can send birds into their marsh.</p>`);
@@ -1620,7 +1620,7 @@ const marshRoom = (()=>{
     });
     const p = U.players[viewing], more = U.marshBirds.reduce((a, _, i)=>a + birdCount(p, i), 0) - birds.length;
     if(more > 0) label(`+${more} more in the pond`, MCX, MCY + MRY - 14, '#e5dbff');
-    if(!birds.length) label('No birds yet: hatch ducks in the Infirmary', MCX, MCY - 4, '#e5dbff');
+    if(!birds.length) label('No birds yet: hatch ducks in the Duck Lab', MCX, MCY - 4, '#e5dbff');
     fx = fx.filter(f=>now - f.t < 1100);
     fx.forEach(f=>{
       const t = now - f.t; if(t < 0) return;
@@ -1702,7 +1702,7 @@ function founding(){
   box.innerHTML = `<div class="box"><canvas></canvas><h2 id="foundTitle">Founding Day</h2>
     <p>${f.games} games together, replayed. Your Ductopia starts from your history.</p>
     <ul>${rows.map(([img, n, text], i)=>`<li style="animation-delay:${300 + i * 450}ms">${pic(img)}<b>${n}</b><span>${text}</span></li>`).join('')}</ul>
-    <p>New ducks are spawned in the Duck Infirmary and grow in its nests, then move to the pond to collect breadcrumbs.</p>
+    <p>New ducks are spawned in the Duck Lab and grow in its nests, then move to the pond to collect breadcrumbs.</p>
     <button data-found-close>Enter your Ductopia</button></div>`;
   box.classList.remove('hidden');
   box.querySelector('button').focus();
