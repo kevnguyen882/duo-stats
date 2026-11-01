@@ -106,6 +106,27 @@ class PipelineTests(unittest.TestCase):
         self.assertAlmostEqual(b["total"], crumb_rate(s))
 
 
+class CrateTests(unittest.TestCase):
+    def test_a_crate_gives_its_loot_and_the_roll_is_fixed(self):
+        a, b = new_utopia("A#1", 0), new_utopia("A#1", 0)
+        a["crates"] = b["crates"] = 1
+        self.assertEqual(utopia.open_crate(a, 0), utopia.open_crate(b, 0))   # the same crate always holds the same thing
+        self.assertEqual((a["crates"], a["cratesOpened"]), (0, 1))
+
+    def test_a_golden_egg_hatches_into_the_next_mystery_bird(self):
+        s = new_utopia("A#1", 0)
+        s["birds"][2] = 1   # the best so far: a baker duck
+        for n in range(500):   # find a crate that holds a golden egg
+            s["cratesOpened"], s["crates"] = n, 1
+            before = list(s["birds"])
+            loot = utopia.open_crate(s, 0)
+            if loot["kind"] == "golden":
+                break
+            s["birds"] = before
+        self.assertEqual((loot["tier"], s["birds"][3]), (4, 1))   # a finance chad duck: the step after the baker
+        self.assertEqual(utopia.discovered(s), 4)
+
+
 class MarshTests(unittest.TestCase):
     def test_two_of_a_kind_become_one_of_the_next(self):
         s = new_utopia("A#1", 0)
@@ -864,6 +885,19 @@ class GameTests(TempStorageCase):
         data["players"]["duo one#na1"]["birds"] = [0] * (len(utopia.BIRDS) - 1)
         self.storage.write_json(self.game.path, data)
         self.assertEqual(self.game.state(viewer=False, now=1000)["players"][0]["discovered"], 2)
+
+    def test_a_win_drops_a_victory_crate_to_open(self):
+        self.game.state(viewer=False, now=1000)
+        crate = {"owner": "duo one#na1", "action": "openCrate"}
+        with self.assertRaises(ValueError):   # none yet
+            self.game.act(crate, viewer=False, now=1000)
+        self.rows["duo one#na1"][:0] = [row("4", 4), row("3", 3, win=False)]   # a win and a loss: one crate
+        p = self.game.state(viewer=False, now=2000)["players"][0]
+        self.assertEqual(p["crates"], 1)
+        out = self.game.act(crate, viewer=False, now=2000)
+        self.assertIn(out["result"]["loot"]["rarity"], ("common", "uncommon", "rare", "legendary"))
+        self.assertEqual(out["players"][0]["crates"], 0)
+        self.assertIn("Opened a victory crate", out["players"][0]["log"][0]["text"] + out["players"][0]["log"][1]["text"])
 
     def test_every_game_together_lays_an_egg(self):
         self.game.state(viewer=False, now=1000)

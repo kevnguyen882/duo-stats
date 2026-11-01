@@ -340,6 +340,13 @@ function buildArt(){
     px(0, 96, 40, 16, '#5c636a'); px(0, 96, 40, 2, '#adb5bd'); px(4, 102, 32, 6, '#343a40');
     px(3, 10, 2, 86, 'rgba(220,240,255,.55)'); px(35, 10, 2, 86, 'rgba(220,240,255,.55)'); px(8, 14, 2, 70, 'rgba(255,255,255,.35)');
   });
+  ART['victory-crate'] = chunky(48, px=>{
+    px(3, 8, 18, 14, '#a0652e'); px(3, 8, 18, 2, '#c8843f'); px(3, 20, 18, 2, '#7a4a20');   // the box
+    px(4, 12, 16, 1, '#7a4a20'); px(4, 16, 16, 1, '#7a4a20');                                // planks
+    px(3, 8, 2, 14, '#f2c94c'); px(19, 8, 2, 14, '#f2c94c'); px(3, 4, 18, 4, '#8a5428');     // gold corners, the lid
+    px(3, 4, 18, 1, '#b5733a'); px(10, 4, 4, 18, '#f2c94c');                                 // a gold band over the top
+    px(11, 12, 2, 1, '#fff3bf'); px(10, 13, 4, 1, '#fff3bf'); px(11, 14, 2, 2, '#fff3bf');  // a star on the band
+  });
   ART['egg'] = fromMap(['..WWW...', '.WWWWW..', 'WWWSWWW.', 'WWWWWWW.', 'WWWWWSW.', 'WSWWWWW.', '.WWWWW..', '..WWW...'], {W: '#fff8e1', S: '#e9d8a6'}, 2);
   Object.entries(HAT_ART).forEach(([name, [rows, pal]])=>{ ART['hat-' + name] = fromMap(rows, pal, 2); });
   // the Champion Quarter: a lounge for the defenders

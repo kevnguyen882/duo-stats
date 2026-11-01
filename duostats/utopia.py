@@ -76,7 +76,11 @@ INCUBATION_SPEEDUP = (30 / GROW_MINUTES) ** (1 / 10)   # each incubation level: 
 SPAWN_COST = 100             # breadcrumbs for the first duckling spawned ...
 SPAWN_GROWTH = 1.05          # ... and 5% more for each duck or bird in your flock past the first STARTING_DUCKS
 CLUTCH_DISCOUNT = 0.1       # hatching a clutch (every free nest at once, 2 or more): 10% off
-GAME_EGGS, WIN_EGGS = 1, 2   # free eggs laid in the Duck Lab by each new game together, and by a win
+GAME_EGGS, WIN_EGGS = 1, 2
+# a victory crate, dropped by each new win and opened from the page: kind -> (rarity, chance out of 100)
+CRATE_LOOT = {"crumbs": ("common", 55), "feathers": ("common", 15), "eggs": ("uncommon", 15), "mallards": ("uncommon", 8),
+              "baker": ("rare", 5), "golden": ("legendary", 2)}
+CRATE_MINUTES, CRATE_MIN_CRUMBS, CRATE_FEATHERS = 60, 500, 5   # free eggs laid in the Duck Lab by each new game together, and by a win
 LUCKY_EGG, LUCKY_SCIENCE, MAX_LUCKY = 0.05, 0.01, 0.2   # chance a duckling hatches as a mallard: 5%, +1% a Duck Science level
 WIN_CRUMBS = 100              # bonus breadcrumbs for a new win, at least (catch-up boost applies) ...
 WIN_MINUTES = 30             # ... or this many minutes of breadcrumbs, whichever is more, so wins keep mattering
@@ -114,6 +118,38 @@ def spawn_cost(flock: int) -> int:
     """A duckling's price, by how many ducks and birds you have now (flock()): 100 up to STARTING_DUCKS, then 5% more
     for each one (163 with 15, 1,147 with 55). Merging two birds into one in the Mystic Marsh makes it cheaper again."""
     return round(SPAWN_COST * SPAWN_GROWTH ** max(0, flock - STARTING_DUCKS))
+
+
+def open_crate(s: dict, now: int) -> dict:
+    """Open one victory crate: roll its loot (seeded by how many this player has opened, so reloading can't change it),
+    give it, and say what it was."""
+    n = s.get("cratesOpened", 0)
+    roll, total = random.Random(f"crate-{s['riotId']}-{n}").random() * 100, 0
+    kind = next(k for k, (_, chance) in CRATE_LOOT.items() if roll < (total := total + chance))
+    loot = {"kind": kind, "rarity": CRATE_LOOT[kind][0]}
+    if kind == "crumbs":
+        amount = round(max(CRATE_MIN_CRUMBS, crumb_rate(s) * CRATE_MINUTES))
+        s["crumbs"] += amount
+        loot.update(amount=amount, name=f"{amount:,} breadcrumbs", icon="icon-breadcrumb")
+    elif kind == "feathers":
+        s["feathers"] += CRATE_FEATHERS
+        loot.update(amount=CRATE_FEATHERS, name=f"{CRATE_FEATHERS} goose feathers", icon="icon-feather")
+    elif kind == "eggs":   # a full clutch: one for each nest
+        amount = nest_space(s["levels"]["nests"])
+        s["lost"] += amount
+        _fill_nests(s, now)
+        loot.update(amount=amount, name=f"a clutch of {amount} eggs", icon="egg")
+    elif kind == "mallards":
+        s["birds"][0] += 2
+        loot.update(amount=2, name="2 mallards", icon="bird-mallard")
+    else:   # a baker duck, or a golden egg: the next bird up from the best you've made (a mystery until now)
+        tier = 3 if kind == "baker" else min(discovered(s) + 1, len(BIRDS) - 1)
+        s["birds"][tier - 1] += 1
+        loot.update(amount=1, tier=tier, name=("a golden egg: " if kind == "golden" else "") + f"a {BIRDS[tier][1].lower()}",
+                    icon="bird-" + BIRDS[tier][0])
+    s["crates"] -= 1
+    s["cratesOpened"] = n + 1
+    return loot
 
 
 def free_nests(s: dict) -> int:
@@ -919,6 +955,9 @@ class DuckUtopia:
                 eggs = WIN_EGGS if r.get("win") else GAME_EGGS
                 s["lost"] += eggs   # into free nests below (_fill_nests), or they wait for one
                 got.append(f"{eggs} egg{'s' if eggs > 1 else ''} in the Duck Lab")
+                if r.get("win"):
+                    s["crates"] = s.get("crates", 0) + 1
+                    got.append("a victory crate")
                 recs = champion_records(rows.get(key, []))
                 squad = self._squad(s, recs, classes)
                 if r.get("win"):
@@ -1065,6 +1104,16 @@ class DuckUtopia:
             s["spawned"] += 1
             s["ducklings"].append(now + round(grow_minutes(s["levels"]["incubation"]) * 60000))
             return {"spawned": s["spawned"]}
+        if action == "openCrate":   # a victory crate from a win: what's inside was settled when it dropped
+            if not s.get("crates"):
+                raise ValueError("No victory crates to open: win a game together to get one.")
+            before = discovered(s)
+            loot = open_crate(s, now)
+            s["discovered"] = discovered(s)
+            self._note(s, now, f"Opened a victory crate: {loot['name']} ({loot['rarity']}).")
+            if s["discovered"] > before:
+                self._note(s, now, f"The Mystic Marsh: a new bird! A golden egg hatched into a {BIRDS[s['discovered']][1].lower()}.")
+            return {"loot": loot, "crates": s["crates"]}
         if action == "autonest":   # turn the Auto-nester on or off
             if not s["levels"]["autonest"]:
                 raise ValueError("Build the Auto-nester first.")
@@ -1298,7 +1347,7 @@ class DuckUtopia:
                                      "log", "founding", "founded")},
                 "crumbs": round(s["crumbs"], 2), "ducklings": sorted(s["ducklings"]),
                 "score": scores[i], "catchUp": catch_up(scores[i], best), "leading": len(scores) > 1 and scores[i] == best and scores.count(best) == 1,
-                "rate": round(crumb_rate(s), 3), "rateFrom": rate_breakdown(s), "heat": heat(s), "nestSpace": nest_space(lv["nests"]), "pondSpace": pond_space(lv["pond"]), "pondUsed": pond_used(s), "edgeSpace": edge_space(s), "discovered": discovered(s),
+                "rate": round(crumb_rate(s), 3), "rateFrom": rate_breakdown(s), "heat": heat(s), "nestSpace": nest_space(lv["nests"]), "pondSpace": pond_space(lv["pond"]), "pondUsed": pond_used(s), "edgeSpace": edge_space(s), "crates": s.get("crates", 0), "discovered": discovered(s),
                 "districts": districts(s), "boostFrom": boost_breakdown(s, rows.get(p.key, [])),
                 "plaza": penta_plaza(s, rows.get(p.key, [])), "volcano": fire_ducks(s, rows.get(p.key, []), classes),
                 "lab": {"spawnCost": spawn_cost(flock(s)), "clutchCost": clutch_cost(s), "freeNests": free_nests(s), "clutchDiscount": CLUTCH_DISCOUNT, "autoOn": s.get("autoOn", True), "autoSpawned": s.get("autoSpawned", 0), "autoScience": AUTONEST_SCIENCE, "flock": flock(s), "lucky": lucky_chance(s), "gameEggs": GAME_EGGS, "winEggs": WIN_EGGS,

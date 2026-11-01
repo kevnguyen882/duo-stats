@@ -44,6 +44,22 @@
 #marshDetail .umystery .duck{filter:brightness(0) opacity(.35)}   /* a dark shape: the next bird stays a mystery */
 #marshDetail .umystery b{font-family:ui-monospace,Menlo,monospace;letter-spacing:.15em}
 .ufull{color:#e8590c;font-weight:600;margin-top:0}
+/* victory crates */
+.ucrates{border-color:#f2c94c!important}
+.ucrates button{margin-left:auto;padding:5px 12px;font-size:13px}
+.ucrate{text-align:center}
+.ucrate-stage{position:relative;height:150px;display:grid;place-items:center}
+.ucrate-pic img{width:96px;height:96px;image-rendering:pixelated;position:relative;z-index:1}
+.ucrate-pic.shake{animation:crate-shake .9s ease-in-out}
+.ucrate-pic.pop{animation:crate-pop .45s ease-out}
+.ucrate-burst{position:absolute;width:140px;height:140px;border-radius:50%;background:radial-gradient(closest-side, var(--c), transparent);opacity:.55;animation:crate-burst .6s ease-out}
+.ucrate-loot{display:flex;flex-direction:column;gap:2px;min-height:44px;margin:6px 0 12px}
+.ucrate-loot b{font-size:17px;color:var(--text)}
+.ucrate-rarity{font:800 12px ui-monospace,Menlo,monospace;text-transform:uppercase;letter-spacing:.12em}
+@keyframes crate-shake{10%,50%{transform:rotate(-8deg)}30%,70%{transform:rotate(8deg)}85%{transform:scale(1.15)}}
+@keyframes crate-pop{from{transform:scale(.2)}70%{transform:scale(1.2)}to{transform:none}}
+@keyframes crate-burst{from{transform:scale(.2);opacity:1}}
+@media (prefers-reduced-motion: reduce){ .ucrate-pic,.ucrate-burst{animation:none!important} }
 .ucount{font:800 13px ui-monospace,Menlo,monospace;color:var(--gold);margin-left:4px}
 .umarsh .uplaza-scene canvas.over{cursor:grab}
 .umarsh .uplaza-scene canvas.drag{cursor:grabbing}
