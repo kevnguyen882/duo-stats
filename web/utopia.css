@@ -39,6 +39,10 @@
 /* the Volcano Spa: the scene, and every fire duck listed under it */
 .uvolcano .uplaza-scene{background:#3b3236}
 .uspa .uplaza-scene{background:#5c4b3f}
+.umarsh .uplaza-scene{background:#69a84f}
+.ucount{font:800 13px ui-monospace,Menlo,monospace;color:var(--gold);margin-left:4px}
+.umarsh .uplaza-scene canvas.over{cursor:grab}
+.umarsh .uplaza-scene canvas.drag{cursor:grabbing}
 #tip .ufire{color:#d9480f}
 [data-theme="dark"] #tip .ufire{color:#ff922b}
 .uqpick{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 4px}

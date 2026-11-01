@@ -75,13 +75,13 @@ function accept(s){
   $('#msg').textContent = '';
   $('#game').classList.remove('hidden');
   renderPanels();
-  scene.reset(); plaza.reset(); lab.reset(); bakeryRoom.reset(); quarter.reset(); volcano.reset(); spaRoom.reset();
+  scene.reset(); plaza.reset(); lab.reset(); bakeryRoom.reset(); quarter.reset(); volcano.reset(); spaRoom.reset(); marshRoom.reset();
   founding(); checkFireDucks();
   // the main page's fire duck pop-up links here: #volcano=<player index> opens that player's Volcano Spa
   const link = !openedFromLink && /^#volcano(?:=(\d))?$/.exec(location.hash);
   if(link){
     openedFromLink = true;
-    if(link[1] && U.players[+link[1]] && +link[1] !== viewing){ viewing = +link[1]; renderPanels(); scene.reset(); plaza.reset(); lab.reset(); bakeryRoom.reset(); quarter.reset(); volcano.reset(); spaRoom.reset(); }
+    if(link[1] && U.players[+link[1]] && +link[1] !== viewing){ viewing = +link[1]; renderPanels(); scene.reset(); plaza.reset(); lab.reset(); bakeryRoom.reset(); quarter.reset(); volcano.reset(); spaRoom.reset(); marshRoom.reset(); }
     show('volcano');
   }
 }
@@ -92,7 +92,7 @@ setInterval(()=>{ if(U && U.players.some(p=>p.ducklings.length && p.ducklings[0]
 
 // ---- drawing the panels ----
 function renderPanels(){
-  renderScore(); renderWhose(); renderResources(); renderBuild(); renderLab(); renderBakery(); renderQuarter(); renderVolcano(); renderSquad(); renderRaids(); renderGrounds(); renderSpa(); renderLog();
+  renderScore(); renderWhose(); renderResources(); renderBuild(); renderLab(); renderBakery(); renderQuarter(); renderVolcano(); renderSquad(); renderRaids(); renderGrounds(); renderSpa(); renderMarsh(); renderLog();
   if(tipEl && !tipEl.isConnected) showTip({target: document.body});   // what it was over has been redrawn
 }
 function renderScore(){
@@ -111,7 +111,7 @@ function renderWhose(){
 $('#whose').addEventListener('click', e=>{
   const b = e.target.closest('[data-view]'); if(!b) return;
   viewing = +b.dataset.view; store.set('utopia_view', viewing); picking = false;
-  renderPanels(); scene.reset(); plaza.reset(); lab.reset(); bakeryRoom.reset(); quarter.reset(); volcano.reset(); spaRoom.reset();
+  renderPanels(); scene.reset(); plaza.reset(); lab.reset(); bakeryRoom.reset(); quarter.reset(); volcano.reset(); spaRoom.reset(); marshRoom.reset();
 });
 
 function growLeft(p){ return p.ducklings.length ? clock(p.ducklings[0] - nowApp()) : ''; }
@@ -124,7 +124,7 @@ function renderResources(){
   $('#resources').innerHTML = `
     <div class="utipped" tabindex="0" data-tip-html="${esc(rateTip(p))}">${pic('icon-breadcrumb')}<b id="crumbs">${fmt(crumbsNow(p))}</b><span>breadcrumbs · ${fmt(p.rate)}/min</span></div>
     <div>${pic('icon-feather')}<b>${p.feathers}</b><span>goose feathers</span></div>
-    <div>${pic('duck-plain')}<b>${p.pond}/${p.pondSpace}</b><span>ducks in the pond</span></div>
+    <div>${pic('duck-plain')}<b>${p.pondUsed}/${p.pondSpace}</b><span>${p.pondUsed > p.pond ? 'ducks and birds' : 'ducks'} in the pond</span></div>
     ${p.edge ? `<div class="warn">${pic('duck-plain')}<b>${p.edge}</b><span>waiting at the pond's edge (upgrade the pond)</span></div>` : ''}
     <div>${pic('duckling')}<b>${p.ducklings.length}/${p.nestSpace}</b><span>ducklings growing in the infirmary${p.ducklings.length ? ` · next grows in <span id="grow">${growLeft(p)}</span>` : ''}</span></div>
     ${p.lost ? `<div class="warn">${pic('duckling')}<b>${p.lost}</b><span>in the lost and found (upgrade the nests)</span></div>` : ''}
@@ -783,7 +783,7 @@ const W = 480, H = 280;
 // where each place sits on the map (its picture's top-left; all PLACE_SIZE square), round the pond in the middle: the
 // Duck Infirmary and the Volcano Spa down the left, the Bakery and Spa top right, the Plaza and Quarter bottom right
 const PLACE_SIZE = 44;
-const PLACES = {lab: [16, 8], volcano: [16, 192], bakery: [350, 8], spa: [422, 8], plaza: [350, 192], quarter: [422, 192]};
+const PLACES = {lab: [16, 8], marsh: [16, 100], volcano: [16, 192], bakery: [350, 8], spa: [422, 8], plaza: [350, 192], quarter: [422, 192]};
 const scene = (()=>{
   const cv = $('#scene'), g = cv.getContext('2d');
   let ducks = [], t0 = performance.now();
@@ -798,10 +798,10 @@ const scene = (()=>{
   function reset(){
     if(!U) return;
     const p = U.players[viewing], b = pondBox(p);
-    const n = Math.min(p.pond, 36);
-    ducks = Array.from({length: n}, (_, i)=>{
+    const kinds = [...p.birds.flatMap((n, i)=>Array(n).fill(U.marshBirds[i + 1].id)).reverse(), ...Array(p.pond).fill('duck')].slice(0, 36);   // marsh birds first
+    ducks = kinds.map(kind=>{
       const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * .75;
-      return {x: b.cx + Math.cos(a) * b.rx * r, y: b.cy + Math.sin(a) * b.ry * r, vx: (Math.random() < .5 ? -1 : 1) * (4 + Math.random() * 6), phase: Math.random() * 6};
+      return {art: birdArt(kind), x: b.cx + Math.cos(a) * b.rx * r, y: b.cy + Math.sin(a) * b.ry * r, vx: (Math.random() < .5 ? -1 : 1) * (4 + Math.random() * 6), phase: Math.random() * 6};
     });
   }
   function label(text, x, y, align = 'center', color = '#fff'){
@@ -848,11 +848,11 @@ const scene = (()=>{
       const bob = Math.sin(now / 400 + d.phase) * 1;
       g.save();
       if(d.vx < 0){ g.translate(Math.round(d.x) + 8, 0); g.scale(-1, 1); g.translate(-Math.round(d.x) - 8, 0); }
-      g.drawImage(art('duck-plain'), 0, 0, 32, 24, Math.round(d.x), Math.round(d.y + bob), 16, 12);   // swimming: no feet
+      g.drawImage(art(d.art), 0, 0, 32, 24, Math.round(d.x), Math.round(d.y + bob), 16, 12);   // swimming: no feet
       g.restore();
     });
-    label(`${BUILD_INFO.pond[0](p.levels.pond).split('-')[2].replace(/^./, c=>c.toUpperCase())} · ${p.pond}/${p.pondSpace} ducks`, b.cx, b.cy - b.ry - 12);
-    if(p.pond > ducks.length) label(`+${p.pond - ducks.length} more`, b.cx, b.cy + b.ry - 16, 'center', '#ffe066');
+    label(`${BUILD_INFO.pond[0](p.levels.pond).split('-')[2].replace(/^./, c=>c.toUpperCase())} · ${p.pondUsed}/${p.pondSpace} ${p.pondUsed > p.pond ? 'birds' : 'ducks'}`, b.cx, b.cy - b.ry - 12);
+    if(p.pondUsed > ducks.length) label(`+${p.pondUsed - ducks.length} more`, b.cx, b.cy + b.ry - 16, 'center', '#ffe066');
     // ducks waiting at the pond's edge
     if(p.edge){
       const n = Math.min(p.edge, 16), y = b.cy + b.ry + 2;
@@ -887,6 +887,8 @@ const scene = (()=>{
     [x, y] = at('spa');
     if(p.levels.spa){ sprite(BUILD_INFO.spa[0](p.levels.spa), x, y, S); names(x, y, p.levels.spa >= 2 ? 'Hot springs' : 'Spa', p.soaks.length ? `${p.soaks.length} soaking` : ''); }
     else lot(x, y, 'Spa plot');
+    [x, y] = at('marsh');   // the Mystic Marsh, where the Mystic zaps pairs of birds into bigger ones
+    sprite('district-mystic-marsh', x, y, S); names(x, y, 'Marsh', p.birds.some(n=>n) ? plural(p.birds.reduce((a, n)=>a + n, 0), 'bird') : 'the Mystic');
     // districts: unlocked by real achievements only
     const D = [['penta', 'plaza', 'district-penta-plaza', 'Plaza', 'a penta', `${p.golden} golden`, 'duck-golden'],
                ['champion', 'quarter', 'district-champion-quarter', 'Quarter', 'an S', `${Object.keys(p.champs).length} champs`, 'duck-fighter'],
@@ -1479,14 +1481,200 @@ function checkFireDucks(){
     if(e.target.closest('.toastx')) return close();
     const v = e.target.closest('[data-visit-volcano]'); if(!v) return;
     viewing = +v.dataset.visitVolcano; store.set('utopia_view', viewing);
-    renderPanels(); scene.reset(); plaza.reset(); lab.reset(); bakeryRoom.reset(); quarter.reset(); volcano.reset(); spaRoom.reset();
+    renderPanels(); scene.reset(); plaza.reset(); lab.reset(); bakeryRoom.reset(); quarter.reset(); volcano.reset(); spaRoom.reset(); marshRoom.reset();
     show('volcano'); close(); $('#volcano').scrollIntoView({behavior: 'smooth', block: 'start'});
   });
 }
 
 // Penta Plaza, the Duck Infirmary, the Bakery, the Champion Quarter, the Spa and the Volcano Spa take the place of the utopia scene,
 // each with a button back
-const VIEWS = {town: () => scene, plaza: () => plaza, lab: () => lab, bakery: () => bakeryRoom, quarter: () => quarter, volcano: () => volcano, spa: () => spaRoom};
+
+// ---- the Mystic Marsh: the Mystic, a wizard toad, zaps two birds of a kind into one of the next kind up ----
+// The birds are counts on the Mac running the app (BIRDS in duostats/utopia.py); where each one swims is only this page's.
+function birdArt(kind){ return kind === 'duck' ? 'duck-plain' : 'bird-' + kind; }
+const birdCount = (p, i) => i === 0 ? p.pond : p.birds[i - 1];
+const birdEach = (p, i) => duckEach(p) * U.marshBirds[i].rate;   // with Duck Science
+function renderMarsh(){
+  const p = U.players[viewing], own = mine(), last = U.marshBirds.length - 1;
+  const canPair = U.marshBirds.some((_, i)=>i < last && birdCount(p, i) >= 2);
+  $('#marshNote').textContent = 'Two birds of a kind go into the mist and the Mystic zaps them into one of the next kind up. It collects 10% more than the two did '
+    + 'and takes one pond spot, so merging makes room to hatch more. Drag a bird onto a matching one, or tap one and then another. Golden, champion and fire ducks stay as they are.';
+  $('#marshDetail').innerHTML = U.marshBirds.map((b, i)=>{
+    const n = birdCount(p, i);
+    return `<div class="udef">${pic(birdArt(b.id), 'duck pix')}<span></span><div class="t"><b>${esc(b.name)} <span class="ucount">${n}</span></b>
+      <span>${perMin(birdEach(p, i))} breadcrumbs a minute each${i ? ` · from 2 ${esc(U.marshBirds[i - 1].name.toLowerCase())}s` : ' · from the Infirmary'}</span></div>
+      ${own && i < last ? `<button class="ghost" data-zap="${i}" ${n >= 2 ? '' : 'disabled'}>Zap a pair</button>` : ''}</div>`;
+  }).join('') + (own ? `<div class="ubtns"><button data-zap-all ${canPair ? '' : 'disabled'}>Send every pair in</button></div>`
+    : `<p class="unote">Only ${esc(shortName(p.riotId))} can send birds into their marsh.</p>`);
+}
+$('#marshDetail').addEventListener('click', e=>{
+  const z = e.target.closest('[data-zap]');
+  if(z){ marshRoom.zap(+z.dataset.zap); return act({action: 'merge', tier: +z.dataset.zap}); }
+  if(e.target.closest('[data-zap-all]')){ marshRoom.zapAll(); act({action: 'mergeAll'}); }
+});
+
+const MW = 480, MH = 260, MCX = 240, MCY = 132, MRX = 214, MRY = 104, LILY = {x: 74, y: 214}, MARSH_SHOWN = 40;
+const marshRoom = (()=>{
+  const cv = $('#marshScene'), g = cv.getContext('2d');
+  let birds = [], who = null, drag = null, sel = null, fx = [], cast = 0, line = 0;
+  const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const px = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(Math.round(x / 2) * 2, Math.round(y / 2) * 2, w, h); };   // on a 2px grid, like the map
+  const ground = canvasOf(MW, MH, (gg, p)=>{   // grass, the marsh's mossy rim and murky water, cattails and the Mystic's lily pad
+    const rows = (cx, cy, rx, ry, fn) => {   // a stepped ellipse, one 2px row at a time, like the pond art
+      for(let y = -ry; y < ry; y += 2){ const half = Math.round(rx * Math.sqrt(Math.max(0, 1 - ((y + 1) / ry) ** 2)) / 2) * 2; if(half > 0) fn(cx - half, cy + y, half * 2, y); }
+    };
+    for(let y = 0; y < MH; y += 32) for(let x = 0; x < MW; x += 32) gg.drawImage(art('tile-grass'), x, y, 32, 32);
+    rows(MCX, MCY, MRX + 8, MRY + 8, (x, y, w)=>p(x, y, w, 2, '#5c6b34'));
+    rows(MCX, MCY, MRX + 4, MRY + 4, (x, y, w)=>p(x, y, w, 2, '#3d4f2a'));
+    rows(MCX, MCY, MRX, MRY, (x, y, w, dy)=>p(x, y, w, 2, dy > 10 ? '#24474f' : '#2f5f5c'));
+    for(let y = MCY - MRY; y < MCY + MRY; y += 4) for(let x = MCX - MRX; x < MCX + MRX; x += 4)
+      if(((x - MCX) / MRX) ** 2 + ((y - MCY) / MRY) ** 2 < .92 && ((x + y) / 4) % 6 === 0) p(x, y, 2, 2, '#3b6f68');
+    [[52, 66], [82, 50], [412, 58], [440, 82], [400, 206], [150, 230], [330, 234]].forEach(([x, y], i)=>{
+      for(let k = 0; k < 3; k++){ const sx = x + k * 6, h = 18 + ((i + k) % 3) * 6; p(sx, y - h, 2, h, '#4a6b2a'); p(sx - 1, y - h - 6, 4, 8, '#6b4423'); }
+    });
+    rows(LILY.x, LILY.y, 44, 14, (x, y, w)=>p(x, y, w, 2, '#4f7a0e'));
+    rows(LILY.x, LILY.y - 2, 40, 11, (x, y, w)=>p(x, y, w, 2, '#74b816'));
+    p(LILY.x + 18, LILY.y - 4, 22, 2, '#4f7a0e'); p(LILY.x + 24, LILY.y - 2, 16, 2, '#4f7a0e');
+    p(LILY.x + 30, LILY.y + 6, 6, 4, '#e64980'); p(LILY.x + 32, LILY.y + 4, 2, 2, '#ffc9de');
+  });
+  const MIST = Array.from({length: 7}, (_, i)=>({x: (i * 83) % MW, y: MCY - MRY + 20 + (i * 37) % (MRY * 2 - 30), w: 60 + (i * 17) % 50, v: 4 + (i % 3) * 3}));
+  const scale = t => t < 3 ? 2 : 3;   // whole-number sizes: ducks at 2x, swans at 3x
+  const inMarsh = (x, y) => ((x - MCX) / (MRX - 26)) ** 2 + ((y - MCY) / (MRY - 22)) ** 2 <= 1;
+  const nearPad = (x, y) => Math.hypot(x - LILY.x, y - (LILY.y - 26)) < 52;
+  function spot(){ for(let i = 0; i < 200; i++){ const x = MCX - MRX + Math.random() * MRX * 2, y = MCY - MRY + Math.random() * MRY * 2; if(inMarsh(x, y) && !nearPad(x, y)) return {x, y}; } return {x: MCX, y: MCY}; }
+  function shown(p){   // how many of each kind to draw: the bigger birds first, up to MARSH_SHOWN in all
+    let left = MARSH_SHOWN; const out = U.marshBirds.map(()=>0);
+    for(let i = U.marshBirds.length - 1; i >= 0; i--){ out[i] = Math.min(birdCount(p, i), left); left -= out[i]; }
+    return out;
+  }
+  function reset(){   // match the birds drawn to the saved counts, keeping where the ones still here are swimming
+    if(!U) return;
+    const p = U.players[viewing];
+    if(who !== p.riotId){ birds = []; who = p.riotId; sel = null; }
+    const want = shown(p);
+    want.forEach((n, t)=>{
+      const mine = birds.filter(b=>b.tier === t);
+      if(mine.length > n) birds = birds.filter(b=>b.tier !== t || mine.indexOf(b) < n);
+      for(let i = mine.length; i < n; i++) birds.push({tier: t, ...spot(), born: 0, phase: Math.random() * 6});
+    });
+    if(sel && !birds.includes(sel)) sel = null;
+    cv.setAttribute('aria-label', `The Mystic Marsh: the Mystic on a lily pad, and ${plural(birds.length, 'bird')} in the water`);
+  }
+  function size(){
+    const css = cv.clientWidth || MW, dpr = window.devicePixelRatio || 1;
+    cv.width = Math.round(css * dpr); cv.height = Math.round(css * dpr * MH / MW);
+  }
+  function label(text, x, y, color = '#fff'){
+    g.font = 'bold 9px ui-monospace, Menlo, monospace'; g.textAlign = 'center'; g.textBaseline = 'top';
+    g.lineWidth = 3; g.strokeStyle = 'rgba(30,16,40,.9)'; g.strokeText(text, x, y); g.fillStyle = color; g.fillText(text, x, y);
+  }
+  function bolt(x0, y0, x1, y1, seed, color, w){   // a jagged bolt in 2px blocks
+    let r = seed * 9973; const rnd = () => (r = (r * 9301 + 49297) % 233280) / 233280;
+    const pts = Array.from({length: 7}, (_, i)=>[x0 + (x1 - x0) * i / 6 + (i && i < 6 ? (rnd() - .5) * 22 : 0), y0 + (y1 - y0) * i / 6 + (i && i < 6 ? (rnd() - .5) * 22 : 0)]);
+    for(let i = 0; i < 6; i++){ const [ax, ay] = pts[i], [bx, by] = pts[i + 1], n = Math.ceil(Math.hypot(bx - ax, by - ay) / 2);
+      for(let k = 0; k <= n; k++) px(ax + (bx - ax) * k / n - w / 2, ay + (by - ay) * k / n - w / 2, w, w, color); }
+  }
+  // the zap, on the page straight away; the Mac running the app then saves it (act), and reset() lines the birds back up
+  function transform(a, b){
+    const now = performance.now(), t = a.tier + 1;
+    birds = birds.filter(x=>x !== a && x !== b);
+    const n = {tier: t, x: b.x, y: b.y, born: now + 220, phase: Math.random() * 6}; birds.push(n);
+    cast = now;
+    fx.push({kind: 'zap', t: now, x: n.x, y: n.y - 16 * scale(t) / 3, seed: Math.random()}, {kind: 'fog', t: now + 120, x: n.x, y: n.y},
+            {kind: 'pop', t: now + 220, x: n.x, y: n.y - 8 * scale(t) - 4, text: `${U.marshBirds[t].name}!`});
+  }
+  function zap(t){ const two = birds.filter(b=>b.tier === t).slice(0, 2); if(two.length === 2) transform(two[0], two[1]); }
+  async function zapAll(){ for(let t = 0; t < U.marshBirds.length - 1; t++){ for(;;){ const two = birds.filter(b=>b.tier === t); if(two.length < 2) break; transform(two[0], two[1]); await new Promise(r=>setTimeout(r, calm ? 0 : 120)); } } }
+  function merge(a, b){
+    if(a.tier !== b.tier){ $('#msg').className = 'msg err'; $('#msg').textContent = `Only matching birds go in together: a ${U.marshBirds[a.tier].name.toLowerCase()} needs another.`; return false; }
+    if(a.tier === U.marshBirds.length - 1) return false;
+    transform(a, b); act({action: 'merge', tier: a.tier}); return true;
+  }
+  function draw(now){
+    requestAnimationFrame(draw);
+    if(!U || view !== 'marsh') return;
+    const k = cv.width / MW; g.setTransform(k, 0, 0, k, 0, 0); g.imageSmoothingEnabled = false;
+    g.drawImage(ground, 0, 0);
+    for(let r = 0; r < 6; r++){ const x = MCX - 150 + (((calm ? 0 : now) / 40 + r * 61) % 300), y = MCY - 70 + r * 26; if(inMarsh(x, y)) px(x, y, 14, 2, 'rgba(255,255,255,.18)'); }
+    const since = now - cast, hop = since < 420 ? Math.round(Math.sin(since / 420 * Math.PI) * 8) : 0, idle = calm ? 0 : Math.round(Math.sin(now / 700));
+    g.drawImage(art('mystic-toad'), LILY.x - 32, LILY.y - 58 - hop - idle, 64, 64);
+    if(since < 420 && !calm) for(let i = 0; i < 4; i++) px(LILY.x + 26 + Math.cos(now / 60 + i) * 6, LILY.y - 46 - hop + Math.sin(now / 60 + i) * 6, 2, 2, '#ffe066');
+    [...birds].sort((a, b)=>a.y - b.y).forEach(b=>{
+      if(b.born > now) return;
+      const s = 16 * scale(b.tier), grow = Math.min(1, (now - b.born) / 300), kk = calm || grow >= 1 ? 1 : .4 + .6 * grow + Math.sin(grow * Math.PI) * .25;
+      const held = drag && drag.b === b && drag.moved, bob = held || calm ? 0 : Math.round(Math.sin(now / 500 + b.phase));
+      const w = Math.round(s * kk / 2) * 2, h = Math.round(s * .75 * kk / 2) * 2, x = Math.round((b.x - w / 2) / 2) * 2, y = Math.round((b.y - h / 2 + bob) / 2) * 2;
+      if(held) px(b.x - s / 2, b.y + s * .4, s, 2, 'rgba(0,0,0,.25)');
+      if(sel === b || (drag && drag.target === b)){
+        const c = sel === b ? '#ffe066' : drag.ok ? '#b2f2bb' : '#ff8787';
+        px(x - 4, y - 4, 8, 2, c); px(x - 4, y - 4, 2, 8, c); px(x + w - 4, y - 4, 8, 2, c); px(x + w + 2, y - 4, 2, 8, c);
+        px(x - 4, y + h + 2, 8, 2, c); px(x - 4, y + h - 4, 2, 8, c); px(x + w - 4, y + h + 2, 8, 2, c); px(x + w + 2, y + h - 4, 2, 8, c);
+      }
+      g.drawImage(art(birdArt(U.marshBirds[b.tier].id)), 0, 0, 32, 24, x, y, w, h);   // swimming: no feet
+      if(!held) px(x + 2, y + h - 2, w - 4, 2, 'rgba(255,255,255,.35)');
+    });
+    MIST.forEach(m=>{
+      const x = ((m.x + (calm ? 0 : now / 1000 * m.v)) % (MW + 120)) - 60;
+      for(let i = 0; i < m.w; i += 8){ const hh = 6 + Math.round(Math.sin(i / m.w * Math.PI) * 4) * 2; px(x + i, m.y - hh / 2, 8, hh, 'rgba(230,234,255,.16)'); }
+    });
+    const p = U.players[viewing], more = U.marshBirds.reduce((a, _, i)=>a + birdCount(p, i), 0) - birds.length;
+    if(more > 0) label(`+${more} more in the pond`, MCX, MCY + MRY - 14, '#e5dbff');
+    if(!birds.length) label('No birds yet: hatch ducks in the Infirmary', MCX, MCY - 4, '#e5dbff');
+    fx = fx.filter(f=>now - f.t < 1100);
+    fx.forEach(f=>{
+      const t = now - f.t; if(t < 0) return;
+      if(f.kind === 'zap' && t < 320){
+        const x0 = LILY.x + 26, y0 = LILY.y - 52 - Math.round(Math.sin(Math.min(1, t / 420) * Math.PI) * 8);
+        bolt(x0, y0, f.x, f.y, f.seed, '#7950f2', 6); bolt(x0, y0, f.x, f.y, f.seed, '#fff3bf', 2);
+      }
+      if(f.kind === 'fog' && t < 700 && !calm){
+        const q = t / 700, r = 8 + q * 26, a = (1 - q) * .7;
+        for(let i = 0; i < 14; i++){ const ang = i / 14 * Math.PI * 2; px(f.x + Math.cos(ang) * r, f.y + Math.sin(ang) * r * .6, 6, 6, `rgba(240,236,255,${a})`); }
+        for(let i = 0; i < 8; i++){ const ang = i / 8 * Math.PI * 2 + .3; px(f.x + Math.cos(ang) * r * 1.4, f.y + Math.sin(ang) * r, 2, 2, `rgba(208,191,255,${1 - q})`); }
+      }
+      if(f.kind === 'pop'){ g.globalAlpha = Math.max(0, 1 - t / 1100); label(f.text, f.x, f.y - Math.round(t / 1100 * 16), '#e5dbff'); g.globalAlpha = 1; }
+    });
+  }
+  const at = e => { const r = cv.getBoundingClientRect(); return {x: (e.clientX - r.left) * MW / r.width, y: (e.clientY - r.top) * MH / r.height}; };
+  function birdAt(p, not){
+    let best = null, d = 1e9;
+    birds.forEach(b=>{ if(b === not) return; const s = 8 * scale(b.tier) + 6, dd = Math.hypot(p.x - b.x, p.y - b.y); if(Math.abs(p.x - b.x) < s && Math.abs(p.y - b.y) < s * .8 && dd < d){ d = dd; best = b; } });
+    return best;
+  }
+  const onToad = p => Math.abs(p.x - LILY.x) < 30 && p.y > LILY.y - 60 && p.y < LILY.y - 4;
+  const LINES = ['Ribbit. Bring me two of a kind.', 'Two go in, one comes out. That is the way of the marsh.', 'Mind the mist. It tickles.',
+    'I have been turning ducks into swans since before you hatched.', 'A royal swan? Patience, little one. Patience.'];
+  cv.addEventListener('pointerdown', e=>{
+    const p = at(e), b = mine() && birdAt(p);
+    if(!b){ if(onToad(p)){ cast = performance.now(); $('#msg').className = 'msg'; $('#msg').textContent = `The Mystic: “${LINES[line++ % LINES.length]}”`; } return; }
+    cv.setPointerCapture(e.pointerId);
+    drag = {b, sx: p.x, sy: p.y, ox: b.x, oy: b.y, moved: false, target: null, ok: false};
+  });
+  cv.addEventListener('pointermove', e=>{
+    const p = at(e);
+    if(!drag){ cv.classList.toggle('over', !!(mine() && birdAt(p)) || onToad(p)); return; }
+    if(!drag.moved && Math.hypot(p.x - drag.sx, p.y - drag.sy) < 4) return;
+    drag.moved = true; cv.classList.add('drag');
+    drag.b.x = Math.min(MW - 16, Math.max(16, drag.ox + p.x - drag.sx)); drag.b.y = Math.min(MH - 16, Math.max(16, drag.oy + p.y - drag.sy));
+    drag.target = birdAt({x: drag.b.x, y: drag.b.y}, drag.b);
+    drag.ok = !!drag.target && drag.target.tier === drag.b.tier && drag.b.tier < U.marshBirds.length - 1;
+  });
+  cv.addEventListener('pointerup', ()=>{
+    if(!drag) return;
+    const {b, moved, target, ox, oy} = drag; drag = null; cv.classList.remove('drag');
+    if(!moved){   // tap one, then a matching one
+      if(sel && sel !== b){ const a = sel; sel = null; merge(a, b); return; }
+      sel = sel === b ? null : b; return;
+    }
+    if(target && merge(b, target)) return;
+    if(target || !inMarsh(b.x, b.y) || nearPad(b.x, b.y)){ b.x = ox; b.y = oy; }
+  });
+  window.addEventListener('resize', size);
+  size(); requestAnimationFrame(draw);
+  return {reset, size, zap, zapAll};
+})();
+
+const VIEWS = {town: () => scene, plaza: () => plaza, lab: () => lab, bakery: () => bakeryRoom, quarter: () => quarter, volcano: () => volcano, spa: () => spaRoom, marsh: () => marshRoom};
 let view = 'town';
 function show(v){
   view = v;

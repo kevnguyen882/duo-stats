@@ -56,6 +56,22 @@ const CLASS_KIT = {   // extra pixels on the plain duck for each League class
   fighter:  [...line(7, 2, 6, 'R'), [6, 3, 'R'], [5, 4, 'R'], ...line(14, 5, 6, 'M', 0, 1), [13, 9, 'T'], [15, 9, 'T']],
   assassin: [...line(7, 1, 5, 'H'), ...line(6, 2, 2, 'H'), [11, 2, 'H'], [6, 3, 'H'], [6, 4, 'H'], [13, 8, 'M'], [14, 7, 'M'], [12, 10, 'M']],
 };
+// the Mystic Marsh's birds: the duck recoloured, smallest first after the plain duck (see BIRDS in duostats/utopia.py)
+const recolour = fn => DUCK.map((row, y)=>[...row].map((ch, x)=>fn(ch, x, y) || ch).join(''));
+const HEAD = (ch, x, y) => y >= 1 && y <= 4 && ch === 'B' ? 'N' : null;
+const MARSH_BIRDS = {
+  mallard: [recolour((ch, x, y)=>HEAD(ch, x, y) || (y === 5 && ch === 'B' ? 'W' : null)), {N: '#2b8a3e', W: '#ffffff', B: '#b9a894', S: '#6f5a45'}],
+  wood: [recolour((ch, x, y)=>(y === 2 && ch === 'B' && x > 8 ? 'W' : HEAD(ch, x, y))), {N: '#5f3dc4', W: '#ffffff', B: '#c4874f', S: '#7f4f24', O: '#e03131'}],
+  swan: [DUCK, {B: '#ffffff', S: '#b9c6d3', O: '#f08c00'}],
+  black: [DUCK, {B: '#2f3237', S: '#17181b', K: '#f8f9fa', O: '#e03131'}],
+  royal: [recolour((ch, x, y)=>(y === 0 && (x === 7 || x === 9 || x === 11)) || (y === 1 && x >= 7 && x <= 11) ? 'Y' : null), {B: '#ffffff', S: '#f2d27a', Y: '#fcc419', O: '#f08c00'}],
+};
+// the Mystic: the Mystic Marsh's wizard toad, in a starry hat with its wand raised
+const MYSTIC = [
+  '.......P........', '......PPP.......', '.....PPSPP......', '....PPPPPPP...Q.', '..PPPPPPPPPPP.T.', '...GGGGGGGGG..T.',
+  '..GWKGGGGGWKG.T.', '..GGGGGGGGGGGGT.', '..GDDDDDDDDDGGT.', '.GGGYYYYYYYGGGT.', '.GGYYYYYYYYYGG..', '.GGYYYYYYYYYGG..',
+  '..GGYYYYYYYGG...', '.GGGG.....GGGG..', '................', '................'];
+const MYSTIC_PAL = {P: '#5f3dc4', S: '#ffd43b', Q: '#fff3bf', T: '#8b5a2b', G: '#5c940d', D: '#2b5d0a', Y: '#d8f5a2', W: '#ffffff', K: '#1b1b1b'};
 const KIT_PAL = {M: '#9aa3ad', D: '#3b5ba5', Y: '#f7c948', P: '#7c3aed', T: '#8b5a2b', C: '#38bdf8', G: '#2f9e44',
   W: '#ffffff', R: '#e03131', H: '#343a40', Z: '#fff3bf', F: '#fa5252', Q: '#ffd43b'};
 const CHAMP_DUCK = [   // a game with more than one pentakill: crowned, caped, sashed and flexing (20x20, drawn at 40x40)
@@ -186,6 +202,14 @@ function district(kind){
         px(x + 5, 8, 1, 24, '#6b4423'); px(x, 8, 5, 12, c); px(x + 1, 20, 3, 2, c);
       });
       px(8, 36, 5, 4, '#f4f1e8'); px(22, 38, 5, 4, '#f4f1e8'); px(34, 35, 5, 4, '#f4f1e8');
+    } else if(kind === 'marsh'){   // a murky pool with cattails, and the Mystic's hat poking up from a lily pad
+      px(2, 30, 44, 16, '#5c6b34');
+      for(let y = 0; y < 12; y++){ const half = Math.round(19 * Math.sqrt(1 - ((y - 5.5) / 6) ** 2)); px(24 - half, 32 + y, half * 2, 1, y > 5 ? '#24474f' : '#2f5f5c'); }
+      [[6, 18], [9, 22], [39, 20]].forEach(([x, h])=>{ px(x, 44 - h, 1, h - 10, '#4a6b2a'); px(x - 1, 44 - h - 3, 2, 4, '#6b4423'); });
+      px(28, 37, 10, 3, '#74b816'); px(30, 26, 6, 11, '#5c940d'); px(31, 29, 1, 1, '#1b1b1b'); px(34, 29, 1, 1, '#1b1b1b');
+      for(let i = 0; i < 5; i++) px(33 - i, 18 + i * 2, 1 + i * 2, 2, '#5f3dc4');
+      px(32, 21, 1, 1, '#ffd43b'); px(38, 20, 1, 9, '#8b5a2b'); px(37, 18, 3, 2, '#fff3bf');
+      px(14, 36, 4, 2, '#ffffff'); px(17, 35, 1, 1, '#f29a2e'); px(20, 39, 4, 2, '#b9a894'); px(20, 38, 2, 1, '#2b8a3e');   // a duck and a mallard
     } else {
       for(let i = 0; i < 14; i++) px(10 + i, 30 - i*2, 28 - 2*i, 2, i < 11 ? '#6c4f3d' : '#e8590c');
       px(21, 2, 6, 3, '#ff922b'); px(19, 0, 2, 2, '#ffd43b'); px(27, 1, 2, 2, '#ffd43b');
@@ -252,6 +276,9 @@ function buildArt(){
   ART['banner'] = canvasOf(16, 24, (g, px)=>{ px(1, 0, 2, 24, '#6b4423'); px(3, 1, 12, 14, '#c8aa6e'); px(5, 3, 8, 10, '#1f2937'); px(3, 15, 5, 3, '#c8aa6e'); px(10, 15, 5, 3, '#c8aa6e'); });
   [1, 2, 3].forEach(t=>{ ART[`pond-${t}-${['pond', 'lake', 'lagoon'][t-1]}`] = pond(t); ART[`nests-${t}-${['nests', 'village', 'skyline'][t-1]}`] = nests(t); ART[`bakery-${t}`] = bakery(t); });
   ART['spa-1-spa'] = spa(1); ART['spa-2-hotsprings'] = spa(2);
+  ART['district-mystic-marsh'] = district('marsh');
+  Object.entries(MARSH_BIRDS).forEach(([id, [map, pal]])=>{ ART['bird-' + id] = fromMap(map, {...DUCK_PAL, ...pal}, 2); });
+  ART['mystic-toad'] = fromMap(MYSTIC, MYSTIC_PAL, 2);
   ART['district-penta-plaza'] = district('penta'); ART['district-champion-quarter'] = district('champion'); ART['district-volcano-spa'] = district('volcano');
   ART['goose'] = fromMap(GOOSE, GOOSE_PAL, 2);
   ART['goose-armoured'] = fromMap(overlay(GOOSE, [...line(3, 9, 10, 'M'), ...line(2, 10, 12, 'M'), ...line(3, 1, 4, 'M')]), GOOSE_PAL, 2);
