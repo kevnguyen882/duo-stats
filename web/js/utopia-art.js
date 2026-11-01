@@ -93,9 +93,10 @@ const MARSH_BIRDS = {
   dj: [overlay(DUCK, [...line(7, 0, 5, 'H'), [6, 1, 'H'], [12, 1, 'H'], [7, 2, 'P'], [7, 3, 'P'], [8, 2, 'H'], [8, 3, 'H'],   // headphones
                       ...line(8, 6, 3, 'Y'), [9, 7, 'Y']]), {H: '#212529', P: '#f06595', Y: '#fcc419'}],   // and a gold chain
   raver: [overlay(DUCK, [[8, 0, 'P'], [9, 0, 'G'], [10, 0, 'C'], [8, 1, 'P'], [9, 1, 'G'], [10, 1, 'C'],   // a neon mohawk
+                         [7, 3, 'K'], ...line(8, 3, 3, 'K'),                                                 // sunglasses
                          ...line(0, 5, 4, 'G', 0, 1), [1, 6, 'L'], [1, 7, 'L'],                              // a glow stick
                          [4, 13, 'P'], [5, 13, 'P'], [6, 13, 'P'], [9, 13, 'P'], [10, 13, 'P'], [11, 13, 'P']]),   // fluffy leg warmers
-          {P: '#f783ac', G: '#94d82d', C: '#3bc9db', L: '#d8f5a2'}],
+          {P: '#f783ac', G: '#94d82d', C: '#3bc9db', L: '#d8f5a2', K: '#111111'}],
   police: [overlay(recolour((ch, x, y)=>y >= 7 && y <= 12 && ch === 'B' ? 'N' : y >= 7 && ch === 'S' ? 'M' : null),   // a navy uniform
                    [...line(7, 0, 5, 'N'), ...line(7, 1, 5, 'N'), [9, 0, 'Y'], [9, 1, 'Y'], ...line(8, 2, 5, 'K'), [8, 9, 'Y']]),   // cap, badges, brim
            {N: '#1c3d7a', M: '#142c57', Y: '#fcc419', K: '#111111'}],

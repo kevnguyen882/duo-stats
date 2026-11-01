@@ -135,7 +135,7 @@ class MarshTests(unittest.TestCase):
 
 
     def test_the_new_ducks_sit_below_the_swans_and_old_saves_keep_their_worth(self):
-        self.assertEqual([k for k, _ in utopia.BIRDS], ["duck", "mallard", "wood", "baker", "chad", "firefighter", "dj", "raver", "police",
+        self.assertEqual([k for k, _ in utopia.BIRDS], ["duck", "mallard", "wood", "baker", "chad", "firefighter", "police", "raver", "dj",
                                                          "swan", "black", "royal"])
         s = new_utopia("A#1", 0)
         s["birds"] = [1, 0, 2, 0, 1]   # saved with the old ladder: a mallard, two swans and a royal swan

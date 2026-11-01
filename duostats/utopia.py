@@ -20,7 +20,7 @@ Only ducks in the pond collect breadcrumbs (golden, champion and caught fire duc
 Duck Lab's upgrades: more nests, a shorter incubation time, and Duck Science (each level: pond ducks collect x1.5).
 
 The Mystic Marsh: the Mystic, a wizard toad, zaps two pond birds of the same kind into one of the next kind up
-(BIRDS: duck, mallard, wood duck, baker, finance chad, firefighter, DJ, raver and police ducks, swan, black swan,
+(BIRDS: duck, mallard, wood duck, baker, finance chad, firefighter, police, raver and DJ ducks, swan, black swan,
 royal swan). Each collects MARSH_STEP times the one below (10% more
 than the two it replaced) and takes one pond spot, so merging frees room. Duck Science multiplies them all.
 
@@ -122,7 +122,7 @@ def lucky_chance(s: dict) -> float:
 
 # the Mystic Marsh's birds, smallest first: plain pond ducks, then what two of the kind before turn into
 BIRDS = [("duck", "Duck"), ("mallard", "Mallard"), ("wood", "Wood duck"), ("baker", "Baker duck"), ("chad", "Finance Chad duck"),
-         ("firefighter", "Firefighter duck"), ("dj", "DJ duck"), ("raver", "Raver duck"), ("police", "Police duck"),
+         ("firefighter", "Firefighter duck"), ("police", "Police duck"), ("raver", "Raver duck"), ("dj", "DJ duck"),
          ("swan", "Swan"), ("black", "Black swan"), ("royal", "Royal swan")]
 
 
