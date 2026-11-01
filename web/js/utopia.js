@@ -1558,26 +1558,18 @@ const birdCount = (p, i) => i === 0 ? p.pond : p.birds[i - 1];
 const birdEach = (p, i) => duckEach(p) * U.marshBirds[i].rate;   // with Duck Science
 function renderMarsh(){
   const p = U.players[viewing], own = mine(), last = U.marshBirds.length - 1;
-  const canPair = U.marshBirds.some((_, i)=>i < last && birdCount(p, i) >= 2);
   $('#marshNote').textContent = 'Two birds of a kind go into the mist and the Mystic zaps them into one of the next kind up. It collects 10% more than the two did '
-    + 'and takes one pond spot, so merging makes room to hatch more. Drag a bird onto a matching one, or tap one and then another. Golden, champion and fire ducks stay as they are.';
+    + 'and takes one pond spot, so merging makes room to hatch more. Click the Mystic to zap your lowest pair, drag a bird onto a matching one, or tap one and then another. Golden, champion and fire ducks stay as they are.';
   // the ladder up to the best bird made so far, then the next one as a mystery; anything beyond stays hidden
   const known = p.discovered, next = known < last ? U.marshBirds[known + 1] : null;
   $('#marshDetail').innerHTML = U.marshBirds.slice(0, known + 1).map((b, i)=>{
     const n = birdCount(p, i);
     return `<div class="udef">${pic(birdArt(b.id), 'duck pix')}<span></span><div class="t"><b>${esc(b.name)} <span class="ucount">${n}</span></b>
-      <span>${perMin(birdEach(p, i))} breadcrumbs a minute each${i ? ` · from 2 ${esc(U.marshBirds[i - 1].name.toLowerCase())}s` : ' · from the Duck Lab'}</span></div>
-      ${own && i < last ? `<button class="ghost" data-zap="${i}" ${n >= 2 ? '' : 'disabled'}>Zap a pair</button>` : ''}</div>`;
+      <span>${perMin(birdEach(p, i))} breadcrumbs a minute each${i ? ` · from 2 ${esc(U.marshBirds[i - 1].name.toLowerCase())}s` : ' · from the Duck Lab'}</span></div></div>`;
   }).join('') + (next ? `<div class="udef umystery">${pic('duck-plain', 'duck pix')}<span></span><div class="t"><b>???</b>
       <span>Zap two ${esc(U.marshBirds[known].name.toLowerCase())}s to find out what comes out of the mist.</span></div></div>`
-      : '<p class="unote">Every bird in the marsh discovered.</p>') + (own ? `<div class="ubtns"><button data-zap-all ${canPair ? '' : 'disabled'}>Send every pair in</button></div>`
-    : `<p class="unote">Only ${esc(shortName(p.riotId))} can send birds into their marsh.</p>`);
+      : '<p class="unote">Every bird in the marsh discovered.</p>') + (own ? '' : `<p class="unote">Only ${esc(shortName(p.riotId))} can send birds into their marsh.</p>`);
 }
-$('#marshDetail').addEventListener('click', e=>{
-  const z = e.target.closest('[data-zap]');
-  if(z){ marshRoom.zap(+z.dataset.zap); return act({action: 'merge', tier: +z.dataset.zap}); }
-  if(e.target.closest('[data-zap-all]')){ marshRoom.zapAll(); act({action: 'mergeAll'}); }
-});
 
 const MW = 480, MH = 260, MCX = 240, MCY = 132, MRX = 214, MRY = 104, LILY = {x: 74, y: 214}, MARSH_SHOWN = 40;
 const marshRoom = (()=>{
@@ -1646,11 +1638,10 @@ const marshRoom = (()=>{
     birds = birds.filter(x=>x !== a && x !== b);
     const n = {tier: t, x: b.x, y: b.y, born: now + 220, phase: Math.random() * 6}; birds.push(n);
     cast = now;
-    fx.push({kind: 'zap', t: now, x: n.x, y: n.y - 16 * scale(t) / 3, seed: Math.random()}, {kind: 'fog', t: now + 120, x: n.x, y: n.y},
+    fx.push({kind: 'zap', t: now, x: n.x, y: n.y - 16 * scale(t) / 3, seed: Math.random()}, {kind: 'fog', t: now + 120, x: n.x, y: n.y}, {kind: 'bubbles', t: now + 60, x: n.x, y: n.y + 6, seed: Math.random()},
             {kind: 'pop', t: now + 220, x: n.x, y: n.y - 8 * scale(t) - 4, text: `${U.marshBirds[t].name}!`});
   }
   function zap(t){ const two = birds.filter(b=>b.tier === t).slice(0, 2); if(two.length === 2) transform(two[0], two[1]); }
-  async function zapAll(){ for(let t = 0; t < U.marshBirds.length - 1; t++){ for(;;){ const two = birds.filter(b=>b.tier === t); if(two.length < 2) break; transform(two[0], two[1]); await new Promise(r=>setTimeout(r, calm ? 0 : 120)); } } }
   function merge(a, b){
     if(a.tier !== b.tier){ $('#msg').className = 'msg err'; $('#msg').textContent = `Only matching birds go in together: a ${U.marshBirds[a.tier].name.toLowerCase()} needs another.`; return false; }
     if(a.tier === U.marshBirds.length - 1) return false;
@@ -1686,17 +1677,32 @@ const marshRoom = (()=>{
     const p = U.players[viewing], more = U.marshBirds.reduce((a, _, i)=>a + birdCount(p, i), 0) - birds.length;
     if(more > 0) label(`+${more} more in the pond`, MCX, MCY + MRY - 14, '#e5dbff');
     if(!birds.length) label('No birds yet: hatch ducks in the Duck Lab', MCX, MCY - 4, '#e5dbff');
-    fx = fx.filter(f=>now - f.t < 1100);
+    fx = fx.filter(f=>now - f.t < 1400);
     fx.forEach(f=>{
       const t = now - f.t; if(t < 0) return;
       if(f.kind === 'zap' && t < 320){
         const x0 = LILY.x + 26, y0 = LILY.y - 52 - Math.round(Math.sin(Math.min(1, t / 420) * Math.PI) * 8);
         bolt(x0, y0, f.x, f.y, f.seed, '#7950f2', 6); bolt(x0, y0, f.x, f.y, f.seed, '#fff3bf', 2);
       }
-      if(f.kind === 'fog' && t < 700 && !calm){
-        const q = t / 700, r = 8 + q * 26, a = (1 - q) * .7;
-        for(let i = 0; i < 14; i++){ const ang = i / 14 * Math.PI * 2; px(f.x + Math.cos(ang) * r, f.y + Math.sin(ang) * r * .6, 6, 6, `rgba(240,236,255,${a})`); }
-        for(let i = 0; i < 8; i++){ const ang = i / 8 * Math.PI * 2 + .3; px(f.x + Math.cos(ang) * r * 1.4, f.y + Math.sin(ang) * r, 2, 2, `rgba(208,191,255,${1 - q})`); }
+      if(f.kind === 'fog' && t < 1100 && !calm){   // a thick cloud of mist rolling out, in two rings, then thinning away
+        const q = t / 1100, a = (1 - q) * .8;
+        for(let k = 0; k < 3; k++){ const w = 34 - k * 8 + q * 30, h = 14 - k * 3 + q * 10;   // the cloud's heart, in layers
+          px(f.x - w / 2, f.y - h / 2 - k * 2, w, h, `rgba(240,236,255,${a * .35})`); }
+        [[8 + q * 30, 18, 8], [4 + q * 46, 24, 6]].forEach(([r, n, s], ring)=>{
+          for(let i = 0; i < n; i++){ const ang = i / n * Math.PI * 2 + ring * .2 + q * .6;
+            px(f.x + Math.cos(ang) * r, f.y + Math.sin(ang) * r * .55 - q * 6, s, s, `rgba(240,236,255,${a * (ring ? .6 : 1)})`); }
+        });
+        for(let i = 0; i < 10; i++){ const ang = i / 10 * Math.PI * 2 + .3; px(f.x + Math.cos(ang) * (8 + q * 26) * 1.4, f.y + Math.sin(ang) * (8 + q * 26), 2, 2, `rgba(208,191,255,${1 - q})`); }
+      }
+      if(f.kind === 'bubbles' && t < 1300 && !calm){   // bubbles wobbling up out of the water, popping as they go
+        let r = f.seed * 9973; const rnd = () => (r = (r * 9301 + 49297) % 233280) / 233280;
+        for(let i = 0; i < 14; i++){
+          const start = rnd() * 500, life = 500 + rnd() * 500, q = (t - start) / life;
+          if(q < 0 || q > 1) continue;
+          const bx = f.x + (rnd() - .5) * 46 + Math.sin(t / 90 + i) * 3, by = f.y + 8 - q * (24 + rnd() * 26), s = rnd() < .3 ? 8 : 6;
+          if(q > .88){ px(bx - 2, by, 2, 2, '#e7f5ff'); px(bx + s, by, 2, 2, '#e7f5ff'); px(bx + s / 2 - 1, by - 3, 2, 2, '#e7f5ff'); continue; }   // pop!
+          px(bx, by, s, s, 'rgba(165,216,255,.8)'); px(bx, by, s, 2, '#f1f8ff'); px(bx + 2, by + 2, 2, 2, '#ffffff'); px(bx + s - 2, by + 2, 2, s - 2, 'rgba(116,192,252,.8)');
+        }
       }
       if(f.kind === 'pop'){ g.globalAlpha = Math.max(0, 1 - t / 1100); label(f.text, f.x, f.y - Math.round(t / 1100 * 16), '#e5dbff'); g.globalAlpha = 1; }
     });
@@ -1708,11 +1714,18 @@ const marshRoom = (()=>{
     return best;
   }
   const onToad = p => Math.abs(p.x - LILY.x) < 30 && p.y > LILY.y - 60 && p.y < LILY.y - 4;
+  function toadClick(){   // in your own marsh the Mystic zaps your lowest pair (so you see it, wherever the ladder's scrolled to)
+    const q = U.players[viewing], low = U.marshBirds.findIndex((_, i)=>i < U.marshBirds.length - 1 && birdCount(q, i) >= 2);
+    if(mine() && low >= 0){ zap(low); act({action: 'merge', tier: low}); return; }   // (the new bird's name pops up over it)
+    cast = performance.now();
+    $('#msg').className = 'msg';
+    $('#msg').textContent = `The Mystic: “${mine() ? 'No pairs to zap. Bring me two of a kind.' : LINES[line++ % LINES.length]}”`;
+  }
   const LINES = ['Ribbit. Bring me two of a kind.', 'Two go in, one comes out. That is the way of the marsh.', 'Mind the mist. It tickles.',
     'I have been turning ducks into swans since before you hatched.', 'A royal swan? Patience, little one. Patience.'];
   cv.addEventListener('pointerdown', e=>{
     const p = at(e), b = mine() && birdAt(p);
-    if(!b){ if(onToad(p)){ cast = performance.now(); $('#msg').className = 'msg'; $('#msg').textContent = `The Mystic: “${LINES[line++ % LINES.length]}”`; } return; }
+    if(!b){ if(onToad(p)) toadClick(); return; }
     cv.setPointerCapture(e.pointerId);
     drag = {b, sx: p.x, sy: p.y, ox: b.x, oy: b.y, moved: false, target: null, ok: false};
   });
@@ -1737,7 +1750,7 @@ const marshRoom = (()=>{
   });
   window.addEventListener('resize', size);
   size(); requestAnimationFrame(draw);
-  return {reset, size, zap, zapAll};
+  return {reset, size};
 })();
 
 const VIEWS = {town: () => scene, plaza: () => plaza, lab: () => lab, bakery: () => bakeryRoom, quarter: () => quarter, volcano: () => volcano, spa: () => spaRoom, marsh: () => marshRoom};
