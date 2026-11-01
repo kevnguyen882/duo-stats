@@ -1611,9 +1611,11 @@ const marshRoom = (()=>{
   const inMarsh = (x, y) => ((x - MCX) / (MRX - 26)) ** 2 + ((y - MCY) / (MRY - 22)) ** 2 <= 1;
   const nearPad = (x, y) => Math.hypot(x - LILY.x, y - (LILY.y - 26)) < 52;
   function spot(){ for(let i = 0; i < 200; i++){ const x = MCX - MRX + Math.random() * MRX * 2, y = MCY - MRY + Math.random() * MRY * 2; if(inMarsh(x, y) && !nearPad(x, y)) return {x, y}; } return {x: MCX, y: MCY}; }
-  function shown(p){   // how many of each kind to draw: the bigger birds first, up to MARSH_SHOWN in all
-    let left = MARSH_SHOWN; const out = U.marshBirds.map(()=>0);
-    for(let i = U.marshBirds.length - 1; i >= 0; i--){ out[i] = Math.min(birdCount(p, i), left); left -= out[i]; }
+  function shown(p){   // how many of each kind to draw, up to MARSH_SHOWN in all: first up to two of every kind (so any pair
+    // the Mystic can zap is on screen), then the rest, bigger birds first
+    const out = U.marshBirds.map((_, i)=>Math.min(birdCount(p, i), 2));
+    let left = MARSH_SHOWN - out.reduce((a, n)=>a + n, 0);
+    for(let i = U.marshBirds.length - 1; i >= 0 && left > 0; i--){ const more = Math.min(birdCount(p, i) - out[i], left); out[i] += more; left -= more; }
     return out;
   }
   function reset(){   // match the birds drawn to the saved counts, keeping where the ones still here are swimming
@@ -1652,7 +1654,11 @@ const marshRoom = (()=>{
     fx.push({kind: 'zap', t: now, x: n.x, y: n.y - 16 * scale(t) / 3, seed: Math.random()}, {kind: 'fog', t: now + 120, x: n.x, y: n.y}, {kind: 'bubbles', t: now + 60, x: n.x, y: n.y + 6, seed: Math.random()},
             {kind: 'pop', t: now + 220, x: n.x, y: n.y - 8 * scale(t) - 4, text: `${U.marshBirds[t].name}!`});
   }
-  function zap(t){ const two = birds.filter(b=>b.tier === t).slice(0, 2); if(two.length === 2) transform(two[0], two[1]); }
+  function zap(t){   // (if the pair isn't on screen, it swims into view for the zap)
+    const two = birds.filter(b=>b.tier === t).slice(0, 2);
+    while(two.length < 2){ const b = {tier: t, ...spot(), born: 0, phase: Math.random() * 6}; birds.push(b); two.push(b); }
+    transform(two[0], two[1]);
+  }
   function merge(a, b){
     if(a.tier !== b.tier){ $('#msg').className = 'msg err'; $('#msg').textContent = `Only matching birds go in together: a ${U.marshBirds[a.tier].name.toLowerCase()} needs another.`; return false; }
     if(a.tier === U.marshBirds.length - 1) return false;
