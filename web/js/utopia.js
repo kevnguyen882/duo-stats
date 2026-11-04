@@ -1573,7 +1573,10 @@ function renderMarsh(){
     + 'and takes one pond spot, so merging makes room to hatch more. Click the Mystic to zap your lowest pair, drag a bird onto a matching one, or tap one and then another. Golden, champion and fire ducks stay as they are.';
   // the ladder up to the best bird made so far, then the next one as a mystery; anything beyond stays hidden
   const known = p.discovered, next = known < last ? U.marshBirds[known + 1] : null;
-  $('#marshDetail').innerHTML = U.marshBirds.slice(0, known + 1).map((b, i)=>{
+  const pairs = U.marshBirds.some((_, i)=>i < last && birdCount(p, i) >= 2);
+  $('#marshDetail').innerHTML = (own ? `<div class="ubtns uzapall"><button data-zap-all ${pairs ? '' : 'disabled'}>Zap every pair</button>
+      <span class="unote">${pairs ? 'Smallest first, so new birds can pair up again on the way.' : 'No pairs to zap yet.'}</span></div>` : '')
+    + U.marshBirds.slice(0, known + 1).map((b, i)=>{
     const n = birdCount(p, i);
     return `<div class="udef">${pic(birdArt(b.id), 'duck pix')}<span></span><div class="t"><b>${esc(b.name)} <span class="ucount">${n}</span></b>
       <span>${perMin(birdEach(p, i))} breadcrumbs a minute each${i ? ` · from 2 ${esc(U.marshBirds[i - 1].name.toLowerCase())}s` : ' · from the Duck Lab'}</span></div></div>`;
@@ -1582,6 +1585,9 @@ function renderMarsh(){
       : '<p class="unote">Every bird in the marsh discovered.</p>') + (own ? '' : `<p class="unote">Only ${esc(shortName(p.riotId))} can send birds into their marsh.</p>`);
 }
 
+$('#marshDetail').addEventListener('click', e=>{ if(e.target.closest('[data-zap-all]')) marshRoom.zapEverything(); });
+
+const ZAP_SHOWN = 16;   // "Zap every pair": how many of its zaps play on screen (the rest happen at once)
 const MW = 480, MH = 260, MCX = 240, MCY = 132, MRX = 214, MRY = 104, LILY = {x: 74, y: 214}, MARSH_SHOWN = 40;
 const marshRoom = (()=>{
   const cv = $('#marshScene'), g = cv.getContext('2d');
@@ -1743,6 +1749,19 @@ const marshRoom = (()=>{
     });
     noPairs();
   }
+  function zapEverything(){   // every pair, smallest first (as the Mac running the app does it): up to ZAP_SHOWN zapped on screen, then saved
+    if(!mine()) return;
+    inTurn(async ()=>{
+      const q = U.players[viewing], n = U.marshBirds.map((_, i)=>birdCount(q, i)), calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      let made = 0;
+      for(let t = 0; t < n.length - 1; t++) while(n[t] >= 2){
+        n[t] -= 2; n[t + 1]++;
+        if(made++ < ZAP_SHOWN){ zap(t); await new Promise(r=>setTimeout(r, calm ? 0 : 110)); }
+      }
+      if(!made) return noPairs();
+      await act({action: 'mergeAll'});
+    });
+  }
   function noPairs(){
     cast = performance.now();
     $('#msg').className = 'msg';
@@ -1779,7 +1798,7 @@ const marshRoom = (()=>{
   });
   window.addEventListener('resize', size);
   size(); requestAnimationFrame(draw);
-  return {reset, size};
+  return {reset, size, zapEverything};
 })();
 
 const VIEWS = {town: () => scene, plaza: () => plaza, lab: () => lab, bakery: () => bakeryRoom, quarter: () => quarter, volcano: () => volcano, spa: () => spaRoom, marsh: () => marshRoom};

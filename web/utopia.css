@@ -60,6 +60,8 @@
 @keyframes crate-pop{from{transform:scale(.2)}70%{transform:scale(1.2)}to{transform:none}}
 @keyframes crate-burst{from{transform:scale(.2);opacity:1}}
 @media (prefers-reduced-motion: reduce){ .ucrate-pic,.ucrate-burst{animation:none!important} }
+.uzapall{align-items:center;margin:8px 0 4px}
+.uzapall .unote{margin:0}
 .ucount{font:800 13px ui-monospace,Menlo,monospace;color:var(--gold);margin-left:4px}
 .umarsh .uplaza-scene canvas.over{cursor:grab}
 .umarsh .uplaza-scene canvas.drag{cursor:grabbing}
