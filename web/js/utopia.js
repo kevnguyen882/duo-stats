@@ -1196,7 +1196,7 @@ const lab = (()=>{
   const factory = p => p.levels.autonest && p.lab.autoOn;
   const BELT_X0 = 104, BELT_X1 = 392, BELT_Y = LAB_WALL + 44, BELT_SHOWN = 9;   // the belt, and how many on it are drawn
   const factoryHeight = () => LAB_WALL + 78 + LAB_FLOOR;
-  let leaving = [], seen = new Set();   // ducklings hopping off the end of the belt and waddling away, and which have
+  let leaving = [], laps = [];   // ducklings hopping off the end of the belt and waddling away; how many laps each on the belt has done
   function layout(n){
     n = Math.min(n, LAB_TUBES);
     const {cols, gap, half, k} = grid(n);
@@ -1283,8 +1283,7 @@ const lab = (()=>{
       for(let y = LAB_WALL + 17, w = 12; y < LH - 8; y += 4, w += 4){ g.fillStyle = 'rgba(255,243,191,.07)'; g.fillRect(Math.round(x - w / 2), y, w, 4); }
     });
   }
-  // the belt: each growing egg sits where its growing time has got it to (up to BELT_SHOWN of them drawn, spread over all
-  // the nests), an egg at first and a duckling by the end; at the end it hops off and waddles away to the pond
+  // the belt, the Auto-nester's incubator loading it, and the eggs and ducklings riding along it
   function conveyor(p, now){
     const len = BELT_X1 - BELT_X0, floorY = LH - LAB_FLOOR;
     for(let x = BELT_X0 + 10; x < BELT_X1; x += 48){ g.fillStyle = '#495057'; g.fillRect(x, BELT_Y + 16, 4, floorY - BELT_Y - 14); g.fillStyle = '#343a40'; g.fillRect(x - 2, floorY, 8, 2); }   // its legs
@@ -1302,17 +1301,23 @@ const lab = (()=>{
     g.fillStyle = '#e7f5ff'; g.fillRect(mx + 54, my + 30, 18, 10); g.fillStyle = '#e03131'; g.fillRect(mx + 62, my + 32, 2, 6);   // a gauge
     if(p.lost){ label(`${p.lost} egg${p.lost === 1 ? '' : 's'} waiting`, mx + 42, my + 46, '#e7f5ff'); }
     g.fillStyle = '#495057'; g.fillRect(mx + 84, BELT_Y + 4, BELT_X0 - mx - 84, 12);   // its chute onto the belt
-    // the eggs and ducklings riding along: up to BELT_SHOWN, every k-th by when they hatch
-    const order = p.ducklings.map((due, i)=>i).sort((a, b)=>p.ducklings[a] - p.ducklings[b]), k = Math.max(1, Math.ceil(order.length / BELT_SHOWN));
-    order.forEach((i, j)=>{
-      const prog = progress(p, i); if(prog >= 1 || j % k) return;
-      const x = Math.round(BELT_X0 + prog * len), bob = Math.round(Math.sin(now / 300 + i));
-      if(prog < .3) g.drawImage(art('egg'), x - 7, BELT_Y - 12, 14, 14);
-      else g.drawImage(art('duckling'), x - 11, BELT_Y - 20 + bob, 22, 22);
-    });
+    // the eggs and ducklings riding along: an even, steady line (just for show: the monitor has the real rate), each an
+    // egg at first and a duckling from a third of the way; at the end it hops off and waddles away to the pond
+    const shown = Math.min(BELT_SHOWN, p.ducklings.length), now2 = nowApp();
+    if(shown){
+      const gap = len / shown, every = Math.min(12000, Math.max(3000, p.lab.grow * 60000 / p.nestSpace)), speed = gap / every;   // px a ms
+      for(let j = 0; j < shown; j++){
+        const run = j * gap + now2 * speed, x = Math.round(BELT_X0 + run % len), lap = Math.floor(run / len);
+        if(laps[j] !== undefined && lap > laps[j]) leaving.push({due: now2 - (run % len) / speed, phase: Math.random() * 6});   // it just reached the end
+        laps[j] = lap;
+        const bob = Math.round(Math.sin(now / 300 + j));
+        if(x < BELT_X0 + len / 3) g.drawImage(art('egg'), x - 7, BELT_Y - 12, 14, 14);
+        else g.drawImage(art('duckling'), x - 11, BELT_Y - 20 + bob, 22, 22);
+      }
+    }
+    laps.length = shown;
     // off the end: a hop down to the floor, then a waddle off to the right, towards the pond
-    const t0 = nowApp(), dues = [...p.ducklings].sort((a, b)=>a - b);
-    dues.forEach((due, n)=>{ const key = due + ':' + dues.indexOf(due) + ':' + n; if(due <= t0 && !seen.has(key)){ seen.add(key); if(t0 - due < 4000) leaving.push({due, phase: Math.random() * 6}); } });
+    const t0 = now2;
     leaving = leaving.filter(d=>{
       const t = t0 - d.due, hop = 650;
       let x, y;
@@ -1323,7 +1328,6 @@ const lab = (()=>{
       g.save(); g.translate(Math.round(x), Math.round(y) + 11); g.rotate(tilt); g.drawImage(art('duckling'), -11, -11, 22, 22); g.restore();
       return true;
     });
-    if(seen.size > 500) seen = new Set([...seen].slice(-200));
     const sx = BELT_X1 + 6, sy = LAB_WALL + 6;   // a sign hanging over the belt's end
     g.fillStyle = '#495057'; g.fillRect(sx + 10, LAB_WALL, 1, 6); g.fillRect(sx + 60, LAB_WALL, 1, 6);
     g.fillStyle = '#2b8a3e'; g.fillRect(sx, sy, 72, 13); g.fillStyle = '#ffffff'; g.fillRect(sx + 1, sy + 1, 70, 1);
