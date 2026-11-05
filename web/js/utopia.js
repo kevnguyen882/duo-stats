@@ -1359,7 +1359,11 @@ const lab = (()=>{
     g.drawImage(art('lab-duck'), dx, Math.round(dy), 32, 32);
     if(hardHat){ g.fillStyle = '#ff922b'; g.fillRect(dx + 14, Math.round(dy) - 2, 12, 5); g.fillRect(dx + 12, Math.round(dy) + 3, 16, 2); g.fillStyle = '#d9480f'; g.fillRect(dx + 19, Math.round(dy) - 2, 2, 5); }   // a hard hat, in the factory
     g.restore();
-    if(now < duck.sayUntil && duck.say){   // a speech bubble
+    duck.dy = dy;
+  }
+  function speech(now){   // the lab duck's speech bubble, drawn after everything else so nothing covers it
+    const dy = duck.dy;
+    if(dy != null && now < duck.sayUntil && duck.say){
       g.font = 'bold 9px ui-monospace, Menlo, monospace';
       const w = Math.ceil(g.measureText(duck.say).width) + 10, bx = Math.round(Math.min(LW - w - 4, Math.max(4, duck.x - w / 2))), by = Math.round(dy - 18);
       g.fillStyle = '#ffffff'; g.fillRect(bx, by, w, 14); g.fillStyle = '#343a40'; g.fillRect(bx, by + 14, w, 1); g.fillRect(bx, by - 1, w, 1);
@@ -1380,7 +1384,7 @@ const lab = (()=>{
     for(let y = LAB_WALL; y < LH; y += 32) for(let x = 0; x < LW; x += 32) g.drawImage(art('lab-tile'), x, y, 32, 32);
     if(factory(p)){
       for(let y = LAB_WALL; y < LH - LAB_FLOOR; y += 8){ g.fillStyle = y % 16 ? '#dfe5e8' : '#e6ebee'; g.fillRect(0, y, LW, 8); }   // the factory's lower wall
-      factoryWall(p, now); floor(p, now, dt, true); conveyor(p, now); lampLight(); return;
+      factoryWall(p, now); floor(p, now, dt, true); conveyor(p, now); lampLight(); speech(now); return;
     }
     wall(p, now);
     const cs = layout(p.nestSpace);
@@ -1395,6 +1399,7 @@ const lab = (()=>{
     if(p.nestSpace > LAB_TUBES) label(`+${p.nestSpace - LAB_TUBES} more nests growing`, LW / 2, LH - LAB_FLOOR + 4, '#c5f6fa');
     label(`${p.spawned} spawned so far`, 10, LH - 14, '#dee2e6', 'left');
     label(`Ducklings grow in ${fmtMin(L.grow)}`, LW - 10, LH - 14, '#dee2e6', 'right');
+    speech(now);
   }
   // hover a chamber to see how long its duckling has left
   cv.addEventListener('mousemove', e=>{
