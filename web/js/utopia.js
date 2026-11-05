@@ -181,9 +181,9 @@ function renderBuild(){
 function autoRow(p, own){   // the Auto-nester: needs Duck Science, then fills empty nests by itself (and can be paused)
   const L = p.lab, x = p.buildings.autonest;
   if(!x.level){
-    const locked = p.levels.science < L.autoScience;
+    const needs = [p.levels.science < L.autoScience && `Duck Science level ${L.autoScience}`, p.levels.pond < L.autoPond && `the lagoon (pond level ${L.autoPond})`].filter(Boolean), locked = needs.length > 0;
     return `<div class="ubld">${pic('lab-chamber')}<div class="t"><b>Auto-nester (not built)</b>
-      <span>Spawns a duckling into any empty nest by itself, at the normal price, whenever you have the breadcrumbs. ${locked ? `Needs Duck Science level ${L.autoScience}.` : ''}</span></div>
+      <span>Spawns a duckling into any empty nest by itself, at the normal price, whenever you have the breadcrumbs. ${locked ? `Needs ${needs.join(' and ')}.` : ' Turns the Duck Lab into a duck factory.'}</span></div>
       <button data-build="autonest" data-cost="${x.cost}" ${own && !locked ? '' : 'disabled'} ${locked ? 'data-full="1"' : ''}>${pic('icon-breadcrumb')}${fmt(x.cost)}</button></div>`;
   }
   return `<div class="ubld">${pic('lab-chamber')}<div class="t"><b>Auto-nester · ${L.autoOn ? 'on' : 'paused'}</b>
@@ -1191,6 +1191,12 @@ const lab = (()=>{
     return {cols, rows, gap, half, k};
   }
   const labHeight = n => { const {rows, k} = grid(n); return Math.max(240, Math.ceil(LAB_TOP + rows * (112 * k + 14) + LAB_FLOOR)); };
+  // with the Auto-nester running, the lab is a duck factory: a conveyor belt that each egg rides for
+  // exactly its growing time, so ducklings roll off at the rate the nests and incubation make them
+  const factory = p => p.levels.autonest && p.lab.autoOn;
+  const LANE = 46, BELT_X0 = 86, BELT_X1 = 404;
+  const beltLanes = () => 1;   // always one line: with more nests the eggs ride closer together
+  const factoryHeight = n => LAB_WALL + 26 + beltLanes(n) * LANE + 10 + LAB_FLOOR;
   function layout(n){
     const {cols, gap, half, k} = grid(n);
     const w = 40 * k, h = 112 * k, x0 = (LW - (cols * w + (cols - 1) * gap * k + half * k)) / 2;
@@ -1246,6 +1252,60 @@ const lab = (()=>{
     g.fillStyle = '#e03131'; for(let d = 0; d < 7; d++) g.fillRect(Math.round(456 + Math.sin(ma) * d), Math.round(22 - Math.cos(ma) * d), 1, 1);
     g.fillStyle = '#5c636a'; g.fillRect(0, LAB_WALL - 6, LW, 3); g.fillStyle = '#2b5563'; g.fillRect(0, LAB_WALL, LW, 2);   // the pipe rail, the skirting
   }
+  // the factory's wall: corrugated metal, hazard stripes, blinking warning lights, and the monitor showing the output
+  function factoryWall(p, now){
+    g.fillStyle = '#868e96'; g.fillRect(0, 0, LW, LAB_WALL);
+    for(let x = 0; x < LW; x += 8){ g.fillStyle = '#adb5bd'; g.fillRect(x, 0, 3, LAB_WALL - 8); g.fillStyle = '#6c757d'; g.fillRect(x + 6, 0, 1, LAB_WALL - 8); }   // corrugated
+    for(let x = -8; x < LW; x += 16){ g.fillStyle = '#fcc419'; g.fillRect(x, LAB_WALL - 8, 8, 6); g.fillStyle = '#212529'; g.fillRect(x + 8, LAB_WALL - 8, 8, 6); }   // hazard stripes
+    const blink = Math.floor(now / 450) % 2;
+    [[20, blink], [452, 1 - blink]].forEach(([x, on])=>{ g.fillStyle = '#495057'; g.fillRect(x - 1, 12, 10, 4); g.fillStyle = on ? '#ff922b' : '#7a3e0b'; g.fillRect(x, 4, 8, 8);
+      if(on){ g.fillStyle = 'rgba(255,146,43,.25)'; g.fillRect(x - 4, 0, 16, 18); } });
+    g.fillStyle = '#343a40'; g.fillRect(150, 6, 180, 40); g.fillStyle = '#0b1f17'; g.fillRect(154, 10, 172, 32);   // the monitor
+    g.fillStyle = '#495057'; g.fillRect(234, 46, 12, 4);
+    const perMin = p.nestSpace / p.lab.grow;
+    label(`OUTPUT ${perMin >= 1 ? `${+perMin.toFixed(1)} DUCKS/MIN` : `1 DUCK EVERY ${short(p.lab.grow / p.nestSpace * 60000)}`}`, 240, 13, '#8ce99a');
+    label(`${p.nestSpace} NESTS × ${fmtMin(p.lab.grow).toUpperCase()} EACH`, 240, 25, '#c5f6fa');
+    if(Math.floor(now / 500) % 2){ g.fillStyle = '#8ce99a'; g.fillRect(318, 34, 4, 6); }
+  }
+  // the belt: each growing egg sits where its growing time has got it to, an egg at first and a duckling by the end;
+  // the Auto-nester's machine loads it on the left, and it rolls off into the chute to the pond when it hatches
+  function conveyor(p, now){
+    const n = beltLanes(p.nestSpace), len = BELT_X1 - BELT_X0, top = LAB_WALL + 26;
+    const laneY = l => top + l * LANE;
+    for(let l = 0; l < n; l++){
+      const y = laneY(l) + 22;
+      g.fillStyle = '#495057'; g.fillRect(BELT_X0 - 6, y, len + 12, 12);
+      const dir = l % 2 ? -1 : 1;
+      g.fillStyle = '#343a40'; for(let x = 0; x < len + 12; x += 12){ const sx = BELT_X0 - 6 + ((x + dir * now / 1000 * 10) % (len + 12) + len + 12) % (len + 12); g.fillRect(Math.round(sx), y, 2, 12); }   // treads
+      g.fillStyle = '#868e96'; g.fillRect(BELT_X0 - 6, y - 2, len + 12, 2); g.fillRect(BELT_X0 - 6, y + 12, len + 12, 2);
+      for(let x = BELT_X0; x < BELT_X1; x += 24){ g.fillStyle = '#212529'; g.fillRect(x, y + 14, 8, 4); g.fillStyle = '#adb5bd'; g.fillRect(x + 3, y + 15, 2, 2); }   // rollers
+      if(l < n - 1){ g.fillStyle = '#495057'; g.fillRect(l % 2 ? BELT_X0 - 14 : BELT_X1 + 2, y, 12, LANE + 12); }   // the turn down to the next lane
+    }
+    // the Auto-nester's machine, loading eggs on the left (with any eggs from games waiting in its hopper)
+    g.fillStyle = '#1c7ed6'; g.fillRect(6, top - 4, 70, 50); g.fillStyle = '#1864ab'; g.fillRect(6, top + 40, 70, 6);
+    g.fillStyle = '#74c0fc'; g.fillRect(14, top + 4, 54, 14); g.fillStyle = '#e7f5ff'; for(let i = 0; i < Math.min(p.lost, 5); i++) g.fillRect(18 + i * 10, top + 8, 6, 7);
+    g.fillStyle = Math.floor(now / 300) % 2 ? '#51cf66' : '#2b8a3e'; g.fillRect(16, top + 24, 6, 6); g.fillStyle = '#fcc419'; g.fillRect(26, top + 24, 6, 6);
+    g.fillStyle = '#495057'; g.fillRect(64, top + 20, 22, 10);
+    label('AUTO-NESTER', 41, top + 32, '#e7f5ff');
+    const smoke = (now / 1400) % 1; g.fillStyle = `rgba(222,226,230,${.6 * (1 - smoke)})`; g.fillRect(52, Math.round(top - 10 - smoke * 14), 8, 8);
+    // the chute out to the pond, at the end of the last lane
+    const endRight = n % 2 === 1, cx = endRight ? BELT_X1 + 8 : 8, cy = laneY(n - 1) + 14;
+    g.fillStyle = '#fab005'; g.fillRect(cx, cy, 52, 8); g.fillStyle = '#e67700'; g.fillRect(cx, cy + 8, 52, 3);
+    label(endRight ? 'TO THE POND →' : '← TO THE POND', cx + 26, cy + 14, '#ffe066');
+    // the eggs and ducklings riding along
+    const total = n * len;
+    p.ducklings.forEach((due, i)=>{
+      const prog = progress(p, i), s = Math.min(prog, 1) * total, lane = Math.min(n - 1, Math.floor(s / len)), along = s - lane * len;
+      let x = lane % 2 ? BELT_X1 - along : BELT_X0 + along, y = laneY(lane) + 8;
+      if(prog >= 1){ const t = Math.min(1, (nowApp() - due) / 1200); x = cx + 20 + (endRight ? t * 30 : -t * 30); y = cy - 6 + t * 10; }   // rolled off, down the chute
+      const pw = Math.max(8, Math.min(14, Math.floor(total / Math.max(1, p.nestSpace)) - 1));   // pods shrink a little when the belt's busy
+      x = Math.round(x - pw / 2); y += 12 - Math.round(pw * 12 / 14);
+      g.fillStyle = 'rgba(116,192,252,.55)'; g.fillRect(x, y, pw, Math.round(pw * 12 / 14)); g.fillStyle = 'rgba(255,255,255,.4)'; g.fillRect(x, y, pw, 1);
+      const sz = Math.round(pw * (prog < .3 ? 8 : 12) / 14);
+      g.drawImage(art(prog < .3 ? 'egg' : 'duckling'), Math.round(x + (pw - sz) / 2), Math.round(y + (prog < .3 ? 2 : -1) * pw / 14), sz, sz);
+    });
+    if(!p.ducklings.length) label('Waiting for breadcrumbs to spawn the next egg', 240, top + 6, '#ffd8a8');
+  }
   // the floor, and the lab duck who runs the place: it walks between the chambers checking on them, and says how they're doing
   const LAB_LINES = p => {
     const soonest = p.ducklings.map((_, i)=>i).sort((a, b)=>left(p, a) - left(p, b))[0];
@@ -1255,7 +1315,7 @@ const lab = (()=>{
       p.levels.autonest ? 'The Auto-nester keeps me busy.' : 'An Auto-nester? I could use the help.'];
   };
   const duck = {x: 60, tx: 60, face: 1, wait: 0, say: '', sayUntil: 0, nextSay: 4000};
-  function floor(p, now, dt){
+  function floor(p, now, dt, hardHat){
     const fy = LH - LAB_FLOOR;
     for(let y = fy; y < LH; y += 12) for(let x = 0; x < LW; x += 12){ g.fillStyle = ((x + y) / 12) % 2 ? '#dee2e6' : '#f1f3f5'; g.fillRect(x, y, 12, 12); }
     g.fillStyle = '#868e96'; g.fillRect(0, fy, LW, 2);
@@ -1268,7 +1328,9 @@ const lab = (()=>{
     if(now > duck.nextSay){ const lines = LAB_LINES(p); duck.say = lines[Math.floor(Math.random() * lines.length)]; duck.sayUntil = now + 3500; duck.nextSay = now + 9000 + Math.random() * 6000; }
     const walking = duck.wait <= 0 && Math.abs(duck.tx - duck.x) >= 1, bob = walking ? Math.abs(Math.sin(now / 90)) * 2 : 0, dy = fy + 8 - bob, dx = Math.round(duck.x - 16);
     g.save(); if(duck.face < 0){ g.translate(dx + 16, 0); g.scale(-1, 1); g.translate(-dx - 16, 0); }
-    g.drawImage(art('lab-duck'), dx, Math.round(dy), 32, 32); g.restore();
+    g.drawImage(art('lab-duck'), dx, Math.round(dy), 32, 32);
+    if(hardHat){ g.fillStyle = '#ff922b'; g.fillRect(dx + 14, Math.round(dy) - 2, 12, 5); g.fillRect(dx + 12, Math.round(dy) + 3, 16, 2); g.fillStyle = '#d9480f'; g.fillRect(dx + 19, Math.round(dy) - 2, 2, 5); }   // a hard hat, in the factory
+    g.restore();
     if(now < duck.sayUntil && duck.say){   // a speech bubble
       g.font = 'bold 9px ui-monospace, Menlo, monospace';
       const w = Math.ceil(g.measureText(duck.say).width) + 10, bx = Math.round(Math.min(LW - w - 4, Math.max(4, duck.x - w / 2))), by = Math.round(dy - 18);
@@ -1282,11 +1344,13 @@ const lab = (()=>{
     requestAnimationFrame(draw);
     if(!U || view !== 'lab') return;
     const p = U.players[viewing], L = p.lab;
-    if(labHeight(p.nestSpace) !== LH){ LH = labHeight(p.nestSpace); size(); }   // more nests: a taller lab
+    const want = factory(p) ? factoryHeight(p.nestSpace) : labHeight(p.nestSpace);
+    if(want !== LH){ LH = want; size(); }   // more nests: a taller lab
     const k = cv.width / LW;
     g.setTransform(k, 0, 0, k, 0, 0); g.imageSmoothingEnabled = false;
     const dt = Math.min(100, now - (last || now)); last = now;
     for(let y = LAB_WALL; y < LH; y += 32) for(let x = 0; x < LW; x += 32) g.drawImage(art('lab-tile'), x, y, 32, 32);
+    if(factory(p)){ factoryWall(p, now); conveyor(p, now); floor(p, now, dt, true); return; }
     wall(p, now);
     const cs = layout(p.nestSpace);
     g.fillStyle = '#5c636a';

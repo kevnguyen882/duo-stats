@@ -164,7 +164,7 @@ class MarshTests(unittest.TestCase):
 
 
     def test_the_new_ducks_sit_below_the_swans_and_old_saves_keep_their_worth(self):
-        self.assertEqual([k for k, _ in utopia.BIRDS], ["duck", "mallard", "wood", "baker", "chad", "firefighter", "police", "raver", "dj",
+        self.assertEqual([k for k, _ in utopia.BIRDS], ["duck", "mallard", "wood", "baker", "chad", "lab", "firefighter", "police", "raver", "dj",
                                                          "swan", "black", "royal"])
         s = new_utopia("A#1", 0)
         s["birds"] = [1, 0, 2, 0, 1]   # saved with the old ladder: a mallard, two swans and a royal swan
@@ -585,13 +585,17 @@ class GameTests(TempStorageCase):
         room = utopia.pond_space(1) - utopia.STARTING_DUCKS
         self.assertEqual((len(p["ducklings"]), p["pondUsed"], p["edge"]), (0, utopia.pond_space(1), utopia.nest_space(1) - room))   # grown; the rest wait
 
-    def test_the_auto_nester_needs_duck_science_and_can_be_switched(self):
+    def test_the_auto_nester_needs_duck_science_and_the_lagoon_and_can_be_switched(self):
         self.game.state(viewer=False, now=1)
         self.give(100000)
         build = {"owner": "duo one#na1", "action": "upgrade", "building": "autonest"}
-        with self.assertRaises(ValueError):   # needs Duck Science level 3
+        with self.assertRaises(ValueError):   # needs Duck Science 3 and the lagoon
             self.game.act(build, viewer=False, now=1)
         data = self.game._load()
+        data["players"]["duo one#na1"]["levels"]["pond"] = utopia.AUTONEST_POND
+        self.storage.write_json(self.game.path, data)
+        with self.assertRaises(ValueError):   # the lagoon alone isn't enough: it needs Duck Science 3 too
+            self.game.act(build, viewer=False, now=1)
         data["players"]["duo one#na1"]["levels"]["science"] = utopia.AUTONEST_SCIENCE
         self.storage.write_json(self.game.path, data)
         p = self.game.act(build, viewer=False, now=1)["players"][0]

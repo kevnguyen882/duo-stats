@@ -19,10 +19,11 @@ then moves to the pond. If the pond is full it waits at the edge, up to one full
 when there's room; beyond that it waddles off to find another pond (waddle_off(), which logs it). Now and then one hatches as a mallard
 (lucky_chance()). Only ducks in the pond collect breadcrumbs (golden, champion and caught fire ducks collect wherever they are). The
 Duck Lab's upgrades: more nests, a shorter incubation time, Duck Science (each level: pond ducks collect x1.5), and
-from Duck Science level AUTONEST_SCIENCE the Auto-nester, which spawns into empty nests by itself (auto_nest()).
+with Duck Science level AUTONEST_SCIENCE and the pond a lagoon (AUTONEST_POND) the Auto-nester, which spawns into
+empty nests by itself (auto_nest()).
 
 The Mystic Marsh: the Mystic, a wizard toad, zaps two pond birds of the same kind into one of the next kind up
-(BIRDS: duck, mallard, wood duck, baker, finance chad, firefighter, police, raver and DJ ducks, swan, black swan,
+(BIRDS: duck, mallard, wood duck, baker, finance chad, lab, firefighter, police, raver and DJ ducks, swan, black swan,
 royal swan). Each collects MARSH_STEP times the one below (10% more
 than the two it replaced) and takes one pond spot, so merging frees room. Duck Science multiplies them all.
 
@@ -123,10 +124,10 @@ BUILDINGS = {
     "fence":  (600, 1.7, 9, [(1, "Fences"), (4, "Scarecrows"), (7, "Honk-proof walls")]),
     "incubation": (500, 2.0, 10, [(1, "Incubation time")]),   # in the Duck Lab
     "science": (1000, 3.0, 15, [(1, "Duck Science")]),          # in the Duck Lab: what each pond duck collects
-    "autonest": (20000, 1.0, 1, [(1, "Auto-nester")]),          # in the Duck Lab, from Duck Science AUTONEST_SCIENCE: fills empty nests
+    "autonest": (20000, 1.0, 1, [(1, "Auto-nester")]),          # in the Duck Lab, with Duck Science 3 and the lagoon: fills empty nests
 }
 START_LEVELS = {"nests": 1, "pond": 1, "bakery": 0, "spa": 0, "fence": 0, "incubation": 0, "science": 0, "autonest": 0}
-AUTONEST_SCIENCE = 3   # the Duck Science level the Auto-nester needs
+AUTONEST_SCIENCE, AUTONEST_POND = 3, 7   # the Auto-nester needs Duck Science level 3 and the pond to be a lagoon
 
 
 def grow_minutes(level: int) -> float:
@@ -217,7 +218,7 @@ def lucky_chance(s: dict) -> float:
 
 # the Mystic Marsh's birds, smallest first: plain pond ducks, then what two of the kind before turn into
 BIRDS = [("duck", "Duck"), ("mallard", "Mallard"), ("wood", "Wood duck"), ("baker", "Baker duck"), ("chad", "Finance Chad duck"),
-         ("firefighter", "Firefighter duck"), ("police", "Police duck"), ("raver", "Raver duck"), ("dj", "DJ duck"),
+         ("lab", "Lab duck"), ("firefighter", "Firefighter duck"), ("police", "Police duck"), ("raver", "Raver duck"), ("dj", "DJ duck"),
          ("swan", "Swan"), ("black", "Black swan"), ("royal", "Royal swan")]
 
 
@@ -1135,8 +1136,8 @@ class DuckUtopia:
             if cost is None:
                 more = next_unlock(s, b)
                 raise ValueError(f"More levels open when your pond grows into {more}." if more else "That's already as big as it gets.")
-            if b == "autonest" and s["levels"]["science"] < AUTONEST_SCIENCE:
-                raise ValueError(f"The Auto-nester needs Duck Science level {AUTONEST_SCIENCE}.")
+            if b == "autonest" and (s["levels"]["science"] < AUTONEST_SCIENCE or s["levels"]["pond"] < AUTONEST_POND):
+                raise ValueError(f"The Auto-nester needs Duck Science level {AUTONEST_SCIENCE} and the lagoon (pond level {AUTONEST_POND}).")
             if s["crumbs"] < cost:
                 raise ValueError(f"Not enough breadcrumbs: {cost:,} needed.")
             s["crumbs"] -= cost
@@ -1410,7 +1411,7 @@ class DuckUtopia:
                 "rate": round(crumb_rate(s), 3), "rateFrom": rate_breakdown(s), "heat": heat(s), "nestSpace": nest_space(lv["nests"]), "pondSpace": pond_space(lv["pond"]), "pondUsed": pond_used(s), "edgeSpace": edge_space(s), "population": population(s), "crates": s.get("crates", 0), "discovered": discovered(s),
                 "districts": districts(s), "boostFrom": boost_breakdown(s, rows.get(p.key, [])),
                 "plaza": penta_plaza(s, rows.get(p.key, [])), "volcano": fire_ducks(s, rows.get(p.key, []), classes),
-                "lab": {"spawnCost": spawn_cost(flock(s)), "clutchCost": clutch_cost(s), "freeNests": free_nests(s), "clutchDiscount": CLUTCH_DISCOUNT, "autoOn": s.get("autoOn", True), "autoSpawned": s.get("autoSpawned", 0), "autoScience": AUTONEST_SCIENCE, "flock": flock(s), "lucky": lucky_chance(s), "gameEggs": GAME_EGGS, "winEggs": WIN_EGGS,
+                "lab": {"spawnCost": spawn_cost(flock(s)), "clutchCost": clutch_cost(s), "freeNests": free_nests(s), "clutchDiscount": CLUTCH_DISCOUNT, "autoOn": s.get("autoOn", True), "autoSpawned": s.get("autoSpawned", 0), "autoScience": AUTONEST_SCIENCE, "autoPond": AUTONEST_POND, "flock": flock(s), "lucky": lucky_chance(s), "gameEggs": GAME_EGGS, "winEggs": WIN_EGGS,
                         "grow": grow_minutes(lv["incubation"]),
                         "growNext": grow_minutes(lv["incubation"] + 1) if upgrade_cost("incubation", lv["incubation"], top_level(s, "incubation")) is not None else None,
                         "nestSpaceNext": nest_space(lv["nests"] + 1)},
