@@ -233,11 +233,14 @@ class DuckLabTests(unittest.TestCase):
         self.assertEqual(grow_minutes(0), 8 * 60)
         self.assertLess(grow_minutes(5), grow_minutes(0))
 
-    def test_incubation_reaches_20_minutes_then_10_with_the_city(self):
-        self.assertAlmostEqual(grow_minutes(10), 20)
-        self.assertAlmostEqual(grow_minutes(10 + 2 * len(utopia.CITY_STAGES)), utopia.CITY_GROW_MINUTES)
-        times = [grow_minutes(n) for n in range(19)]
-        self.assertEqual(times, sorted(times, reverse=True))   # every level faster than the last
+    def test_incubation_is_one_exponential_curve_down_to_10_minutes_at_the_top(self):
+        self.assertEqual(grow_minutes(0), 8 * 60)
+        self.assertAlmostEqual(grow_minutes(utopia.INCUBATION_TOP), 10)
+        self.assertEqual(utopia.INCUBATION_TOP, 18)
+        times = [grow_minutes(n) for n in range(utopia.INCUBATION_TOP + 1)]
+        saved = [a - b for a, b in zip(times, times[1:])]
+        self.assertEqual(saved, sorted(saved, reverse=True))   # big savings early on, smaller as it goes
+        self.assertEqual({round(b / a, 6) for a, b in zip(times, times[1:])}, {round(utopia.INCUBATION_SPEEDUP, 6)})   # the same share each level
 
     def test_each_city_stage_gives_the_duck_lab_more_levels(self):
         s = new_utopia("A#1", 0)
