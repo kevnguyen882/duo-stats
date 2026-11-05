@@ -1163,7 +1163,8 @@ const plaza = (()=>{
   return {reset, size};
 })();
 // ---- the Duck Lab: a lab whose nests are fluid chambers, one duckling growing in each ----
-const LW = 480, LH = 200;
+const LW = 480;
+let LH = 200;   // the lab grows taller with more rows of nests (labHeight()), rather than shrinking every chamber
 const lab = (()=>{
   const cv = $('#labScene'), g = cv.getContext('2d');
   let hover = -1;
@@ -1183,12 +1184,17 @@ const lab = (()=>{
   }
   // where each chamber goes: one row of up to 13, a second row beyond that, shrunk to fit.
   // The second row sits half a step over, so its pipes come down through the gaps in the first.
-  function layout(n){
+  function grid(n){   // up to 13 chambers a row, as big as the width allows (more rows make the lab taller, not narrower)
     const cols = Math.min(n, 13), rows = Math.ceil(n / cols), gap = 26, half = rows > 1 ? (40 + gap) / 2 : 0;
-    const k = Math.min(1, (LW - 24) / (cols * 40 + (cols - 1) * gap + half), ((LH - 66) / rows - 14) / 112);
+    const k = Math.min(1, (LW - 24) / (cols * 40 + (cols - 1) * gap + half), (200 - 66 - 14) / 112);
+    return {cols, rows, gap, half, k};
+  }
+  const labHeight = n => { const {rows, k} = grid(n); return Math.max(200, Math.ceil(44 + rows * (112 * k + 14) + 22)); };
+  function layout(n){
+    const {cols, gap, half, k} = grid(n);
     const w = 40 * k, h = 112 * k, x0 = (LW - (cols * w + (cols - 1) * gap * k + half * k)) / 2;
     return Array.from({length: n}, (_, i)=>{ const row = Math.floor(i / cols);
-      return {x: x0 + row * half * k + (i % cols) * (w + gap * k), y: 44 + row * (h + 14), w, h, k}; });
+      return {x: x0 + row % 2 * half * k + (i % cols) * (w + gap * k), y: 44 + row * (h + 14), w, h, k}; });   // every other row shifted half a chamber
   }
   const left = (p, i) => Math.max(0, p.ducklings[i] - nowApp());
   const progress = (p, i) => Math.min(1, Math.max(0, 1 - left(p, i) / (p.lab.grow * 60000)));
@@ -1217,6 +1223,7 @@ const lab = (()=>{
     requestAnimationFrame(draw);
     if(!U || view !== 'lab') return;
     const p = U.players[viewing], L = p.lab;
+    if(labHeight(p.nestSpace) !== LH){ LH = labHeight(p.nestSpace); size(); }   // more nests: a taller lab
     const k = cv.width / LW;
     g.setTransform(k, 0, 0, k, 0, 0); g.imageSmoothingEnabled = false;
     for(let y = 0; y < LH; y += 32) for(let x = 0; x < LW; x += 32) g.drawImage(art('lab-tile'), x, y, 32, 32);
