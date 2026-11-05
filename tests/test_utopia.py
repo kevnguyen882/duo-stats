@@ -181,20 +181,33 @@ class AutoNesterTests(unittest.TestCase):
         s["levels"]["autonest"] = 1
         return s
 
-    def test_it_fills_empty_nests_when_it_can_pay(self):
+    def test_it_fills_empty_nests_one_at_a_time_at_its_pace(self):
         s = self.nester(10000)
+        gap, grow = utopia.autonest_gap(s), utopia.GROW_MINUTES * MIN   # 4 nests, 8 h: one every 2 h
         advance(s, 0)
-        self.assertEqual(len(s["ducklings"]), utopia.nest_space(1))
+        self.assertEqual(len(s["ducklings"]), 1)   # not all at once ...
+        advance(s, round(3 * gap))
+        self.assertEqual(sorted(s["ducklings"]), [round(grow + k * gap) for k in range(utopia.nest_space(1))])   # ... evenly spaced
         self.assertEqual(s["autoSpawned"], utopia.nest_space(1))
-        self.assertLess(s["crumbs"], 10000)
 
-    def test_it_refills_a_nest_as_soon_as_a_duckling_grows(self):
+    def test_ducklings_then_hatch_one_at_a_time_and_each_nest_is_refilled(self):
         s = self.nester(10000, pond=0)
-        advance(s, 0)
+        gap, grow = utopia.autonest_gap(s), utopia.GROW_MINUTES * MIN
+        advance(s, round(3 * gap))
+        advance(s, round(grow + 1.5 * gap))   # the first two have grown, a gap apart; their nests filled again as they did
+        self.assertEqual(s["pond"] + s["birds"][0], 2)
+        dues = sorted(s["ducklings"])
+        self.assertEqual(len(dues), utopia.nest_space(1))
+        self.assertTrue(all(abs(b - a - gap) <= 2 for a, b in zip(dues, dues[1:])))   # still evenly spaced
+
+    def test_ducklings_spawned_together_spread_out(self):
+        s = self.nester(10 ** 6, pond=0)
+        s["levels"]["pond"] = 20
         grow = utopia.GROW_MINUTES * MIN
-        advance(s, grow + 5 * MIN)   # the first batch grew at `grow`: the nests filled again right then
-        self.assertEqual(s["pond"] + s["birds"][0], utopia.nest_space(1))
-        self.assertEqual(sorted(s["ducklings"]), [2 * grow] * utopia.nest_space(1))
+        s["ducklings"] = [grow] * utopia.nest_space(1)   # a batch, all due together (say, a clutch)
+        advance(s, 3 * grow)
+        dues = sorted(s["ducklings"])
+        self.assertEqual(len(set(dues)), len(dues))   # refilled one at a time: no longer together
 
     def test_it_waits_until_it_can_afford_one(self):
         s = self.nester(0)
@@ -599,7 +612,7 @@ class GameTests(TempStorageCase):
         data["players"]["duo one#na1"]["levels"]["science"] = utopia.AUTONEST_SCIENCE
         self.storage.write_json(self.game.path, data)
         p = self.game.act(build, viewer=False, now=1)["players"][0]
-        self.assertEqual((p["levels"]["autonest"], len(p["ducklings"])), (1, utopia.nest_space(1)))   # filled the nests straight away
+        self.assertEqual((p["levels"]["autonest"], len(p["ducklings"])), (1, 1))   # its first duckling straight away, the rest at its pace
         p = self.game.act({"owner": "duo one#na1", "action": "autonest", "on": False}, viewer=False, now=1)["players"][0]
         self.assertFalse(p["lab"]["autoOn"])
 

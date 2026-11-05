@@ -380,7 +380,7 @@ def advance(s: dict, now: int):
         auto_nest(s, t)
         due = min(s["ducklings"]) if s["ducklings"] else None
         end = due if due is not None and due <= now else now
-        wait = _autonest_wait(s)   # the Auto-nester can afford its next duckling then: stop there to buy it
+        wait = _autonest_wait(s, t)   # the Auto-nester's next duckling is due then: stop there to spawn it
         if wait is not None and t + wait < end:
             end = t + wait
         s["crumbs"] += crumb_rate(s) * max(0, end - t) / 60000
@@ -399,6 +399,8 @@ def advance(s: dict, now: int):
             else:
                 s["pond"] += 1
         s["ducklings"] = [r for r in s["ducklings"] if r > t]
+    _fill_nests(s, now)   # (anything due at `now` itself)
+    auto_nest(s, now)
     s["tick"] = max(s["tick"], now)
     if left:
         waddle_off(s, left, now)
@@ -411,23 +413,37 @@ def waddle_off(s: dict, n: int, now: int):
                                    f"to find a new one. Merge birds in the Mystic Marsh or upgrade the pond to keep them."}] + s["log"])[:MAX_LOG]
 
 
+def autonest_gap(s: dict) -> float:
+    """The Auto-nester is a production line: one duckling every incubation time / nests (in ms), so they hatch evenly,
+    at the same rate as filling every nest at once would, rather than in batches that stay together for good."""
+    return grow_minutes(s["levels"]["incubation"]) * 60000 / nest_space(s["levels"]["nests"])
+
+
 def auto_nest(s: dict, t: int):
-    """The Auto-nester: a duckling into every empty nest it can pay for, at the normal price, at time t."""
+    """The Auto-nester: a duckling into an empty nest at time t, at the normal price, if it can pay and its last one was
+    at least autonest_gap() ago."""
     if not (s["levels"]["autonest"] and s.get("autoOn", True)):
         return
-    while free_nests(s) and s["crumbs"] >= spawn_cost(flock(s)):
+    last = s.get("autoLast")
+    if free_nests(s) and s["crumbs"] >= spawn_cost(flock(s)) and (last is None or t - last >= autonest_gap(s) - 1):
         s["crumbs"] -= spawn_cost(flock(s))
         s["spawned"] += 1
         s["autoSpawned"] = s.get("autoSpawned", 0) + 1
+        s["autoLast"] = t
         s["ducklings"].append(t + round(grow_minutes(s["levels"]["incubation"]) * 60000))
 
 
-def _autonest_wait(s: dict):
-    """Milliseconds until the Auto-nester can pay for a duckling in an empty nest; None if it isn't waiting on that."""
+def _autonest_wait(s: dict, t: int):
+    """Milliseconds from t until the Auto-nester's next duckling, with a nest free: once its pace allows one and it can
+    pay for it; None if it can't (no breadcrumbs coming in)."""
     if not (s["levels"]["autonest"] and s.get("autoOn", True) and free_nests(s)):
         return None
+    last = s.get("autoLast")
+    pace = 0 if last is None else max(0, last + autonest_gap(s) - t)
     short, rate = spawn_cost(flock(s)) - s["crumbs"], crumb_rate(s)
-    return None if short <= 0 or rate <= 0 else max(1, math.ceil(short / rate * 60000))
+    if short > 0 and rate <= 0:
+        return None
+    return max(1, math.ceil(max(pace, short / rate * 60000 if short > 0 else 0)))
 
 
 def _fill_nests(s: dict, t: int):
