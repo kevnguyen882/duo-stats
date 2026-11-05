@@ -1165,9 +1165,10 @@ const plaza = (()=>{
 // ---- the Duck Lab: a lab whose nests are fluid chambers, one duckling growing in each ----
 const LW = 480;
 let LH = 200;   // the lab grows taller with more rows of nests (labHeight()), rather than shrinking every chamber
+const LAB_WALL = 64, LAB_TOP = LAB_WALL + 14, LAB_FLOOR = 56;   // the back wall, where the chambers start, the floor below them
 const lab = (()=>{
   const cv = $('#labScene'), g = cv.getContext('2d');
-  let hover = -1;
+  let hover = -1, last = 0;   // (last: when it was last drawn, for the lab duck's walk)
   function size(){   // (also called when the lab is shown)
     hover = -1;
     const css = cv.clientWidth || LW, dpr = window.devicePixelRatio || 1;
@@ -1189,12 +1190,12 @@ const lab = (()=>{
     const k = Math.min(1, (LW - 24) / (cols * 40 + (cols - 1) * gap + half), (200 - 66 - 14) / 112);
     return {cols, rows, gap, half, k};
   }
-  const labHeight = n => { const {rows, k} = grid(n); return Math.max(200, Math.ceil(44 + rows * (112 * k + 14) + 22)); };
+  const labHeight = n => { const {rows, k} = grid(n); return Math.max(240, Math.ceil(LAB_TOP + rows * (112 * k + 14) + LAB_FLOOR)); };
   function layout(n){
     const {cols, gap, half, k} = grid(n);
     const w = 40 * k, h = 112 * k, x0 = (LW - (cols * w + (cols - 1) * gap * k + half * k)) / 2;
     return Array.from({length: n}, (_, i)=>{ const row = Math.floor(i / cols);
-      return {x: x0 + row % 2 * half * k + (i % cols) * (w + gap * k), y: 44 + row * (h + 14), w, h, k}; });   // every other row shifted half a chamber
+      return {x: x0 + row % 2 * half * k + (i % cols) * (w + gap * k), y: LAB_TOP + row * (h + 14), w, h, k}; });   // every other row shifted half a chamber
   }
   const left = (p, i) => Math.max(0, p.ducklings[i] - nowApp());
   const progress = (p, i) => Math.min(1, Math.max(0, 1 - left(p, i) / (p.lab.grow * 60000)));
@@ -1218,6 +1219,64 @@ const lab = (()=>{
     if(i === hover){ g.strokeStyle = '#c5f6fa'; g.lineWidth = 2; g.strokeRect(-1, -1, 42, 114); }
     g.restore();
   }
+  // the back wall: tiles, a shelf of bubbling flasks, the control monitor (the nests' status), a clock and a whiteboard
+  function wall(p, now){
+    g.fillStyle = '#cfe3dd'; g.fillRect(0, 0, LW, LAB_WALL);
+    g.fillStyle = '#b7cfc8'; for(let y = 15; y < LAB_WALL; y += 16) g.fillRect(0, y, LW, 1); for(let x = 15; x < LW; x += 16) g.fillRect(x, 0, 1, LAB_WALL);
+    g.fillStyle = '#8a5a34'; g.fillRect(14, 36, 118, 4); g.fillStyle = '#6b4423'; g.fillRect(20, 40, 3, 5); g.fillRect(123, 40, 3, 5);   // the shelf
+    [['#f06595', 22], ['#51cf66', 44], ['#845ef7', 66], ['#ffa94d', 88], ['#4dabf7', 110]].forEach(([c, x], i)=>{   // flasks
+      const tall = i % 2 ? 14 : 10;
+      g.fillStyle = 'rgba(255,255,255,.75)'; g.fillRect(x + 2, 36 - tall - 6, 4, 6); g.fillRect(x, 36 - tall, 8, tall);
+      g.fillStyle = c; g.fillRect(x + 1, 36 - Math.round(tall * .6), 6, Math.round(tall * .6));
+      const b = (now / 700 + i * .37) % 1; g.fillStyle = 'rgba(255,255,255,.8)'; g.fillRect(x + 3, Math.round(36 - tall * .6 * b - 2), 2, 2);   // a bubble
+    });
+    g.fillStyle = '#343a40'; g.fillRect(162, 6, 156, 40); g.fillStyle = '#0b1f17'; g.fillRect(166, 10, 148, 32);   // the monitor
+    g.fillStyle = '#495057'; g.fillRect(234, 46, 12, 6); g.fillRect(222, 52, 36, 3);
+    for(let x = 0; x < 140; x += 2){ const y = 30 + Math.round(Math.sin((x + now / 40) / 9) * 4); g.fillStyle = 'rgba(140,233,154,.35)'; g.fillRect(170 + x, y, 2, 2); }   // a heartbeat trace
+    const free = p.nestSpace - p.ducklings.length - p.lost;
+    label(`NESTS ${p.ducklings.length}/${p.nestSpace}${p.lost ? ` · ${p.lost} EGGS WAITING` : ''}`, 240, 13, '#8ce99a');
+    label(free > 0 ? `${free} FREE: SPAWN BELOW` : 'ALL FULL: UPGRADE NESTS', 240, 24, free > 0 ? '#c5f6fa' : '#ffd8a8');
+    if(Math.floor(now / 500) % 2){ g.fillStyle = '#8ce99a'; g.fillRect(306, 34, 4, 6); }   // a blinking cursor
+    g.fillStyle = '#f8f9fa'; g.fillRect(352, 8, 76, 40); g.fillStyle = '#adb5bd'; g.fillRect(352, 48, 76, 2);   // the whiteboard, and a chart on it
+    [[8, 2], [14, 4], [8, 6], [22, 8], [30, 10]].forEach(([h], i)=>{ g.fillStyle = ['#4dabf7', '#51cf66', '#fcc419', '#f06595', '#845ef7'][i]; g.fillRect(362 + i * 12, 42 - h, 8, h); });
+    g.fillStyle = '#868e96'; g.fillRect(358, 42, 64, 1); g.fillRect(358, 14, 1, 28);
+    g.fillStyle = '#f8f9fa'; g.fillRect(446, 12, 20, 20); g.fillStyle = '#343a40'; g.fillRect(446, 12, 20, 2); g.fillRect(446, 30, 20, 2); g.fillRect(446, 12, 2, 20); g.fillRect(464, 12, 2, 20);   // the clock
+    const tm = new Date(), ha = (tm.getHours() % 12 + tm.getMinutes() / 60) / 12 * Math.PI * 2, ma = tm.getMinutes() / 60 * Math.PI * 2;
+    g.fillStyle = '#343a40'; for(let d = 0; d < 5; d++) g.fillRect(Math.round(456 + Math.sin(ha) * d), Math.round(22 - Math.cos(ha) * d), 1, 1);
+    g.fillStyle = '#e03131'; for(let d = 0; d < 7; d++) g.fillRect(Math.round(456 + Math.sin(ma) * d), Math.round(22 - Math.cos(ma) * d), 1, 1);
+    g.fillStyle = '#5c636a'; g.fillRect(0, LAB_WALL - 6, LW, 3); g.fillStyle = '#2b5563'; g.fillRect(0, LAB_WALL, LW, 2);   // the pipe rail, the skirting
+  }
+  // the floor, and the lab duck who runs the place: it walks between the chambers checking on them, and says how they're doing
+  const LAB_LINES = p => {
+    const soonest = p.ducklings.map((_, i)=>i).sort((a, b)=>left(p, a) - left(p, b))[0];
+    return [soonest != null ? `Nest ${soonest + 1} hatches in ${short(left(p, soonest))}!` : 'All quiet. Spawn me some eggs!',
+      p.lost ? `${plural(p.lost, 'egg')} from your games, waiting for a nest.` : 'Fluids at 98%. Bubbles nominal.',
+      `${p.ducklings.length} of ${p.nestSpace} nests growing.`, 'Eggs from your games go in first. Free science!',
+      p.levels.autonest ? 'The Auto-nester keeps me busy.' : 'An Auto-nester? I could use the help.'];
+  };
+  const duck = {x: 60, tx: 60, face: 1, wait: 0, say: '', sayUntil: 0, nextSay: 4000};
+  function floor(p, now, dt){
+    const fy = LH - LAB_FLOOR;
+    for(let y = fy; y < LH; y += 12) for(let x = 0; x < LW; x += 12){ g.fillStyle = ((x + y) / 12) % 2 ? '#dee2e6' : '#f1f3f5'; g.fillRect(x, y, 12, 12); }
+    g.fillStyle = '#868e96'; g.fillRect(0, fy, LW, 2);
+    // walk to a chamber, look it over, then on to another
+    if(duck.wait > 0) duck.wait -= dt;
+    else if(Math.abs(duck.tx - duck.x) < 1){
+      const cs = layout(p.nestSpace), c = cs[Math.floor(Math.random() * cs.length)];
+      duck.tx = Math.min(LW - 40, Math.max(40, c ? c.x + c.w / 2 : Math.random() * LW)); duck.wait = 1200 + Math.random() * 1600;
+    } else { const step = Math.sign(duck.tx - duck.x) * Math.min(Math.abs(duck.tx - duck.x), dt * .03); duck.x += step; duck.face = step > 0 ? 1 : -1; }
+    if(now > duck.nextSay){ const lines = LAB_LINES(p); duck.say = lines[Math.floor(Math.random() * lines.length)]; duck.sayUntil = now + 3500; duck.nextSay = now + 9000 + Math.random() * 6000; }
+    const walking = duck.wait <= 0 && Math.abs(duck.tx - duck.x) >= 1, bob = walking ? Math.abs(Math.sin(now / 90)) * 2 : 0, dy = fy + 8 - bob, dx = Math.round(duck.x - 16);
+    g.save(); if(duck.face < 0){ g.translate(dx + 16, 0); g.scale(-1, 1); g.translate(-dx - 16, 0); }
+    g.drawImage(art('lab-duck'), dx, Math.round(dy), 32, 32); g.restore();
+    if(now < duck.sayUntil && duck.say){   // a speech bubble
+      g.font = 'bold 9px ui-monospace, Menlo, monospace';
+      const w = Math.ceil(g.measureText(duck.say).width) + 10, bx = Math.round(Math.min(LW - w - 4, Math.max(4, duck.x - w / 2))), by = Math.round(dy - 18);
+      g.fillStyle = '#ffffff'; g.fillRect(bx, by, w, 14); g.fillStyle = '#343a40'; g.fillRect(bx, by + 14, w, 1); g.fillRect(bx, by - 1, w, 1);
+      g.fillStyle = '#ffffff'; g.fillRect(Math.round(duck.x) - 2, by + 14, 4, 3);
+      g.fillStyle = '#343a40'; g.textAlign = 'left'; g.textBaseline = 'top'; g.fillText(duck.say, bx + 5, by + 3);
+    }
+  }
   const short = ms => { const m = Math.ceil(ms / 60000); return m >= 60 ? `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}` : `${m}m`; };
   function draw(now){
     requestAnimationFrame(draw);
@@ -1226,20 +1285,18 @@ const lab = (()=>{
     if(labHeight(p.nestSpace) !== LH){ LH = labHeight(p.nestSpace); size(); }   // more nests: a taller lab
     const k = cv.width / LW;
     g.setTransform(k, 0, 0, k, 0, 0); g.imageSmoothingEnabled = false;
-    for(let y = 0; y < LH; y += 32) for(let x = 0; x < LW; x += 32) g.drawImage(art('lab-tile'), x, y, 32, 32);
-    g.fillStyle = '#16303a'; g.fillRect(0, 0, LW, 36); g.fillStyle = '#2b5563'; g.fillRect(0, 36, LW, 2);   // the back wall
+    const dt = Math.min(100, now - (last || now)); last = now;
+    for(let y = LAB_WALL; y < LH; y += 32) for(let x = 0; x < LW; x += 32) g.drawImage(art('lab-tile'), x, y, 32, 32);
+    wall(p, now);
     const cs = layout(p.nestSpace);
     g.fillStyle = '#5c636a';
-    cs.forEach(c=>g.fillRect(Math.round(c.x + c.w / 2 - 2), 30, 4, Math.round(c.y - 30)));                  // pipes from the ceiling, behind the chambers
+    cs.forEach(c=>g.fillRect(Math.round(c.x + c.w / 2 - 2), LAB_WALL - 4, 4, Math.round(c.y - LAB_WALL + 4)));   // pipes from the rail, behind the chambers
     cs.forEach((c, i)=>{
       const growing = i < p.ducklings.length;
       chamber(c, growing, growing ? progress(p, i) : 0, now, i);
       if(c.k >= .6) label(growing ? short(left(p, i)) : 'empty', c.x + c.w / 2, c.y + c.h + 3, growing ? '#ffe066' : '#adb5bd');
     });
-    g.fillStyle = '#5c636a'; g.fillRect(0, 29, LW, 3);
-    const free = p.nestSpace - p.ducklings.length - p.lost;
-    label(free > 0 ? `${free} free nest${free === 1 ? '' : 's'}: spawn a duckling below` : 'Every nest is full: upgrade the nests to spawn more',
-          LW / 2, 10, free > 0 ? '#c5f6fa' : '#ffd8a8');
+    floor(p, now, dt);
     label(`${p.spawned} spawned so far`, 10, LH - 14, '#dee2e6', 'left');
     label(`Ducklings grow in ${fmtMin(L.grow)}`, LW - 10, LH - 14, '#dee2e6', 'right');
   }
@@ -1258,6 +1315,11 @@ const lab = (()=>{
     tip.style.left = Math.min(Math.max(8, e.clientX - w / 2), innerWidth - w - 8) + 'px'; tip.style.top = ty + 'px';
   });
   cv.addEventListener('mouseleave', ()=>{ hover = -1; tip.classList.remove('on'); });
+  cv.addEventListener('click', e=>{   // the lab duck has a word
+    const p = U && U.players[viewing]; if(!p) return;
+    const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * LW / r.width, y = (e.clientY - r.top) * LH / r.height;
+    if(Math.abs(x - duck.x) < 18 && y > LH - LAB_FLOOR - 4){ const lines = LAB_LINES(p); duck.say = lines[Math.floor(Math.random() * lines.length)]; duck.sayUntil = performance.now() + 3500; }
+  });
   window.addEventListener('resize', size);
   size(); requestAnimationFrame(draw);
   return {reset, size};
