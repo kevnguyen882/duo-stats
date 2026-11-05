@@ -855,7 +855,7 @@ const scene = (()=>{
   let ring = null;
   function shore(b){   // where each level's building stands
     if(ring && ring.rx === b.rx) return ring.spots;
-    const keepOut = [[118, 52, 144, 28],                                                           // the pond's label
+    const keepOut = [[b.cx - 72, 52, 144, 28],                                                     // the pond's label
       [CRATE_SPOT.x - 20, 0, CRATE_SPOT.s + 44, CRATE_SPOT.y + CRATE_SPOT.s + 6],                   // the mailman and his parcel
       [EGGS.x - 4, EGGS.y - 4, 40, 44],                                                            // eggs waiting
       ...Object.values(PLACES).map(([x, y])=>[x - 14, y - 4, PLACE_SIZE + 28, PLACE_SIZE + 30])];  // places and their names
@@ -873,8 +873,10 @@ const scene = (()=>{
     return spots;
   }
   function skyline(p, b, now){
-    const spots = shore(b), n = Math.min(p.levels.pond - 20, 20, spots.length);
-    const order = spots.slice(0, n).map((s, i)=>({...s, lvl: 21 + i})).sort((a, c)=>a.y - c.y);   // back to front
+    const n = Math.min(p.levels.pond - 20, 20);   // a building a level past the lagoon: none before it
+    if(n <= 0) return;
+    const spots = shore(b).slice(0, n);
+    const order = spots.map((s, i)=>({...s, lvl: 21 + i})).sort((a, c)=>a.y - c.y);   // back to front
     for(const {x: cx, y: sy, front, lvl} of order){
       const st = STAGES[lvl <= 25 ? 0 : lvl <= 30 ? 1 : lvl <= 35 ? 2 : 3];
       const h = Math.round(st.h + (lvl * 37) % 7 * st.more), x = Math.round(cx - st.w / 2), base = Math.round(front ? sy + h : sy), top = base - h;
@@ -890,7 +892,7 @@ const scene = (()=>{
   }
   function pondBox(p){
     const lvl = Math.min(p.levels.pond, 12), rx = Math.min(60 + 7 * lvl, 130), ry = Math.round(rx * .55);
-    return {cx: 190, cy: 150, rx, ry};
+    return {cx: W / 2, cy: 150, rx, ry};   // in the middle of the grass
   }
   function reset(){
     if(!U) return;
