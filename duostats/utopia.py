@@ -95,11 +95,26 @@ HATS = {
     "wizard": ("Wizard hat", 4500), "crown": ("Royal crown", 8000),
 }
 
+# past the lagoon (level 20) the pond grows into a city, in stages: each longer, roomier and steeper than the last
+CITY_STAGES = [   # name, its last level, room added a level, how much more each level costs than the one before
+    ("Duck Village", 30, 20, 1.15), ("Duck Town", 45, 25, 1.18), ("Duck City", 60, 35, 1.21), ("Duckopolis", 80, 50, 1.24)]
+
+
+def city_stage(level: int):
+    """The city stage a pond level (past 20) is in: (name, first level, last level, room a level, cost growth)."""
+    first = 21
+    for name, last, room, growth in CITY_STAGES:
+        if level <= last:
+            return name, first, last, room, growth
+        first = last + 1
+    return city_stage(CITY_STAGES[-1][1])
+
+
 # building -> (first cost, cost growth per level, highest level, names by level)
 BUILDINGS = {
     "nests":  (300, 1.7, 12, [(1, "Nests")]),   # in the Duck Lab
-    "pond":   (400, 1.8, 40, [(1, "Pond"), (4, "Lake"), (7, "Lagoon"),   # ... and past the lagoon, the pond grows into a city:
-                              (21, "Duck Village"), (26, "Duck Town"), (31, "Duck City"), (36, "Duckopolis")]),
+    "pond":   (400, 1.8, CITY_STAGES[-1][1], [(1, "Pond"), (4, "Lake"), (7, "Lagoon")]   # ... and past the lagoon, the city
+               + [(city_stage(last)[1], name) for name, last, _, _ in CITY_STAGES]),
     "bakery": (500, 1.9, 10, [(1, "Bakery")]),
     "spa":    (20000, 4.0, 2, [(1, "Spa"), (2, "Hot springs")]),
     "fence":  (600, 1.7, 9, [(1, "Fences"), (4, "Scarecrows"), (7, "Honk-proof walls")]),
@@ -201,19 +216,18 @@ def nest_space(level: int) -> int:
 
 
 LAGOON_SPACE = [65, 80, 95, 110, 130, 150, 175, 200]   # the lagoon's levels 13 to 20
-CITY_STEPS = [(25, 40), (30, 60), (35, 80), (40, 100)]  # past the lagoon: room added a level, up to each stage's last level
-CITY_GROWTH = 1.35   # past level 20, each pond level costs 35% more than the last (the lagoon's 80% would run away)
 
 
 def pond_space(level: int) -> int:
     """Kept small at first, so room is worth making in the Mystic Marsh: 6, 10, 14 ... 50 at level 12, then the lagoon's
-    bigger steps up to 200 at level 20, and then the city it grows into: Duck Village 240 ... 400, Duck Town ... 700,
-    Duck City ... 1,100 and Duckopolis ... 1,600 at the top (40). A pond already holding more keeps every duck."""
+    bigger steps up to 200 at level 20, and then the city it grows into (CITY_STAGES): Duck Village ... 400 at level 30,
+    Duck Town ... 775 at 45, Duck City ... 1,300 at 60 and Duckopolis ... 2,300 at the top (80). A pond already holding
+    more keeps every duck."""
     if level <= 12:
         return 2 + 4 * level
     if level <= 20:
         return LAGOON_SPACE[level - 13]
-    return 200 + sum(next(step for last, step in CITY_STEPS if lvl <= last) for lvl in range(21, min(level, 40) + 1))
+    return 200 + sum(city_stage(lvl)[3] for lvl in range(21, min(level, CITY_STAGES[-1][1]) + 1))
 
 
 def population(s: dict) -> int:
@@ -233,8 +247,8 @@ def upgrade_cost(building: str, level: int):
     start = START_LEVELS[building]
     if level >= top:
         return None
-    if building == "pond" and level >= 20:   # the city: gentler steps on from the lagoon's last one
-        return round(first * growth ** (19 - start) * CITY_GROWTH ** (level - 19))
+    if building == "pond" and level >= 20:   # the city: on from the lagoon's last step, by each level's stage's growth
+        return round(first * growth ** (19 - start) * math.prod(city_stage(lvl)[4] for lvl in range(21, level + 2)))
     return round(first * growth ** (level - start))
 
 
@@ -1391,7 +1405,8 @@ class DuckUtopia:
                                      for c, r in recs.items()), key=lambda x: (-x["games"], x["champion"])),
             })
         return {"now": now, "me": 1 if viewer else 0, "players": out, "goldenRate": GOLDEN_RATE, "fireRate": FIRE_RATE, "winCrumbs": WIN_CRUMBS, "winMinutes": WIN_MINUTES, "raidMinutes": RAID_MINUTES,
-                "scienceBoost": SCIENCE_BOOST, "marshBirds": [{"id": k, "name": n, "rate": bird_rate(i)} for i, (k, n) in enumerate(BIRDS)],
+                "scienceBoost": SCIENCE_BOOST,
+                "cityStages": [{"name": n, "first": city_stage(last)[1], "last": last} for n, last, _, _ in CITY_STAGES], "marshBirds": [{"id": k, "name": n, "rate": bird_rate(i)} for i, (k, n) in enumerate(BIRDS)],
                 "hatShop": [{"id": h, "name": n, "cost": c} for h, (n, c) in HATS.items()],
                 "salts": [{"id": k, "name": n, "does": does} for k, (n, does) in SALTS.items()],
                 "temps": [{"id": k, "name": n, "cost": c, "minutes": m, "power": pw} for k, (n, c, m, pw) in TEMPS.items()],

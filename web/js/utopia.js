@@ -845,7 +845,7 @@ const scene = (()=>{
     cv.width = Math.round(css * dpr); cv.height = Math.round(css * dpr * H / W);
   }
   const SWIM = {x: .8, y: .7};   // ducks swim within this much of the pond's width and height
-  // past the lagoon (level 20) the pond grows into a city: a building a level standing round its shore, from the front
+  // past the lagoon (level 20) the pond grows into a city: buildings standing round its shore, from the front
   // (below the water) out both ways and up the back, by stage (Duck Village's cottages, Duck Town's houses, Duck City's
   // towers, Duckopolis's skyscrapers), lit windows twinkling. Buildings in front stand before the water, ones behind
   // rise away from it, and spots that would run into anything else on the map are skipped.
@@ -873,12 +873,13 @@ const scene = (()=>{
     return spots;
   }
   function skyline(p, b, now){
-    const n = Math.min(p.levels.pond - 20, 20);   // a building a level past the lagoon: none before it
-    if(n <= 0) return;
-    const spots = shore(b).slice(0, n);
-    const order = spots.map((s, i)=>({...s, lvl: 21 + i})).sort((a, c)=>a.y - c.y);   // back to front
-    for(const {x: cx, y: sy, front, lvl} of order){
-      const st = STAGES[lvl <= 25 ? 0 : lvl <= 30 ? 1 : lvl <= 35 ? 2 : 3];
+    // each stage adds 5 buildings in its own style, spread over its levels (Duck Village's at 22, 24 ... 30, and so on)
+    const built = U.cityStages.flatMap((c, si)=>[1, 2, 3, 4, 5].map(k=>({si, lvl: c.first - 1 + Math.round(k * (c.last - c.first + 1) / 5)})))
+      .filter(x=>p.levels.pond >= x.lvl);
+    if(!built.length) return;
+    const order = shore(b).slice(0, built.length).map((s, i)=>({...s, ...built[i]})).sort((a, c)=>a.y - c.y);   // back to front
+    for(const {x: cx, y: sy, front, lvl, si} of order){
+      const st = STAGES[si];
       const h = Math.round(st.h + (lvl * 37) % 7 * st.more), x = Math.round(cx - st.w / 2), base = Math.round(front ? sy + h : sy), top = base - h;
       g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(x + 2, base, st.w, 2);   // its shadow
       g.fillStyle = st.walls[lvl % 2]; g.fillRect(x, top, st.w, h);

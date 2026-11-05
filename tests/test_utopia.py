@@ -360,17 +360,20 @@ class RewardTests(unittest.TestCase):
         self.assertGreater(upgrade_cost("pond", 2), 400)
         self.assertEqual(upgrade_cost("bakery", 0), 500)
         self.assertIsNone(upgrade_cost("spa", 2))
-        self.assertIsNotNone(upgrade_cost("pond", 39))   # the pond goes to level 40 ...
-        self.assertIsNone(upgrade_cost("pond", 40))
+        self.assertIsNotNone(upgrade_cost("pond", 79))   # the pond goes to level 80 ...
+        self.assertIsNone(upgrade_cost("pond", 80))
         self.assertEqual([utopia.pond_space(n) for n in (1, 12, 13, 20)], [6, 50, 65, 200])   # ... the lagoon holding up to 200
 
     def test_the_pond_grows_into_a_city(self):
-        self.assertEqual([(utopia.building_name("pond", n), utopia.pond_space(n)) for n in (21, 25, 26, 31, 36, 40)],
-                         [("Duck Village", 240), ("Duck Village", 400), ("Duck Town", 460), ("Duck City", 780),
-                          ("Duckopolis", 1200), ("Duckopolis", 1600)])
-        costs = [upgrade_cost("pond", n) for n in range(18, 40)]
-        self.assertEqual(costs, sorted(costs))   # always dearer than the level before ...
-        self.assertLess(costs[-1] / costs[-2], 1.4)   # ... but by 35% a level in the city, not the lagoon's 80%
+        self.assertEqual([(utopia.building_name("pond", n), utopia.pond_space(n)) for n in (21, 30, 31, 45, 46, 60, 61, 80)],
+                         [("Duck Village", 220), ("Duck Village", 400), ("Duck Town", 425), ("Duck Town", 775),
+                          ("Duck City", 810), ("Duck City", 1300), ("Duckopolis", 1350), ("Duckopolis", 2300)])
+
+    def test_each_city_stage_takes_longer_than_the_last(self):
+        costs = {n: upgrade_cost("pond", n) for n in range(18, 80)}
+        self.assertEqual(list(costs.values()), sorted(costs.values()))   # always dearer than the level before
+        steps = [round(costs[n + 1] / costs[n], 2) for n in (24, 37, 52, 70)]   # within Village, Town, City, Duckopolis
+        self.assertEqual(steps, [1.15, 1.18, 1.21, 1.24])   # each stage's levels climb faster than the last's
 
     def test_population_counts_each_bird_as_its_ducks(self):
         s = new_utopia("A#1", 0)
