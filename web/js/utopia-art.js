@@ -340,6 +340,13 @@ function buildArt(){
     px(0, 96, 40, 16, '#5c636a'); px(0, 96, 40, 2, '#adb5bd'); px(4, 102, 32, 6, '#343a40');
     px(3, 10, 2, 86, 'rgba(220,240,255,.55)'); px(35, 10, 2, 86, 'rgba(220,240,255,.55)'); px(8, 14, 2, 70, 'rgba(255,255,255,.35)');
   });
+  ART['lab-duck'] = fromMap(overlay(recolour((ch, x, y)=>y >= 7 && y <= 12 && ch === 'B' ? 'C' : y >= 7 && ch === 'S' ? 'D' : null),   // a white lab coat
+    [[7, 2, 'K'], [8, 2, 'L'], [9, 2, 'L'], [10, 2, 'K'], [11, 2, 'L'], [12, 2, 'L'], [13, 2, 'K'],        // goggles pushed up on its head
+     [9, 7, 'D'], [9, 8, 'D'], [9, 9, 'D'], [9, 10, 'D'], [7, 9, 'P'], [6, 9, 'P'], [6, 8, 'R'], [7, 8, 'U'],   // the coat's front, a pocket and pens
+     ...line(0, 7, 4, 'T', 0, 1), ...line(1, 7, 4, 'T', 0, 1), [2, 7, 'M'], [1, 8, 'W'], [1, 9, 'W'], [1, 10, 'W']]),   // a clipboard
+    {...DUCK_PAL, B: '#ffd43b', S: '#f2b705', C: '#ffffff', D: '#ced4da', K: '#343a40', L: '#66d9e8', P: '#dee2e6',
+     R: '#e03131', U: '#1c7ed6', T: '#8b5a2b', M: '#adb5bd', W: '#f8f9fa'}, 2);
+  ART['bird-lab'] = ART['lab-duck'];   // the lab duck is a step on the Mystic Marsh's ladder too
   ART['mailman-duck'] = fromMap(overlay(recolour((ch, x, y)=>y >= 7 && y <= 12 && ch === 'B' ? 'L' : y >= 7 && ch === 'S' ? 'M' : null),   // a postal uniform
     [...line(8, 0, 3, 'C'), ...line(7, 1, 5, 'C'), [9, 1, 'Y'], ...line(10, 2, 3, 'D'),                    // a mail cap with a badge and brim
      [10, 7, 'T'], [9, 8, 'T'], [8, 9, 'T'], [7, 10, 'T'],                                                   // the satchel's strap
