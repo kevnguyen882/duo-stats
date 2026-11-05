@@ -98,7 +98,8 @@ HATS = {
 # building -> (first cost, cost growth per level, highest level, names by level)
 BUILDINGS = {
     "nests":  (300, 1.7, 12, [(1, "Nests")]),   # in the Duck Lab
-    "pond":   (400, 1.8, 20, [(1, "Pond"), (4, "Lake"), (7, "Lagoon")]),
+    "pond":   (400, 1.8, 40, [(1, "Pond"), (4, "Lake"), (7, "Lagoon"),   # ... and past the lagoon, the pond grows into a city:
+                              (21, "Duck Village"), (26, "Duck Town"), (31, "Duck City"), (36, "Duckopolis")]),
     "bakery": (500, 1.9, 10, [(1, "Bakery")]),
     "spa":    (20000, 4.0, 2, [(1, "Spa"), (2, "Hot springs")]),
     "fence":  (600, 1.7, 9, [(1, "Fences"), (4, "Scarecrows"), (7, "Honk-proof walls")]),
@@ -200,12 +201,25 @@ def nest_space(level: int) -> int:
 
 
 LAGOON_SPACE = [65, 80, 95, 110, 130, 150, 175, 200]   # the lagoon's levels 13 to 20
+CITY_STEPS = [(25, 40), (30, 60), (35, 80), (40, 100)]  # past the lagoon: room added a level, up to each stage's last level
+CITY_GROWTH = 1.35   # past level 20, each pond level costs 35% more than the last (the lagoon's 80% would run away)
 
 
 def pond_space(level: int) -> int:
     """Kept small at first, so room is worth making in the Mystic Marsh: 6, 10, 14 ... 50 at level 12, then the lagoon's
-    bigger steps up to 200 at the top (20). A pond already holding more keeps every duck."""
-    return 2 + 4 * level if level <= 12 else LAGOON_SPACE[min(level, 20) - 13]
+    bigger steps up to 200 at level 20, and then the city it grows into: Duck Village 240 ... 400, Duck Town ... 700,
+    Duck City ... 1,100 and Duckopolis ... 1,600 at the top (40). A pond already holding more keeps every duck."""
+    if level <= 12:
+        return 2 + 4 * level
+    if level <= 20:
+        return LAGOON_SPACE[level - 13]
+    return 200 + sum(next(step for last, step in CITY_STEPS if lvl <= last) for lvl in range(21, min(level, 40) + 1))
+
+
+def population(s: dict) -> int:
+    """Every duck you have, counting each bird from the Mystic Marsh as the ducks that went into it (a mallard is 2), so
+    merging never lowers it: in the pond and at its edge, plus ducklings growing and eggs waiting."""
+    return s["pond"] + s["edge"] + len(s["ducklings"]) + s["lost"] + sum(n * 2 ** (i + 1) for i, n in enumerate(s["birds"]))
 
 
 def edge_space(s: dict) -> int:
@@ -217,7 +231,11 @@ def upgrade_cost(building: str, level: int):
     """Breadcrumbs to go from `level` to the next one; None at the top."""
     first, growth, top, _ = BUILDINGS[building]
     start = START_LEVELS[building]
-    return None if level >= top else round(first * growth ** (level - start))
+    if level >= top:
+        return None
+    if building == "pond" and level >= 20:   # the city: gentler steps on from the lagoon's last one
+        return round(first * growth ** (19 - start) * CITY_GROWTH ** (level - 19))
+    return round(first * growth ** (level - start))
 
 
 def building_name(building: str, level: int) -> str:
@@ -228,7 +246,7 @@ def building_name(building: str, level: int) -> str:
 # ---- the race ----
 def score(s: dict) -> int:
     """The Ductopia Score: ducks, buildings, districts and raid wins."""
-    ducks = s["pond"] + s["edge"] + len(s["ducklings"]) + s["lost"] + sum(n * 2 ** (i + 1) for i, n in enumerate(s["birds"]))   # merging never lowers it
+    ducks = population(s)   # (merging never lowers it)
     lv = s["levels"]
     return (10 * ducks + 50 * s["golden"] + 40 * len(s["champs"]) + 50 * len(s["caught"])
             + 20 * (lv["nests"] + lv["pond"]) + 25 * (lv["bakery"] + lv["science"]) + 60 * lv["spa"] + 15 * lv["fence"]
@@ -1347,7 +1365,7 @@ class DuckUtopia:
                                      "log", "founding", "founded")},
                 "crumbs": round(s["crumbs"], 2), "ducklings": sorted(s["ducklings"]),
                 "score": scores[i], "catchUp": catch_up(scores[i], best), "leading": len(scores) > 1 and scores[i] == best and scores.count(best) == 1,
-                "rate": round(crumb_rate(s), 3), "rateFrom": rate_breakdown(s), "heat": heat(s), "nestSpace": nest_space(lv["nests"]), "pondSpace": pond_space(lv["pond"]), "pondUsed": pond_used(s), "edgeSpace": edge_space(s), "crates": s.get("crates", 0), "discovered": discovered(s),
+                "rate": round(crumb_rate(s), 3), "rateFrom": rate_breakdown(s), "heat": heat(s), "nestSpace": nest_space(lv["nests"]), "pondSpace": pond_space(lv["pond"]), "pondUsed": pond_used(s), "edgeSpace": edge_space(s), "population": population(s), "crates": s.get("crates", 0), "discovered": discovered(s),
                 "districts": districts(s), "boostFrom": boost_breakdown(s, rows.get(p.key, [])),
                 "plaza": penta_plaza(s, rows.get(p.key, [])), "volcano": fire_ducks(s, rows.get(p.key, []), classes),
                 "lab": {"spawnCost": spawn_cost(flock(s)), "clutchCost": clutch_cost(s), "freeNests": free_nests(s), "clutchDiscount": CLUTCH_DISCOUNT, "autoOn": s.get("autoOn", True), "autoSpawned": s.get("autoSpawned", 0), "autoScience": AUTONEST_SCIENCE, "flock": flock(s), "lucky": lucky_chance(s), "gameEggs": GAME_EGGS, "winEggs": WIN_EGGS,

@@ -360,9 +360,25 @@ class RewardTests(unittest.TestCase):
         self.assertGreater(upgrade_cost("pond", 2), 400)
         self.assertEqual(upgrade_cost("bakery", 0), 500)
         self.assertIsNone(upgrade_cost("spa", 2))
-        self.assertIsNotNone(upgrade_cost("pond", 19))   # the lagoon goes to level 20 ...
-        self.assertIsNone(upgrade_cost("pond", 20))
-        self.assertEqual([utopia.pond_space(n) for n in (1, 12, 13, 20)], [6, 50, 65, 200])   # ... holding up to 200
+        self.assertIsNotNone(upgrade_cost("pond", 39))   # the pond goes to level 40 ...
+        self.assertIsNone(upgrade_cost("pond", 40))
+        self.assertEqual([utopia.pond_space(n) for n in (1, 12, 13, 20)], [6, 50, 65, 200])   # ... the lagoon holding up to 200
+
+    def test_the_pond_grows_into_a_city(self):
+        self.assertEqual([(utopia.building_name("pond", n), utopia.pond_space(n)) for n in (21, 25, 26, 31, 36, 40)],
+                         [("Duck Village", 240), ("Duck Village", 400), ("Duck Town", 460), ("Duck City", 780),
+                          ("Duckopolis", 1200), ("Duckopolis", 1600)])
+        costs = [upgrade_cost("pond", n) for n in range(18, 40)]
+        self.assertEqual(costs, sorted(costs))   # always dearer than the level before ...
+        self.assertLess(costs[-1] / costs[-2], 1.4)   # ... but by 35% a level in the city, not the lagoon's 80%
+
+    def test_population_counts_each_bird_as_its_ducks(self):
+        s = new_utopia("A#1", 0)
+        s.update(pond=3, edge=1, birds=[1, 0, 1] + [0] * (len(utopia.BIRDS) - 4))   # a mallard (2) and a baker duck (8)
+        before = utopia.population(s)
+        self.assertEqual(before, 3 + 1 + 2 + 8)
+        utopia.merge_birds(s, 0)
+        self.assertEqual(utopia.population(s), before)   # merging never lowers it
 
 
 class RaidTests(unittest.TestCase):
