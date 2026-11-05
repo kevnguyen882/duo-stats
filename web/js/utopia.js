@@ -1183,10 +1183,10 @@ const lab = (()=>{
     g.font = 'bold 9px ui-monospace, Menlo, monospace'; g.textAlign = align; g.textBaseline = 'top';
     g.lineWidth = 3; g.strokeStyle = 'rgba(10,20,26,.9)'; g.strokeText(text, x, y); g.fillStyle = color; g.fillText(text, x, y);
   }
-  // where each chamber goes: one row of up to 13, a second row beyond that, shrunk to fit.
-  // The second row sits half a step over, so its pipes come down through the gaps in the first.
-  function grid(n){   // up to 13 chambers a row, as big as the width allows (more rows make the lab taller, not narrower)
-    const cols = Math.min(n, 13), rows = Math.ceil(n / cols), gap = 26, half = rows > 1 ? (40 + gap) / 2 : 0;
+  // where each chamber goes: one row of up to LAB_TUBES, big enough to see (any more nests are counted, not drawn)
+  const LAB_TUBES = 8;
+  function grid(n){
+    const cols = Math.min(n, LAB_TUBES), rows = 1, gap = 26, half = 0;
     const k = Math.min(1, (LW - 24) / (cols * 40 + (cols - 1) * gap + half), (200 - 66 - 14) / 112);
     return {cols, rows, gap, half, k};
   }
@@ -1194,10 +1194,11 @@ const lab = (()=>{
   // with the Auto-nester running, the lab is a duck factory: a conveyor belt that each egg rides for
   // exactly its growing time, so ducklings roll off at the rate the nests and incubation make them
   const factory = p => p.levels.autonest && p.lab.autoOn;
-  const LANE = 46, BELT_X0 = 86, BELT_X1 = 404;
-  const beltLanes = () => 1;   // always one line: with more nests the eggs ride closer together
-  const factoryHeight = n => LAB_WALL + 26 + beltLanes(n) * LANE + 10 + LAB_FLOOR;
+  const BELT_X0 = 104, BELT_X1 = 392, BELT_Y = LAB_WALL + 44, BELT_SHOWN = 9;   // the belt, and how many on it are drawn
+  const factoryHeight = () => LAB_WALL + 78 + LAB_FLOOR;
+  let leaving = [], seen = new Set();   // ducklings hopping off the end of the belt and waddling away, and which have
   function layout(n){
+    n = Math.min(n, LAB_TUBES);
     const {cols, gap, half, k} = grid(n);
     const w = 40 * k, h = 112 * k, x0 = (LW - (cols * w + (cols - 1) * gap * k + half * k)) / 2;
     return Array.from({length: n}, (_, i)=>{ const row = Math.floor(i / cols);
@@ -1252,59 +1253,82 @@ const lab = (()=>{
     g.fillStyle = '#e03131'; for(let d = 0; d < 7; d++) g.fillRect(Math.round(456 + Math.sin(ma) * d), Math.round(22 - Math.cos(ma) * d), 1, 1);
     g.fillStyle = '#5c636a'; g.fillRect(0, LAB_WALL - 6, LW, 3); g.fillStyle = '#2b5563'; g.fillRect(0, LAB_WALL, LW, 2);   // the pipe rail, the skirting
   }
-  // the factory's wall: corrugated metal, hazard stripes, blinking warning lights, and the monitor showing the output
+  // the factory: pale walls, big windows onto the sky (clouds drifting by), hanging lamps, and the output monitor
   function factoryWall(p, now){
-    g.fillStyle = '#868e96'; g.fillRect(0, 0, LW, LAB_WALL);
-    for(let x = 0; x < LW; x += 8){ g.fillStyle = '#adb5bd'; g.fillRect(x, 0, 3, LAB_WALL - 8); g.fillStyle = '#6c757d'; g.fillRect(x + 6, 0, 1, LAB_WALL - 8); }   // corrugated
-    for(let x = -8; x < LW; x += 16){ g.fillStyle = '#fcc419'; g.fillRect(x, LAB_WALL - 8, 8, 6); g.fillStyle = '#212529'; g.fillRect(x + 8, LAB_WALL - 8, 8, 6); }   // hazard stripes
-    const blink = Math.floor(now / 450) % 2;
-    [[20, blink], [452, 1 - blink]].forEach(([x, on])=>{ g.fillStyle = '#495057'; g.fillRect(x - 1, 12, 10, 4); g.fillStyle = on ? '#ff922b' : '#7a3e0b'; g.fillRect(x, 4, 8, 8);
-      if(on){ g.fillStyle = 'rgba(255,146,43,.25)'; g.fillRect(x - 4, 0, 16, 18); } });
+    g.fillStyle = '#e9ecef'; g.fillRect(0, 0, LW, LAB_WALL);
+    g.fillStyle = '#dee2e6'; for(let y = 8; y < LAB_WALL; y += 8) g.fillRect(0, y, LW, 1);   // panels
+    [[16, 8], [356, 8]].forEach(([wx, wy])=>{   // windows
+      const w = 108, h = 40;
+      g.fillStyle = '#495057'; g.fillRect(wx - 3, wy - 3, w + 6, h + 6);
+      for(let y = 0; y < h; y += 2){ g.fillStyle = y < h / 2 ? '#74c0fc' : '#a5d8ff'; g.fillRect(wx, wy + y, w, 2); }
+      g.save(); g.beginPath(); g.rect(wx, wy, w, h); g.clip();
+      for(let c = 0; c < 3; c++){ const cx = wx + ((now / 400 + c * 47 + wx) % (w + 40)) - 20, cy = wy + 6 + c * 11;   // clouds
+        g.fillStyle = '#ffffff'; g.fillRect(Math.round(cx), cy, 18, 5); g.fillRect(Math.round(cx) + 4, cy - 3, 10, 3); }
+      g.fillStyle = '#69a84f'; g.fillRect(wx, wy + h - 6, w, 6);   // grass outside
+      g.restore();
+      g.fillStyle = '#495057'; g.fillRect(wx + w / 2 - 1, wy, 3, h); g.fillRect(wx, wy + h / 2 - 1, w, 3);   // the window bars
+    });
     g.fillStyle = '#343a40'; g.fillRect(150, 6, 180, 40); g.fillStyle = '#0b1f17'; g.fillRect(154, 10, 172, 32);   // the monitor
     g.fillStyle = '#495057'; g.fillRect(234, 46, 12, 4);
     const perMin = p.nestSpace / p.lab.grow;
     label(`OUTPUT ${perMin >= 1 ? `${+perMin.toFixed(1)} DUCKS/MIN` : `1 DUCK EVERY ${short(p.lab.grow / p.nestSpace * 60000)}`}`, 240, 13, '#8ce99a');
     label(`${p.nestSpace} NESTS × ${fmtMin(p.lab.grow).toUpperCase()} EACH`, 240, 25, '#c5f6fa');
     if(Math.floor(now / 500) % 2){ g.fillStyle = '#8ce99a'; g.fillRect(318, 34, 4, 6); }
+    for(let x = -6; x < LW; x += 12){ g.fillStyle = '#fcc419'; g.fillRect(x, LAB_WALL - 4, 6, 4); g.fillStyle = '#343a40'; g.fillRect(x + 6, LAB_WALL - 4, 6, 4); }   // a hazard stripe
   }
-  // the belt: each growing egg sits where its growing time has got it to, an egg at first and a duckling by the end;
-  // the Auto-nester's machine loads it on the left, and it rolls off into the chute to the pond when it hatches
-  function conveyor(p, now){
-    const n = beltLanes(p.nestSpace), len = BELT_X1 - BELT_X0, top = LAB_WALL + 26;
-    const laneY = l => top + l * LANE;
-    for(let l = 0; l < n; l++){
-      const y = laneY(l) + 22;
-      g.fillStyle = '#495057'; g.fillRect(BELT_X0 - 6, y, len + 12, 12);
-      const dir = l % 2 ? -1 : 1;
-      g.fillStyle = '#343a40'; for(let x = 0; x < len + 12; x += 12){ const sx = BELT_X0 - 6 + ((x + dir * now / 1000 * 10) % (len + 12) + len + 12) % (len + 12); g.fillRect(Math.round(sx), y, 2, 12); }   // treads
-      g.fillStyle = '#868e96'; g.fillRect(BELT_X0 - 6, y - 2, len + 12, 2); g.fillRect(BELT_X0 - 6, y + 12, len + 12, 2);
-      for(let x = BELT_X0; x < BELT_X1; x += 24){ g.fillStyle = '#212529'; g.fillRect(x, y + 14, 8, 4); g.fillStyle = '#adb5bd'; g.fillRect(x + 3, y + 15, 2, 2); }   // rollers
-      if(l < n - 1){ g.fillStyle = '#495057'; g.fillRect(l % 2 ? BELT_X0 - 14 : BELT_X1 + 2, y, 12, LANE + 12); }   // the turn down to the next lane
-    }
-    // the Auto-nester's machine, loading eggs on the left (with any eggs from games waiting in its hopper)
-    g.fillStyle = '#1c7ed6'; g.fillRect(6, top - 4, 70, 50); g.fillStyle = '#1864ab'; g.fillRect(6, top + 40, 70, 6);
-    g.fillStyle = '#74c0fc'; g.fillRect(14, top + 4, 54, 14); g.fillStyle = '#e7f5ff'; for(let i = 0; i < Math.min(p.lost, 5); i++) g.fillRect(18 + i * 10, top + 8, 6, 7);
-    g.fillStyle = Math.floor(now / 300) % 2 ? '#51cf66' : '#2b8a3e'; g.fillRect(16, top + 24, 6, 6); g.fillStyle = '#fcc419'; g.fillRect(26, top + 24, 6, 6);
-    g.fillStyle = '#495057'; g.fillRect(64, top + 20, 22, 10);
-    label('AUTO-NESTER', 41, top + 32, '#e7f5ff');
-    const smoke = (now / 1400) % 1; g.fillStyle = `rgba(222,226,230,${.6 * (1 - smoke)})`; g.fillRect(52, Math.round(top - 10 - smoke * 14), 8, 8);
-    // the chute out to the pond, at the end of the last lane
-    const endRight = n % 2 === 1, cx = endRight ? BELT_X1 + 8 : 8, cy = laneY(n - 1) + 14;
-    g.fillStyle = '#fab005'; g.fillRect(cx, cy, 52, 8); g.fillStyle = '#e67700'; g.fillRect(cx, cy + 8, 52, 3);
-    label(endRight ? 'TO THE POND →' : '← TO THE POND', cx + 26, cy + 14, '#ffe066');
-    // the eggs and ducklings riding along
-    const total = n * len;
-    p.ducklings.forEach((due, i)=>{
-      const prog = progress(p, i), s = Math.min(prog, 1) * total, lane = Math.min(n - 1, Math.floor(s / len)), along = s - lane * len;
-      let x = lane % 2 ? BELT_X1 - along : BELT_X0 + along, y = laneY(lane) + 8;
-      if(prog >= 1){ const t = Math.min(1, (nowApp() - due) / 1200); x = cx + 20 + (endRight ? t * 30 : -t * 30); y = cy - 6 + t * 10; }   // rolled off, down the chute
-      const pw = Math.max(8, Math.min(14, Math.floor(total / Math.max(1, p.nestSpace)) - 1));   // pods shrink a little when the belt's busy
-      x = Math.round(x - pw / 2); y += 12 - Math.round(pw * 12 / 14);
-      g.fillStyle = 'rgba(116,192,252,.55)'; g.fillRect(x, y, pw, Math.round(pw * 12 / 14)); g.fillStyle = 'rgba(255,255,255,.4)'; g.fillRect(x, y, pw, 1);
-      const sz = Math.round(pw * (prog < .3 ? 8 : 12) / 14);
-      g.drawImage(art(prog < .3 ? 'egg' : 'duckling'), Math.round(x + (pw - sz) / 2), Math.round(y + (prog < .3 ? 2 : -1) * pw / 14), sz, sz);
+  const LAMPS = [138, 342];
+  function lampLight(){   // soft pools of light from the hanging lamps (drawn over everything)
+    LAMPS.forEach(x=>{
+      g.fillStyle = '#343a40'; g.fillRect(x, LAB_WALL, 1, 10); g.fillStyle = '#495057'; g.fillRect(x - 7, LAB_WALL + 10, 15, 5); g.fillStyle = '#fff3bf'; g.fillRect(x - 5, LAB_WALL + 15, 11, 2);
+      for(let y = LAB_WALL + 17, w = 12; y < LH - 8; y += 4, w += 4){ g.fillStyle = 'rgba(255,243,191,.07)'; g.fillRect(Math.round(x - w / 2), y, w, 4); }
     });
-    if(!p.ducklings.length) label('Waiting for breadcrumbs to spawn the next egg', 240, top + 6, '#ffd8a8');
+  }
+  // the belt: each growing egg sits where its growing time has got it to (up to BELT_SHOWN of them drawn, spread over all
+  // the nests), an egg at first and a duckling by the end; at the end it hops off and waddles away to the pond
+  function conveyor(p, now){
+    const len = BELT_X1 - BELT_X0, floorY = LH - LAB_FLOOR;
+    for(let x = BELT_X0 + 10; x < BELT_X1; x += 48){ g.fillStyle = '#495057'; g.fillRect(x, BELT_Y + 16, 4, floorY - BELT_Y - 14); g.fillStyle = '#343a40'; g.fillRect(x - 2, floorY, 8, 2); }   // its legs
+    g.fillStyle = 'rgba(0,0,0,.15)'; g.fillRect(BELT_X0, floorY + 2, len, 4);   // its shadow
+    g.fillStyle = '#343a40'; g.fillRect(BELT_X0 - 4, BELT_Y + 4, len + 8, 14);
+    g.fillStyle = '#495057'; for(let x = 0; x < len + 8; x += 10){ const sx = BELT_X0 - 4 + ((x + now / 1000 * 12) % (len + 8)); g.fillRect(Math.round(sx), BELT_Y + 6, 6, 3); }   // treads
+    g.fillStyle = '#adb5bd'; g.fillRect(BELT_X0 - 6, BELT_Y + 2, len + 12, 3); g.fillStyle = '#868e96'; g.fillRect(BELT_X0 - 6, BELT_Y + 16, len + 12, 2);   // rails
+    [BELT_X0 - 4, BELT_X1 - 4].forEach(x=>{ g.fillStyle = '#212529'; g.fillRect(x, BELT_Y + 8, 8, 8); g.fillStyle = '#adb5bd'; g.fillRect(x + 3, BELT_Y + 11, 2, 2); });   // its end rollers
+    // the Auto-nester: an incubator, eggs bobbing under its glass dome, loading the belt
+    const mx = 12, my = LAB_WALL + 8;
+    g.fillStyle = '#1c7ed6'; g.fillRect(mx, my + 22, 84, floorY - my - 22); g.fillStyle = '#1864ab'; g.fillRect(mx, floorY - 6, 84, 6);
+    g.fillStyle = 'rgba(208,235,255,.85)'; g.fillRect(mx + 14, my + 4, 56, 20); g.fillRect(mx + 20, my, 44, 4);   // the dome
+    for(let i = 0; i < 3; i++) g.drawImage(art('egg'), mx + 22 + i * 14, my + 10 + Math.round(Math.sin(now / 400 + i * 2) * 2), 10, 10);
+    g.fillStyle = Math.floor(now / 300) % 2 ? '#51cf66' : '#2b8a3e'; g.fillRect(mx + 10, my + 32, 6, 6); g.fillStyle = '#fcc419'; g.fillRect(mx + 20, my + 32, 6, 6);
+    g.fillStyle = '#e7f5ff'; g.fillRect(mx + 54, my + 30, 18, 10); g.fillStyle = '#e03131'; g.fillRect(mx + 62, my + 32, 2, 6);   // a gauge
+    if(p.lost){ label(`${p.lost} egg${p.lost === 1 ? '' : 's'} waiting`, mx + 42, my + 46, '#e7f5ff'); }
+    g.fillStyle = '#495057'; g.fillRect(mx + 84, BELT_Y + 4, BELT_X0 - mx - 84, 12);   // its chute onto the belt
+    // the eggs and ducklings riding along: up to BELT_SHOWN, every k-th by when they hatch
+    const order = p.ducklings.map((due, i)=>i).sort((a, b)=>p.ducklings[a] - p.ducklings[b]), k = Math.max(1, Math.ceil(order.length / BELT_SHOWN));
+    order.forEach((i, j)=>{
+      const prog = progress(p, i); if(prog >= 1 || j % k) return;
+      const x = Math.round(BELT_X0 + prog * len), bob = Math.round(Math.sin(now / 300 + i));
+      if(prog < .3) g.drawImage(art('egg'), x - 7, BELT_Y - 12, 14, 14);
+      else g.drawImage(art('duckling'), x - 11, BELT_Y - 20 + bob, 22, 22);
+    });
+    // off the end: a hop down to the floor, then a waddle off to the right, towards the pond
+    const t0 = nowApp(), dues = [...p.ducklings].sort((a, b)=>a - b);
+    dues.forEach((due, n)=>{ const key = due + ':' + dues.indexOf(due) + ':' + n; if(due <= t0 && !seen.has(key)){ seen.add(key); if(t0 - due < 4000) leaving.push({due, phase: Math.random() * 6}); } });
+    leaving = leaving.filter(d=>{
+      const t = t0 - d.due, hop = 650;
+      let x, y;
+      if(t < hop){ const q = Math.max(0, t) / hop; x = BELT_X1 + 4 + q * 34; y = BELT_Y - 20 + q * (floorY - BELT_Y + 14) - Math.sin(q * Math.PI) * 22; }
+      else { x = BELT_X1 + 38 + (t - hop) / 1000 * 46; y = floorY + 14 - Math.abs(Math.sin(t / 110 + d.phase)) * 3; }
+      if(x > LW + 20) return false;
+      const tilt = t >= hop ? Math.sin(t / 110 + d.phase) * .15 : 0;
+      g.save(); g.translate(Math.round(x), Math.round(y) + 11); g.rotate(tilt); g.drawImage(art('duckling'), -11, -11, 22, 22); g.restore();
+      return true;
+    });
+    if(seen.size > 500) seen = new Set([...seen].slice(-200));
+    const sx = BELT_X1 + 6, sy = LAB_WALL + 6;   // a sign hanging over the belt's end
+    g.fillStyle = '#495057'; g.fillRect(sx + 10, LAB_WALL, 1, 6); g.fillRect(sx + 60, LAB_WALL, 1, 6);
+    g.fillStyle = '#2b8a3e'; g.fillRect(sx, sy, 72, 13); g.fillStyle = '#ffffff'; g.fillRect(sx + 1, sy + 1, 70, 1);
+    g.fillStyle = '#ffffff'; g.font = 'bold 8px ui-monospace, Menlo, monospace'; g.textAlign = 'center'; g.textBaseline = 'top'; g.fillText('TO THE POND →', sx + 36, sy + 3);
+    if(!p.ducklings.length) label('Waiting for breadcrumbs to spawn the next egg', 240, BELT_Y - 14, '#e67700');
   }
   // the floor, and the lab duck who runs the place: it walks between the chambers checking on them, and says how they're doing
   const LAB_LINES = p => {
@@ -1344,13 +1368,16 @@ const lab = (()=>{
     requestAnimationFrame(draw);
     if(!U || view !== 'lab') return;
     const p = U.players[viewing], L = p.lab;
-    const want = factory(p) ? factoryHeight(p.nestSpace) : labHeight(p.nestSpace);
+    const want = factory(p) ? factoryHeight() : labHeight(p.nestSpace);
     if(want !== LH){ LH = want; size(); }   // more nests: a taller lab
     const k = cv.width / LW;
     g.setTransform(k, 0, 0, k, 0, 0); g.imageSmoothingEnabled = false;
     const dt = Math.min(100, now - (last || now)); last = now;
     for(let y = LAB_WALL; y < LH; y += 32) for(let x = 0; x < LW; x += 32) g.drawImage(art('lab-tile'), x, y, 32, 32);
-    if(factory(p)){ factoryWall(p, now); conveyor(p, now); floor(p, now, dt, true); return; }
+    if(factory(p)){
+      for(let y = LAB_WALL; y < LH - LAB_FLOOR; y += 8){ g.fillStyle = y % 16 ? '#dfe5e8' : '#e6ebee'; g.fillRect(0, y, LW, 8); }   // the factory's lower wall
+      factoryWall(p, now); floor(p, now, dt, true); conveyor(p, now); lampLight(); return;
+    }
     wall(p, now);
     const cs = layout(p.nestSpace);
     g.fillStyle = '#5c636a';
@@ -1361,6 +1388,7 @@ const lab = (()=>{
       if(c.k >= .6) label(growing ? short(left(p, i)) : 'empty', c.x + c.w / 2, c.y + c.h + 3, growing ? '#ffe066' : '#adb5bd');
     });
     floor(p, now, dt);
+    if(p.nestSpace > LAB_TUBES) label(`+${p.nestSpace - LAB_TUBES} more nests growing`, LW / 2, LH - LAB_FLOOR + 4, '#c5f6fa');
     label(`${p.spawned} spawned so far`, 10, LH - 14, '#dee2e6', 'left');
     label(`Ducklings grow in ${fmtMin(L.grow)}`, LW - 10, LH - 14, '#dee2e6', 'right');
   }
