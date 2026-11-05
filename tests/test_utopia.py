@@ -233,9 +233,9 @@ class DuckLabTests(unittest.TestCase):
         self.assertEqual(grow_minutes(0), 8 * 60)
         self.assertLess(grow_minutes(5), grow_minutes(0))
 
-    def test_incubation_is_one_exponential_curve_down_to_10_minutes_at_the_top(self):
+    def test_incubation_is_one_exponential_curve_down_to_15_minutes_at_the_top(self):
         self.assertEqual(grow_minutes(0), 8 * 60)
-        self.assertAlmostEqual(grow_minutes(utopia.INCUBATION_TOP), 10)
+        self.assertAlmostEqual(grow_minutes(utopia.INCUBATION_TOP), 15)
         self.assertEqual(utopia.INCUBATION_TOP, 18)
         times = [grow_minutes(n) for n in range(utopia.INCUBATION_TOP + 1)]
         saved = [a - b for a, b in zip(times, times[1:])]

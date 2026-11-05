@@ -73,7 +73,7 @@ SCIENCE_BOOST = 1.5          # each Duck Science level multiplies what every pon
 MARSH_STEP = 2.2             # in the Mystic Marsh, 2 birds -> 1 of the next kind, collecting 2.2x (10% more than both)
 TRIPLE_BOOST, QUADRA_BOOST = 0.005, 0.015   # permanent breadcrumb boost per triple / quadra kill
 GROW_MINUTES = 8 * 60        # how long a duckling takes to grow in its nest, before incubation upgrades
-TOP_GROW_MINUTES = 10        # ... and at the very top incubation level (with every city stage's extra levels): one smooth
+TOP_GROW_MINUTES = 15        # ... and at the very top incubation level (with every city stage's extra levels): one smooth
                              # exponential curve between them, big savings early on and smaller ones as it goes
 # the Duck Lab's upgrades get more levels with each city stage the pond reaches: building -> levels added a stage
 CITY_LAB_LEVELS = {"nests": 3, "science": 2, "incubation": 2}
@@ -127,13 +127,13 @@ BUILDINGS = {
     "autonest": (20000, 1.0, 1, [(1, "Auto-nester")]),          # in the Duck Lab, with Duck Science 3 and the lagoon: fills empty nests
 }
 INCUBATION_TOP = BUILDINGS["incubation"][2] + CITY_LAB_LEVELS["incubation"] * len(CITY_STAGES)   # 18
-INCUBATION_SPEEDUP = (TOP_GROW_MINUTES / GROW_MINUTES) ** (1 / INCUBATION_TOP)   # each level: ~19% less time
+INCUBATION_SPEEDUP = (TOP_GROW_MINUTES / GROW_MINUTES) ** (1 / INCUBATION_TOP)   # each level: ~17.5% less time
 START_LEVELS = {"nests": 1, "pond": 1, "bakery": 0, "spa": 0, "fence": 0, "incubation": 0, "science": 0, "autonest": 0}
 AUTONEST_SCIENCE, AUTONEST_POND = 3, 7   # the Auto-nester needs Duck Science level 3 and the pond to be a lagoon
 
 
 def grow_minutes(level: int) -> float:
-    """How long a duckling grows: 8 h, 6 h 27, 5 h 13 ... 56 min at level 10 (the top before the city) ... 10 min at the
+    """How long a duckling grows: 8 h, 6 h 36, 5 h 27 ... 1 h 11 at level 10 (the top before the city) ... 15 min at the
     very top (INCUBATION_TOP, at Duckopolis)."""
     return GROW_MINUTES * INCUBATION_SPEEDUP ** min(level, INCUBATION_TOP)
 
