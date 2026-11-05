@@ -855,7 +855,7 @@ const scene = (()=>{
   let ring = null;
   function shore(b){   // where each level's building stands
     if(ring && ring.rx === b.rx) return ring.spots;
-    const keepOut = [[b.cx - 72, 52, 144, 28],                                                     // the pond's label
+    const keepOut = [[b.cx - 100, 52, 200, 28],                                                    // the pond's label
       [CRATE_SPOT.x - 20, 0, CRATE_SPOT.s + 44, CRATE_SPOT.y + CRATE_SPOT.s + 6],                   // the mailman and his parcel
       [EGGS.x - 4, EGGS.y - 4, 40, 44],                                                            // eggs waiting
       ...Object.values(PLACES).map(([x, y])=>[x - 14, y - 4, PLACE_SIZE + 28, PLACE_SIZE + 30])];  // places and their names
@@ -956,7 +956,12 @@ const scene = (()=>{
       g.drawImage(art(d.art), 0, 0, 32, 24, Math.round(d.x), Math.round(d.y + bob), 16, 12);   // swimming: no feet
       g.restore();
     });
-    label(`${p.buildings.pond.name} · ${p.pondUsed}/${p.pondSpace} ${p.pondUsed > p.pond ? 'birds' : 'ducks'}`, b.cx, b.cy - b.ry - 12);
+    // its name and population (every bird counted as the ducks that went into it, so merging never lowers it), then,
+    // quieter, how full it is (heads: what room is about)
+    const head = `${p.buildings.pond.name} · pop. ${p.population.toLocaleString()}`, room = ` · ${p.pondUsed.toLocaleString()}/${p.pondSpace.toLocaleString()}`;
+    g.font = 'bold 9px ui-monospace, Menlo, monospace';
+    const lx = Math.round(b.cx - (g.measureText(head).width + g.measureText(room).width) / 2);
+    label(head, lx, b.cy - b.ry - 12, 'left'); label(room, lx + g.measureText(head).width, b.cy - b.ry - 12, 'left', '#c5d3c0');
     if(p.pondUsed > ducks.length) label(`+${p.pondUsed - ducks.length} more`, b.cx, b.cy + b.ry - 16, 'center', '#ffe066');
     // ducks waiting at the pond's edge
     if(p.edge){
