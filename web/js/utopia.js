@@ -164,7 +164,7 @@ function boostTip(p){
 }
 // one upgrade's row: its picture, name and level, what it does, and the button
 function buildRow(b, x, p, own, img, what, next){
-  const btn = x.cost == null ? '<span class="max">Fully upgraded</span>'
+  const btn = x.cost == null ? `<span class="max">${x.unlocks ? `More with ${esc(x.unlocks)}` : 'Fully upgraded'}</span>`
     : `<button data-build="${b}" ${own ? '' : 'disabled'} data-cost="${x.cost}">${pic('icon-breadcrumb')}${fmt(x.cost)}</button>`;
   return `<div class="ubld">${pic(img)}<div class="t"><b>${esc(x.level ? `${x.name} · level ${x.level}` : b === 'incubation' || b === 'science' ? `${x.next} · not upgraded yet` : `${x.next} (not built)`)}</b>
     <span>${esc(what)}${next ? `. Next: ${esc(next)}` : ''}</span></div>${btn}</div>`;

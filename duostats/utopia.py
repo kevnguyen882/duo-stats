@@ -72,7 +72,10 @@ SCIENCE_BOOST = 1.5          # each Duck Science level multiplies what every pon
 MARSH_STEP = 2.2             # in the Mystic Marsh, 2 birds -> 1 of the next kind, collecting 2.2x (10% more than both)
 TRIPLE_BOOST, QUADRA_BOOST = 0.005, 0.015   # permanent breadcrumb boost per triple / quadra kill
 GROW_MINUTES = 8 * 60        # how long a duckling takes to grow in its nest, before incubation upgrades
-INCUBATION_SPEEDUP = (30 / GROW_MINUTES) ** (1 / 10)   # each incubation level: ~24% less time, 30 min at the top (10)
+INCUBATION_SPEEDUP = (20 / GROW_MINUTES) ** (1 / 10)   # each incubation level: ~27% less time, 20 min at level 10 ...
+CITY_GROW_MINUTES = 10       # ... then the levels each city stage adds take it on down to 10 min at the very top
+# the Duck Lab's upgrades get more levels with each city stage the pond reaches: building -> levels added a stage
+CITY_LAB_LEVELS = {"nests": 3, "science": 2, "incubation": 2}
 SPAWN_COST = 100             # breadcrumbs for the first duckling spawned ...
 SPAWN_GROWTH = 1.05          # ... and 5% more for each duck or bird in your flock past the first STARTING_DUCKS
 CLUTCH_DISCOUNT = 0.1       # hatching a clutch (every free nest at once, 2 or more): 10% off
@@ -127,7 +130,30 @@ AUTONEST_SCIENCE = 3   # the Duck Science level the Auto-nester needs
 
 
 def grow_minutes(level: int) -> float:
-    return GROW_MINUTES * INCUBATION_SPEEDUP ** level     # 8 h, 6 h 4, 4 h 36 ... 30 min at level 10
+    """How long a duckling grows: 8 h, 5 h 50, 4 h 15 ... 20 min at level 10, then down to CITY_GROW_MINUTES at the top
+    of the city's extra levels."""
+    if level <= 10:
+        return GROW_MINUTES * INCUBATION_SPEEDUP ** level
+    extra = CITY_LAB_LEVELS["incubation"] * len(CITY_STAGES)
+    return 20 * (CITY_GROW_MINUTES / 20) ** (min(level - 10, extra) / extra)
+
+
+def stages_reached(s: dict) -> int:
+    """How many city stages the pond has grown into (0 before Duck Village)."""
+    return sum(1 for _, last, _, _ in CITY_STAGES if s["levels"]["pond"] >= city_stage(last)[1])
+
+
+def top_level(s: dict, building: str) -> int:
+    """A building's highest level for this utopia: the Duck Lab's upgrades get more with each city stage reached."""
+    return BUILDINGS[building][2] + CITY_LAB_LEVELS.get(building, 0) * stages_reached(s)
+
+
+def next_unlock(s: dict, building: str):
+    """The city stage that would give a maxed-out building more levels, if one would."""
+    if building not in CITY_LAB_LEVELS or s["levels"][building] < top_level(s, building):
+        return None
+    n = stages_reached(s)
+    return CITY_STAGES[n][0] if n < len(CITY_STAGES) else None
 
 
 def spawn_cost(flock: int) -> int:
@@ -241,11 +267,12 @@ def edge_space(s: dict) -> int:
     return nest_space(s["levels"]["nests"])
 
 
-def upgrade_cost(building: str, level: int):
-    """Breadcrumbs to go from `level` to the next one; None at the top."""
-    first, growth, top, _ = BUILDINGS[building]
+def upgrade_cost(building: str, level: int, top: int | None = None):
+    """Breadcrumbs to go from `level` to the next one; None at the top (`top`, if the utopia has a different one:
+    top_level())."""
+    first, growth, base_top, _ = BUILDINGS[building]
     start = START_LEVELS[building]
-    if level >= top:
+    if level >= (top if top is not None else base_top):
         return None
     if building == "pond" and level >= 20:   # the city: on from the lagoon's last step, by each level's stage's growth
         return round(first * growth ** (19 - start) * math.prod(city_stage(lvl)[4] for lvl in range(21, level + 2)))
@@ -1104,9 +1131,10 @@ class DuckUtopia:
             b = body.get("building")
             if b not in BUILDINGS:
                 raise ValueError("There's no such building.")
-            cost = upgrade_cost(b, s["levels"][b])
+            cost = upgrade_cost(b, s["levels"][b], top_level(s, b))
             if cost is None:
-                raise ValueError("That's already as big as it gets.")
+                more = next_unlock(s, b)
+                raise ValueError(f"More levels open when your pond grows into {more}." if more else "That's already as big as it gets.")
             if b == "autonest" and s["levels"]["science"] < AUTONEST_SCIENCE:
                 raise ValueError(f"The Auto-nester needs Duck Science level {AUTONEST_SCIENCE}.")
             if s["crumbs"] < cost:
@@ -1384,7 +1412,7 @@ class DuckUtopia:
                 "plaza": penta_plaza(s, rows.get(p.key, [])), "volcano": fire_ducks(s, rows.get(p.key, []), classes),
                 "lab": {"spawnCost": spawn_cost(flock(s)), "clutchCost": clutch_cost(s), "freeNests": free_nests(s), "clutchDiscount": CLUTCH_DISCOUNT, "autoOn": s.get("autoOn", True), "autoSpawned": s.get("autoSpawned", 0), "autoScience": AUTONEST_SCIENCE, "flock": flock(s), "lucky": lucky_chance(s), "gameEggs": GAME_EGGS, "winEggs": WIN_EGGS,
                         "grow": grow_minutes(lv["incubation"]),
-                        "growNext": grow_minutes(lv["incubation"] + 1) if upgrade_cost("incubation", lv["incubation"]) is not None else None,
+                        "growNext": grow_minutes(lv["incubation"] + 1) if upgrade_cost("incubation", lv["incubation"], top_level(s, "incubation")) is not None else None,
                         "nestSpaceNext": nest_space(lv["nests"] + 1)},
                 "bakery": {"earned": earned.get(p.key, {}), "badges": badges_left(earned.get(p.key, {}), s["spentBadges"]),
                            "spent": s["spentBadges"], "treats": s["treats"], "bakes": s["bakes"],
@@ -1395,8 +1423,9 @@ class DuckUtopia:
                                             "extraCost": extra_machine_cost(t, s["machineCount"].get(t, 1))}
                                         for t, sp in s["machines"].items()}},
                 "buildings": {b: {"level": lv[b], "name": building_name(b, lv[b]) if lv[b] else None,
-                                  "next": building_name(b, lv[b] + 1) if upgrade_cost(b, lv[b]) is not None else None,
-                                  "cost": upgrade_cost(b, lv[b])} for b in BUILDINGS},
+                                  "next": building_name(b, lv[b] + 1) if upgrade_cost(b, lv[b], top_level(s, b)) is not None else None,
+                                  "cost": upgrade_cost(b, lv[b], top_level(s, b)), "top": top_level(s, b), "unlocks": next_unlock(s, b)}
+                              for b in BUILDINGS},
                 "squad": squad,
                 "challengers": [{**d, "boss": boss(d), "maxRank": d["rank"] >= MAX_RANK}   # champions off the squad with a challenge waiting
                                 for d in (self._defender(s, c, recs, classes) for c in dict.fromkeys(s["challenges"])

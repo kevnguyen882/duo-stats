@@ -2,6 +2,7 @@ import unittest
 
 from duostats import utopia
 from duostats.games import Player
+from duostats.utopia import top_level
 from duostats.utopia import (DuckUtopia, advance, apply_badges, boost_breakdown, boss, boss_fight, catch_up, crumb_rate,
                              defender, goose_wave, heat, perk_power, with_perk,
                              grow_minutes, migrate, new_utopia, penta_plaza, raid, score, spawn_cost, upgrade_cost,
@@ -219,8 +220,25 @@ class DuckLabTests(unittest.TestCase):
         self.assertEqual(grow_minutes(0), 8 * 60)
         self.assertLess(grow_minutes(5), grow_minutes(0))
 
-    def test_the_top_incubation_level_grows_a_duckling_in_half_an_hour(self):
-        self.assertAlmostEqual(grow_minutes(10), 30)
+    def test_incubation_reaches_20_minutes_then_10_with_the_city(self):
+        self.assertAlmostEqual(grow_minutes(10), 20)
+        self.assertAlmostEqual(grow_minutes(10 + 2 * len(utopia.CITY_STAGES)), utopia.CITY_GROW_MINUTES)
+        times = [grow_minutes(n) for n in range(19)]
+        self.assertEqual(times, sorted(times, reverse=True))   # every level faster than the last
+
+    def test_each_city_stage_gives_the_duck_lab_more_levels(self):
+        s = new_utopia("A#1", 0)
+        self.assertEqual([top_level(s, b) for b in ("nests", "science", "incubation")], [12, 15, 10])
+        s["levels"]["nests"] = 12
+        self.assertIsNone(upgrade_cost("nests", 12, top_level(s, "nests")))
+        self.assertEqual(utopia.next_unlock(s, "nests"), "Duck Village")
+        s["levels"]["pond"] = 21   # Duck Village
+        self.assertEqual([top_level(s, b) for b in ("nests", "science", "incubation")], [15, 17, 12])
+        self.assertIsNotNone(upgrade_cost("nests", 12, top_level(s, "nests")))
+        self.assertIsNone(utopia.next_unlock(s, "nests"))
+        s["levels"]["pond"] = 80   # Duckopolis: every stage
+        self.assertEqual([top_level(s, b) for b in ("nests", "science", "incubation")], [24, 23, 18])
+        self.assertEqual(utopia.nest_space(24), 50)
 
     def test_ducklings_cost_more_with_a_bigger_flock_and_merging_brings_it_down(self):
         s = new_utopia("A#1", 0)
