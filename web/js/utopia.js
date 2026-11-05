@@ -845,25 +845,47 @@ const scene = (()=>{
     cv.width = Math.round(css * dpr); cv.height = Math.round(css * dpr * H / W);
   }
   const SWIM = {x: .8, y: .7};   // ducks swim within this much of the pond's width and height
-  // past the lagoon (level 20) the pond grows into a city: a building a level along its shore, from the middle out, by stage
-  // (Duck Village's cottages, Duck Town's houses, Duck City's towers, Duckopolis's skyscrapers), lit windows twinkling
-  const SKYLINE = {left: 76, base: 272, slot: 12.5};
-  const SPOTS_OUT = [10, 9, 11, 8, 12, 7, 13, 6, 14, 5, 15, 4, 16, 3, 17, 2, 18, 1, 19, 0];
+  // past the lagoon (level 20) the pond grows into a city: a building a level standing round its shore, from the front
+  // (below the water) out both ways and up the back, by stage (Duck Village's cottages, Duck Town's houses, Duck City's
+  // towers, Duckopolis's skyscrapers), lit windows twinkling. Buildings in front stand before the water, ones behind
+  // rise away from it, and spots that would run into anything else on the map are skipped.
   const STAGES = [   // width, height, its spread, walls, roof
     {w: 10, h: 11, more: 1, walls: ['#e9c46a', '#f4a261'], roof: '#c92a2a'}, {w: 11, h: 18, more: 1, walls: ['#d4a373', '#b5838d'], roof: '#6b4423'},
     {w: 10, h: 27, more: 1.5, walls: ['#8d99ae', '#adb5bd'], roof: null}, {w: 12, h: 36, more: 1.5, walls: ['#4c6ef5', '#748ffc'], roof: null}];
-  function skyline(p, now){
-    for(let i = 0; i < Math.min(p.levels.pond - 20, 20); i++){
-      const lvl = 21 + i, st = STAGES[lvl <= 25 ? 0 : lvl <= 30 ? 1 : lvl <= 35 ? 2 : 3];
-      const x = Math.round(SKYLINE.left + SPOTS_OUT[i] * SKYLINE.slot), h = Math.round(st.h + (lvl * 37) % 7 * st.more), top = SKYLINE.base - h;
-      g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(x + 2, SKYLINE.base, st.w, 2);   // its shadow
+  let ring = null;
+  function shore(b){   // where each level's building stands
+    if(ring && ring.rx === b.rx) return ring.spots;
+    const keepOut = [[118, 52, 144, 28],                                                           // the pond's label
+      [CRATE_SPOT.x - 20, 0, CRATE_SPOT.s + 44, CRATE_SPOT.y + CRATE_SPOT.s + 6],                   // the mailman and his parcel
+      [EGGS.x - 4, EGGS.y - 4, 40, 44],                                                            // eggs waiting
+      ...Object.values(PLACES).map(([x, y])=>[x - 14, y - 4, PLACE_SIZE + 28, PLACE_SIZE + 30])];  // places and their names
+    const hit = (x, y, w, h) => x < 2 || y < 2 || x + w > W - 2 || y + h > H - 2
+      || keepOut.some(([kx, ky, kw, kh])=>x < kx + kw && x + w > kx && y < ky + kh && y + h > ky);
+    const spots = [];
+    for(let k = 0; k < 72; k++){   // every 5 degrees round the shore, from the front out both ways
+      const a = (90 + Math.ceil(k / 2) * (k % 2 ? 1 : -1) * 5) * Math.PI / 180, front = Math.sin(a) > .35;
+      const x = b.cx + Math.cos(a) * (b.rx + 8), y = b.cy + Math.sin(a) * (b.ry + 4);
+      if(hit(x - 7, front ? y : y - 46, 14, 46)) continue;   // room for the tallest building
+      if(spots.some(s=>Math.abs(s.x - x) < 13 && Math.abs(s.y - y) < 16)) continue;   // a building's width apart
+      spots.push({x, y, front});
+    }
+    ring = {rx: b.rx, spots};
+    return spots;
+  }
+  function skyline(p, b, now){
+    const spots = shore(b), n = Math.min(p.levels.pond - 20, 20, spots.length);
+    const order = spots.slice(0, n).map((s, i)=>({...s, lvl: 21 + i})).sort((a, c)=>a.y - c.y);   // back to front
+    for(const {x: cx, y: sy, front, lvl} of order){
+      const st = STAGES[lvl <= 25 ? 0 : lvl <= 30 ? 1 : lvl <= 35 ? 2 : 3];
+      const h = Math.round(st.h + (lvl * 37) % 7 * st.more), x = Math.round(cx - st.w / 2), base = Math.round(front ? sy + h : sy), top = base - h;
+      g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(x + 2, base, st.w, 2);   // its shadow
       g.fillStyle = st.walls[lvl % 2]; g.fillRect(x, top, st.w, h);
       if(st.roof){ g.fillStyle = st.roof; g.fillRect(x - 1, top - 3, st.w + 2, 3); g.fillRect(x + 2, top - 5, st.w - 4, 2); }
       else if(h > 34){ g.fillStyle = '#dee2e6'; g.fillRect(x + st.w / 2, top - 6, 1, 6); g.fillStyle = '#ff6b6b'; g.fillRect(x + st.w / 2, top - 7, 1, 1); }   // an antenna
-      for(let wy = top + 3, row = 0; wy < SKYLINE.base - 5; wy += 5, row++) for(const wx of [x + 2, x + st.w - 4]){
+      for(let wy = top + 3, row = 0; wy < base - 5; wy += 5, row++) for(const wx of [x + 2, x + st.w - 4]){
         g.fillStyle = (row + wx + lvl + Math.floor(now / 2500)) % 5 ? '#ffe066' : '#495057'; g.fillRect(wx, wy, 2, 2);
       }
-      if(!st.roof || h < 20){ g.fillStyle = '#6b4423'; g.fillRect(x + st.w / 2 - 1, SKYLINE.base - 4, 2, 4); }   // a door
+      if(!st.roof || h < 20){ g.fillStyle = '#6b4423'; g.fillRect(x + st.w / 2 - 1, base - 4, 2, 4); }   // a door
     }
   }
   function pondBox(p){
@@ -915,7 +937,7 @@ const scene = (()=>{
     // the pond, and the ducks in it
     const b = pondBox(p);
     sprite(BUILD_INFO.pond[0](p.levels.pond), b.cx - b.rx, b.cy - b.ry, b.rx * 2, b.ry * 2);
-    skyline(p, now);
+    skyline(p, b, now);
     ducks.forEach(d=>{
       d.x += d.vx * dt;
       const ex = (d.x - b.cx) / (b.rx * SWIM.x), ey = (d.y - b.cy) / (b.ry * SWIM.y);
