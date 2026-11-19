@@ -1,6 +1,16 @@
 # Duo Stats
 
-Compare your League of Legends stats with your duo partner's, for the games you play together.
+Compare your League of Legends stats with your duo partner's, for the games you play together. Created as a companion app to make our time spent playing league even more fun.
+Created in tandem with Stephanie Leung(My gf and duo partner).
+
+# Features:
+Live stat recording and build optimization. Searches recommended builds from op.gg and displays them in a live tab when the game is running. Automatically detects when the League client is running and displays the build for the character you are playing.
+
+Badge system that awards players for performing well in games. Celebrate your accomplishments with your badges and arrange them in your showcase.
+
+Ductopia is a built in idle game where you manage a flourishing duck empire who are obsessed with collecting breadcrumbs.
+
+And many more...
 
 ## Running it
 
