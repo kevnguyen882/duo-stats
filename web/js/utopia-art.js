@@ -101,6 +101,122 @@ const MARSH_BIRDS = {
                    [...line(7, 0, 5, 'N'), ...line(7, 1, 5, 'N'), [9, 0, 'Y'], [9, 1, 'Y'], ...line(8, 2, 5, 'K'), [8, 9, 'Y']]),   // cap, badges, brim
            {N: '#1c3d7a', M: '#142c57', Y: '#fcc419', K: '#111111'}],
   royal: [overlay(SWAN, [[9, 0, 'Y'], [11, 0, 'Y'], ...line(9, 1, 3, 'Y')]), {B: '#ffffff', S: '#f2d27a', Y: '#fcc419', O: '#f08c00'}],   // crowned
+  // ---- the 37 between the DJ duck and the swans ----
+  // everyday heroes
+  farmer: [overlay(recolour((ch, x, y)=>y >= 9 && y <= 12 && ch === 'B' ? 'D' : null),   // straw hat, denim overalls
+                   [...line(6, 1, 7, 'Y'), ...line(8, 0, 3, 'Y'), [9, 6, 'D'], [9, 7, 'D'], [9, 8, 'D'], [13, 4, 'G'], [14, 5, 'G']]),   // and a wheat stalk
+           {Y: '#e9c46a', D: '#3b5ba5', G: '#c9a227'}],
+  fisher: [overlay(recolour((ch, x, y)=>y >= 7 && ch === 'B' ? 'Y' : y >= 7 && ch === 'S' ? 'Z' : null),   // a yellow sou'wester and raincoat
+                   [...line(7, 0, 5, 'Y'), ...line(6, 1, 8, 'Y'), ...line(15, 0, 9, 'T', 0, 1), [14, 9, 'L'], [14, 10, 'F']]),   // a rod, a fish on the line
+           {Y: '#fcc419', Z: '#e67700', T: '#8b5a2b', L: '#ced4da', F: '#4dabf7'}],
+  painter: [overlay(DUCK, [...line(6, 1, 6, 'R'), ...line(8, 0, 3, 'R'), [11, 0, 'R'],   // a beret, and paint everywhere
+                           [4, 9, 'P'], [6, 11, 'G'], [9, 10, 'C'], [11, 9, 'Y'], [7, 8, 'Y'], [3, 11, 'C'], [12, 10, 'P']]),
+            {R: '#c92a2a', P: '#f06595', G: '#40c057', C: '#339af0', Y: '#fcc419'}],
+  doctor: [overlay(DUCK, [...line(7, 2, 5, 'H'), [8, 0, 'M'], [9, 0, 'M'], [8, 1, 'M'], [9, 1, 'M'],   // a head mirror
+                          [8, 7, 'H'], [8, 8, 'H'], [9, 9, 'H'], [10, 9, 'H'], [11, 8, 'H'], [11, 7, 'H'], [10, 10, 'M'],   // a stethoscope
+                          [5, 9, 'R'], [4, 10, 'R'], [5, 10, 'R'], [6, 10, 'R'], [5, 11, 'R']]),   // and a red cross
+           {B: '#ffffff', H: '#495057', M: '#ced4da', R: '#e03131'}],
+  mail: [overlay(DUCK, [...line(7, 1, 5, 'N'), ...line(8, 0, 3, 'N'), [12, 1, 'N'], [13, 1, 'N'], [9, 0, 'Y'],   // a postal cap
+                        ...line(9, 6, 4, 'T', -1, 1), ...line(3, 10, 5, 'T'), ...line(3, 11, 5, 'T'), ...line(3, 9, 4, 'U'), [5, 10, 'W']]),   // a satchel of letters
+         {N: '#1c7ed6', Y: '#fcc419', T: '#8b5a2b', U: '#a0522d', W: '#ffffff'}],
+  builder: [overlay(recolour((ch, x, y)=>y >= 8 && y <= 11 && ch === 'B' && x >= 3 && x <= 11 ? (y === 10 ? 'Z' : 'V') : null),   // a hi-vis vest
+                    [...line(7, 0, 5, 'Y'), ...line(6, 1, 8, 'Y'), [14, 6, 'M'], [14, 7, 'M'], [13, 6, 'M'], [15, 6, 'M']]),   // a hard hat, a hammer
+            {Y: '#fcc419', V: '#fd7e14', Z: '#e9ecef', M: '#868e96'}],
+  detective: [overlay(recolour((ch, x, y)=>y >= 7 && ch === 'B' ? 'C' : y >= 7 && ch === 'S' ? 'D' : null),   // a trench coat
+                      [...line(7, 0, 5, 'T'), ...line(6, 1, 7, 'T'), [8, 0, 'U'], [10, 0, 'U'], [7, 1, 'U'], [9, 1, 'U'], [11, 1, 'U'],   // a deerstalker
+                       [12, 5, 'P'], [13, 5, 'P'], [14, 5, 'P'], [14, 4, 'P'], [15, 2, 'G'], [14, 1, 'G']]),   // a pipe, and its smoke
+              {T: '#7f5539', U: '#b08968', P: '#5c3317', C: '#c2a878', D: '#8d7b5a', G: '#ced4da'}],
+  sailor: [overlay(DUCK, [...line(8, 0, 3, 'W'), ...line(7, 1, 5, 'N'), ...line(8, 7, 4, 'N'), ...line(9, 8, 3, 'N'), [10, 9, 'R'], [10, 10, 'R'],
+                          [4, 9, 'N'], [3, 10, 'N'], [4, 10, 'N'], [5, 10, 'N'], [4, 11, 'N']]),   // a sailor's cap and collar, and an anchor
+           {W: '#ffffff', N: '#1c3d7a', R: '#e03131'}],
+  // adventurers
+  pirate: [overlay(DUCK, [...line(6, 1, 7, 'X'), ...line(8, 0, 3, 'X'), [9, 0, 'W'],   // a tricorn with a skull
+                          [8, 3, 'X'], [9, 3, 'X'], [10, 2, 'X'], [11, 2, 'X'], ...line(3, 9, 9, 'R'), [8, 6, 'Y']]),   // an eyepatch, a sash, an earring
+           {X: '#212529', W: '#f8f9fa', R: '#c92a2a', Y: '#fcc419'}],
+  cowboy: [overlay(DUCK, [...line(7, 0, 5, 'T'), ...line(5, 1, 9, 'T'),   // a ten-gallon hat
+                          ...line(8, 5, 4, 'R'), [9, 6, 'R'], [10, 6, 'R'], [9, 5, 'W'], [11, 5, 'W']]),   // a bandana
+           {T: '#8b5a2b', R: '#e03131', W: '#ffffff'}],
+  rocker: [overlay(recolour((ch, x, y)=>y >= 7 && ch === 'B' ? 'X' : y >= 7 && ch === 'S' ? 'Z' : null),   // a leather jacket
+                   [[7, 0, 'X'], [9, 0, 'X'], [11, 0, 'X'], ...line(7, 1, 5, 'X'),   // spiky hair
+                    [2, 11, 'R'], [3, 11, 'R'], [2, 12, 'R'], [3, 12, 'R'], ...line(4, 10, 5, 'G', 1, -1), [9, 5, 'G']]),   // an electric guitar
+           {X: '#212529', Z: '#000000', R: '#e03131', G: '#ced4da'}],
+  ballerina: [overlay(recolour((ch, x, y)=>y >= 13 && ch === 'O' ? 'Q' : null),   // pink ballet shoes
+                      [...line(1, 11, 13, 'P'), ...line(0, 12, 15, 'P'), ...line(8, 0, 3, 'Y'), [9, 0, 'C']]),   // a tutu, a tiara
+              {P: '#f783ac', Q: '#fcc2d7', Y: '#fcc419', C: '#74c0fc'}],
+  gym: [overlay(recolour((ch, x, y)=>y >= 8 && y <= 11 && ch === 'B' && x >= 3 && x <= 12 ? 'U' : null),   // a tank top
+                [...line(7, 2, 5, 'R'), ...line(13, 6, 3, 'G'), [13, 5, 'X'], [13, 7, 'X'], [15, 5, 'X'], [15, 7, 'X']]),   // a sweatband, a dumbbell
+        {R: '#e03131', U: '#1c7ed6', G: '#868e96', X: '#343a40'}],
+  skater: [overlay(recolour((ch, x, y)=>y >= 8 && y <= 12 && ch === 'B' ? 'H' : null),   // a hoodie
+                   [...line(7, 1, 5, 'G'), ...line(8, 0, 3, 'G'), [6, 1, 'G'], [5, 1, 'G'],   // a cap on backwards
+                    ...line(3, 15, 10, 'T'), [3, 15, 'X'], [12, 15, 'X']]),   // a skateboard
+           {G: '#40c057', H: '#868e96', T: '#c92a2a', X: '#212529'}],
+  surfer: [overlay(DUCK, [...line(8, 3, 4, 'X'), [8, 0, 'Y'], [9, 0, 'Y'], [7, 1, 'Y'], [10, 1, 'Y'],   // shades, sun-bleached hair
+                          ...line(0, 3, 11, 'C', 0, 1), [0, 7, 'R'], [0, 8, 'R'], [8, 5, 'P'], [10, 5, 'Y'], [11, 5, 'P']]),   // a surfboard, a lei
+           {X: '#111111', Y: '#ffe066', C: '#3bc9db', R: '#fa5252', P: '#f783ac'}],
+  // warriors
+  ninja: [overlay(recolour((ch, x, y)=>ch === 'B' ? (y === 3 && x >= 8 && x <= 11 ? null : 'X') : ch === 'S' ? 'Z' : null),   // all in black but the eyes
+                  [...line(3, 10, 10, 'R'), [6, 2, 'R'], [5, 2, 'R'], [4, 3, 'R'], [5, 3, 'R']]),   // a red belt, a headband
+          {X: '#25262b', Z: '#141517', R: '#e03131'}],
+  samurai: [overlay(recolour((ch, x, y)=>y >= 8 && y <= 11 && ch === 'B' ? (y === 9 || y === 11 ? 'Y' : 'R') : null),   // lacquered armour
+                    [[9, 0, 'X'], [9, 1, 'X'], ...line(2, 3, 5, 'G', 1, 1), [1, 2, 'X'], [0, 1, 'X']]),   // a topknot, a katana
+            {X: '#212529', R: '#a61e4d', Y: '#fcc419', G: '#dee2e6'}],
+  knight: [overlay(recolour((ch, x, y)=>y >= 1 && y <= 5 && ch === 'B' ? (y === 3 && x >= 8 && x <= 11 ? 'X' : 'M') : null),   // a steel helm with a visor
+                   [[9, 0, 'R'], [10, 0, 'R'], [11, 0, 'R'], ...[8, 9, 10, 11, 12].flatMap(y=>line(4, y, 3, 'D')),   // a plume, a shield
+                    ...line(5, 8, 5, 'Y', 0, 1), ...line(4, 9, 3, 'Y')]),
+           {M: '#adb5bd', X: '#343a40', R: '#e03131', D: '#1c3d7a', Y: '#fcc419'}],
+  viking: [overlay(DUCK, [...line(7, 1, 5, 'M'), ...line(8, 0, 3, 'M'), [6, 0, 'W'], [5, 0, 'W'], [12, 0, 'W'], [13, 0, 'W'], [6, 1, 'W'],   // a horned helmet
+                          ...line(9, 5, 4, 'R'), ...line(10, 6, 2, 'R'), [11, 7, 'R']]),   // a braided beard
+           {M: '#868e96', W: '#f8f0e3', R: '#e8590c'}],
+  archer: [overlay(recolour((ch, x, y)=>y >= 7 && ch === 'B' ? 'G' : y >= 7 && ch === 'S' ? 'H' : null),   // a green tunic
+                   [...line(7, 1, 5, 'G'), ...line(8, 0, 3, 'G'), [11, 0, 'R'], [12, 0, 'R'],   // a feathered cap
+                    [1, 3, 'T'], [0, 4, 'T'], ...line(0, 5, 5, 'T', 0, 1), [1, 10, 'T'], ...line(1, 4, 6, 'W', 0, 1)]),   // a bow and its string
+           {G: '#2f9e44', H: '#1b5e20', R: '#e03131', T: '#8b5a2b', W: '#f1f3f5'}],
+  // magic and spooky
+  wizard: [overlay(recolour((ch, x, y)=>y >= 7 && ch === 'B' ? 'U' : y >= 7 && ch === 'S' ? 'V' : null),   // a starry robe
+                   [[10, 0, 'U'], ...line(8, 1, 4, 'U'), ...line(6, 2, 8, 'U'), [9, 1, 'Y'], [5, 9, 'Y'], [9, 11, 'Y'],   // a pointed hat
+                    ...line(9, 5, 4, 'W'), ...line(10, 6, 3, 'W'), [11, 7, 'W']]),   // a long white beard
+           {U: '#364fc7', V: '#253493', Y: '#ffe066', W: '#f8f9fa'}],
+  witch: [overlay(recolour((ch, x, y)=>y >= 8 && y <= 12 && ch === 'B' ? 'P' : null),   // a purple dress
+                  [[10, 0, 'X'], ...line(8, 1, 4, 'X'), ...line(6, 2, 8, 'P'),   // a pointed hat
+                   ...line(0, 13, 13, 'T'), [13, 12, 'Y'], [14, 13, 'Y'], [13, 14, 'Y'], [14, 12, 'Y'], [15, 13, 'Y'], [14, 14, 'Y']]),   // riding a broom
+          {X: '#212529', P: '#7048e8', T: '#8b5a2b', Y: '#e9c46a'}],
+  vampire: [overlay(DUCK, [[8, 1, 'X'], [9, 1, 'X'], [10, 1, 'X'], [9, 2, 'X'],   // slicked hair, a widow's peak
+                           ...[5, 6, 7, 8, 9, 10, 11].flatMap(y=>[[0, y, 'X'], [1, y, 'R']]), [2, 5, 'X'], [2, 6, 'R'], [12, 5, 'W']]),   // a cape, a fang
+            {B: '#e5dbff', S: '#b197fc', X: '#212529', R: '#c92a2a', W: '#ffffff', K: '#c92a2a'}],
+  zombie: [overlay(DUCK, [[5, 9, 'D'], [8, 11, 'D'], [11, 8, 'D'], [3, 10, 'D'], [8, 2, 'D'], [12, 9, 'R']]),   // patchy and torn
+           {B: '#8ce99a', S: '#51cf66', D: '#2b8a3e', K: '#e03131', R: '#c92a2a'}],
+  mummy: [recolour((ch, x, y)=>ch === 'B' && (x + y) % 4 === 0 ? 'L' : null), {B: '#f1e3c6', S: '#d6c08f', L: '#b09a6b'}],   // wrapped in bandages
+  ghost: [overlay(recolour((ch, x, y)=>y >= 13 && ch === 'O' ? '.' : null), [[2, 13, 'S'], [4, 13, 'S'], [6, 13, 'S'], [8, 13, 'S'], [10, 13, 'S'], [12, 13, 'S']]),   // no feet, a wispy hem
+          {B: 'rgba(231,245,255,.85)', S: 'rgba(165,216,255,.8)', O: '#a5d8ff'}],
+  // sci-fi
+  robot: [overlay(DUCK, [[9, 0, 'R'], ...line(3, 10, 9, 'M'), [4, 9, 'M'], [11, 9, 'M'], [6, 8, 'C'], [8, 8, 'Y']]),   // an antenna, panels, lights
+          {B: '#ced4da', S: '#868e96', K: '#22b8cf', O: '#adb5bd', R: '#fa5252', M: '#495057', C: '#22b8cf', Y: '#fab005'}],
+  alien: [overlay(DUCK, [[7, 0, 'Y'], [12, 0, 'Y'], [8, 1, 'G'], [11, 1, 'G'], [8, 3, 'K'], [10, 3, 'K']]),   // antennae, big black eyes
+          {B: '#69db7c', S: '#2f9e44', O: '#9775fa', Y: '#ffe066', G: '#2f9e44'}],
+  astronaut: [overlay(recolour((ch, x, y)=>y <= 5 && x >= 6 && x <= 14 && ch === '.' ? 'Q' : null),   // a glass helmet
+                      [...[7, 8, 9, 10].flatMap(y=>line(1, y, 3, 'M')), [5, 9, 'R'], [6, 9, 'D']]),   // a backpack, a flag patch
+              {B: '#ffffff', S: '#adb5bd', Q: 'rgba(165,216,255,.55)', M: '#868e96', R: '#e03131', D: '#1c7ed6'}],
+  // dazzling
+  rainbow: [recolour((ch, x, y)=>(ch === 'B' || ch === 'S') && y >= 7 ? 'RAYGUV'[Math.min(y - 7, 5)] : null),   // every colour, top to bottom
+            {R: '#ff6b6b', A: '#ffa94d', Y: '#ffe066', G: '#69db7c', U: '#4dabf7', V: '#9775fa'}],
+  disco: [overlay(recolour((ch, x, y)=>ch === 'B' ? ((x + y) % 2 ? 'M' : 'N') : ch === 'S' ? 'D' : null),   // a mirror ball
+                  [[1, 1, 'W'], [3, 3, 'W'], [14, 8, 'W'], [13, 0, 'Y'], [0, 12, 'Y']]),   // sparkling
+          {M: '#dee2e6', N: '#adb5bd', D: '#868e96', W: '#ffffff', Y: '#ffd43b'}],
+  galaxy: [recolour((ch, x, y)=>ch === 'B' && (x * 7 + y * 3) % 11 === 0 ? 'W' : ch === 'B' && (x * 5 + y) % 13 === 0 ? 'Y' : ch === 'B' && (x + y * 7) % 17 === 0 ? 'P' : null),   // full of stars
+           {B: '#3b1f6e', S: '#1e1033', K: '#ffffff', W: '#ffffff', Y: '#ffd43b', P: '#e599f7'}],
+  // elemental and divine
+  magma: [overlay(recolour((ch, x, y)=>ch === 'B' && (x * 3 + y * 5) % 7 === 0 ? 'L' : null), [[8, 0, 'F'], [10, 0, 'L'], [9, 0, 'F']]),   // glowing cracks, flames on top
+          {B: '#495057', S: '#212529', K: '#ffd43b', L: '#ff6b1a', F: '#ffd43b'}],
+  ice: [overlay(recolour((ch, x, y)=>ch === 'B' && (x + y * 2) % 6 === 0 ? 'W' : null), [[8, 0, 'C'], [10, 0, 'C'], [3, 13, 'C'], [7, 13, 'C'], [12, 13, 'C']]),   // frost, icicles
+        {B: '#d0ebff', S: '#74c0fc', W: '#ffffff', C: '#a5d8ff', O: '#a5d8ff'}],
+  crystal: [recolour((ch, x, y)=>ch === 'B' ? 'PCW'[(x + y) % 3] : ch === 'S' ? 'D' : null),   // cut gem facets
+            {P: '#b197fc', C: '#66d9e8', W: '#f3f0ff', D: '#7950f2'}],
+  phoenix: [overlay(DUCK, [[8, 0, 'F'], [9, 0, 'Y'], [10, 0, 'F'], [11, 1, 'F'],   // a fiery crest
+                           [0, 5, 'Y'], [0, 6, 'F'], [1, 5, 'F'], [0, 7, 'F'], [1, 4, 'Y'], [2, 5, 'Y'], ...line(4, 9, 6, 'R'), ...line(5, 10, 4, 'R')]),   // a blazing tail, wings
+            {B: '#ff922b', S: '#e8590c', F: '#fa5252', Y: '#ffd43b', R: '#c92a2a'}],
+  angel: [overlay(DUCK, [...line(8, 0, 3, 'Y'),   // a halo
+                         ...line(1, 4, 3, 'W'), ...line(0, 5, 5, 'W'), ...line(0, 6, 5, 'W'), ...line(1, 7, 3, 'L'), [0, 7, 'L'], [3, 3, 'L'], [13, 7, 'Y'], [14, 11, 'Y']]),   // wings, sparkles
+          {B: '#ffffff', S: '#dee2e6', W: '#ffffff', L: '#dee2e6', Y: '#ffd43b'}],
 };
 // the Mystic: the Mystic Marsh's wizard toad, in a starry hat with its wand raised
 const MYSTIC = [

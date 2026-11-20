@@ -23,8 +23,8 @@ with Duck Science level AUTONEST_SCIENCE and the pond a lagoon (AUTONEST_POND) t
 empty nests by itself (auto_nest()).
 
 The Mystic Marsh: the Mystic, a wizard toad, zaps two pond birds of the same kind into one of the next kind up
-(BIRDS: duck, mallard, wood duck, baker, finance chad, lab, firefighter, police, raver and DJ ducks, swan, black swan,
-royal swan). Each collects MARSH_STEP times the one below (10% more
+(BIRDS: 50 kinds, from the plain duck up through the working ducks, adventurers, warriors, magic, spooky, sci-fi and
+elemental ducks to the angel duck, then the swan, black swan and royal swan at the top). Each collects MARSH_STEP times the one below (10% more
 than the two it replaced) and takes one pond spot, so merging frees room. Duck Science multiplies them all.
 
 The Champion Quarter is a lounge where your five defenders rest; there you can see each one's stats and buy it hats
@@ -218,6 +218,24 @@ def lucky_chance(s: dict) -> float:
 # the Mystic Marsh's birds, smallest first: plain pond ducks, then what two of the kind before turn into
 BIRDS = [("duck", "Duck"), ("mallard", "Mallard"), ("wood", "Wood duck"), ("baker", "Baker duck"), ("chad", "Finance Chad duck"),
          ("lab", "Lab duck"), ("firefighter", "Firefighter duck"), ("police", "Police duck"), ("raver", "Raver duck"), ("dj", "DJ duck"),
+         # everyday heroes
+         ("farmer", "Farmer duck"), ("fisher", "Fisher duck"), ("painter", "Painter duck"), ("doctor", "Doctor duck"),
+         ("mail", "Mail duck"), ("builder", "Construction duck"), ("detective", "Detective duck"), ("sailor", "Sailor duck"),
+         # adventurers
+         ("pirate", "Pirate duck"), ("cowboy", "Cowboy duck"), ("rocker", "Rock star duck"), ("ballerina", "Ballerina duck"),
+         ("gym", "Gym duck"), ("skater", "Skater duck"), ("surfer", "Surfer duck"),
+         # warriors
+         ("ninja", "Ninja duck"), ("samurai", "Samurai duck"), ("knight", "Knight duck"), ("viking", "Viking duck"), ("archer", "Archer duck"),
+         # magic and spooky
+         ("wizard", "Wizard duck"), ("witch", "Witch duck"), ("vampire", "Vampire duck"), ("zombie", "Zombie duck"),
+         ("mummy", "Mummy duck"), ("ghost", "Ghost duck"),
+         # sci-fi
+         ("robot", "Robot duck"), ("alien", "Alien duck"), ("astronaut", "Astronaut duck"),
+         # dazzling
+         ("rainbow", "Rainbow duck"), ("disco", "Disco duck"), ("galaxy", "Galaxy duck"),
+         # elemental and divine
+         ("magma", "Magma duck"), ("ice", "Ice duck"), ("crystal", "Crystal duck"), ("phoenix", "Phoenix duck"), ("angel", "Angel duck"),
+         # and the swans, always the top
          ("swan", "Swan"), ("black", "Black swan"), ("royal", "Royal swan")]
 
 
