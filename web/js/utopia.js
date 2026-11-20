@@ -17,7 +17,9 @@ async function api(path, body){
   return j;
 }
 const shortName = id => String(id).split('#')[0];
-const fmt = n => n >= 1e12 ? (n/1e12).toFixed(n >= 1e13 ? 0 : 1) + 'T' : n >= 1e9 ? (n/1e9).toFixed(n >= 1e10 ? 0 : 1) + 'B'
+// big numbers short: 12.3k, 4.5M ... up to quintillions (Qi), as the birds near the top of the Mystic Marsh collect
+const fmt = n => n >= 1e18 ? (n/1e18).toFixed(n >= 1e19 ? 0 : 1) + 'Qi' : n >= 1e15 ? (n/1e15).toFixed(n >= 1e16 ? 0 : 1) + 'Qa'
+  : n >= 1e12 ? (n/1e12).toFixed(n >= 1e13 ? 0 : 1) + 'T' : n >= 1e9 ? (n/1e9).toFixed(n >= 1e10 ? 0 : 1) + 'B'
   : n >= 1e6 ? (n/1e6).toFixed(n >= 1e7 ? 0 : 1) + 'M' : n >= 1e4 ? (n/1e3).toFixed(n >= 1e5 ? 0 : 1) + 'k' : Math.floor(n).toLocaleString();
 const COLORS = ['var(--p1)', 'var(--p2)'];
 const BUILD_INFO = {   // building -> (art for its level, what it does)
