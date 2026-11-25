@@ -438,6 +438,14 @@ class RaidTests(unittest.TestCase):
         self.assertTrue(raid(self.squad(hp=400, atk=40), "9", 3, 0)["win"])
         self.assertFalse(raid(self.squad(hp=20, atk=1), "9", 20, 0)["win"])
 
+    def test_a_raid_loss_steals_less_the_more_geese_were_chased_off(self):
+        game = DuckUtopia.__new__(DuckUtopia)
+        s = dict(utopia.new_utopia("A#1", 0), crumbs=100000.0)
+        none, half = {"win": False, "chased": 0, "total": 40}, {"win": False, "chased": 20, "total": 40}
+        game._reward(dict(s), none, 1)
+        game._reward(dict(s), half, 1)
+        self.assertEqual(half["stolen"], round(none["stolen"] / 2))
+
     def test_pentakill_ultimate(self):
         rep = raid(self.squad(hp=400, atk=10, pentas=1), "9", 10, 0)
         self.assertTrue(any("ultimate" in line for line in rep["log"]))
@@ -537,6 +545,26 @@ class GameTests(TempStorageCase):
         self.rows = {"duo one#na1": [row("1", 1, pentas=1), row("2", 2, win=False)],
                      "duo two#na2": [row("1", 1, champion="Garen"), row("2", 2, win=False, champion="Garen", grade="S")]}
         self.game = DuckUtopia(self.storage, FakeStats(self.rows), FakeTracker(self.players), FakeClient())
+
+    def test_each_ductopia_has_its_own_raid_level(self):
+        self.game.state(viewer=False, now=1000)
+        data = self.game._load()
+        data["players"]["duo one#na1"]["raidLevel"] = 5
+        self.storage.write_json(self.game.path, data)
+        self.rows["duo one#na1"].insert(0, row("3", 3))
+        self.rows["duo two#na2"].insert(0, row("3", 3, champion="Garen"))
+        one, two = self.game.state(viewer=False, now=2000)["players"]
+        self.assertEqual((one["raids"][0]["wave"], two["raids"][0]["wave"]), (5, 1))
+        for p, rep in ((one, one["raids"][0]), (two, two["raids"][0])):   # up one after a win, down two (not below 1) after a loss
+            self.assertEqual(p["raidLevel"], rep["wave"] + 1 if rep["win"] else max(1, rep["wave"] - 2))
+            self.assertEqual(rep["next"], p["raidLevel"])
+
+    def test_old_saves_pick_up_raids_from_the_last_wave_won(self):
+        s = utopia.new_utopia("A#1", 0)
+        del s["raidLevel"]
+        s["raids"] = [{"wave": 30, "win": False}, {"wave": 24, "win": True}, {"wave": 20, "win": True}]
+        utopia.migrate(s)
+        self.assertEqual(s["raidLevel"], 24)
 
     def test_founding_day_replays_history(self):
         v = self.game.state(viewer=False, now=1000)

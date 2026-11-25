@@ -89,7 +89,10 @@ LUCKY_EGG, LUCKY_SCIENCE, MAX_LUCKY = 0.05, 0.01, 0.2   # chance a duckling hatc
 WIN_CRUMBS = 100              # bonus breadcrumbs for a new win, at least (catch-up boost applies) ...
 WIN_MINUTES = 30             # ... or this many minutes of breadcrumbs, whichever is more, so wins keep mattering
 RAID_MINUTES = 15            # a raid win: 30 breadcrumbs a goose, or this many minutes of breadcrumbs if that's more
-STEAL_MINUTES = 10           # a raid loss: 15% of breadcrumbs, up to 500 or this many minutes of breadcrumbs
+STEAL_MINUTES = 10           # a raid loss: 15% of breadcrumbs, up to 500 or this many minutes of breadcrumbs (less the more
+                             # geese were chased off)
+RAID_UP, RAID_DOWN = 1, 2    # each Ductopia's raid level: up a wave after a win, down two after a loss, so it settles where
+                             # its squad wins about three raids in four, and climbs as the squad gets stronger
 MAX_REPORTS, MAX_LOG = 10, 30
 
 # hat -> (name, breadcrumbs), cheapest first
@@ -489,6 +492,8 @@ def migrate(s: dict):
     # saved before new ducks joined the ladder below the swans: each bird keeps its place, and so its worth (a swan made
     # from 8 ducks becomes a baker duck, a black swan a finance chad duck, and so on)
     s["birds"] += [0] * (len(BIRDS) - 1 - len(s["birds"]))
+    if "raidLevel" not in s:   # saved when every raid was the same wave: pick up from the last one this squad won
+        s["raidLevel"] = max([r["wave"] for r in s["raids"] if r.get("win")] or [1])
     s["discovered"] = discovered(s)   # (and remembers a lucky mallard from growing ducklings)
     s["bakes"] = {t: u if isinstance(u, list) else [u] for t, u in s["bakes"].items()}   # one batch per machine, from before extra machines
 
@@ -878,7 +883,7 @@ def raid(defenders: list, seed, wave: int, fence: int, max_rounds: int = 15) -> 
 def new_utopia(riot_id: str, now: int) -> dict:
     return {"riotId": riot_id, "founded": now, "tick": now, "crumbs": float(FOUNDING_GIFT), "feathers": 0,
             "levels": dict(START_LEVELS), "ducklings": [], "lost": 0, "spawned": 0, "hats": {}, "pond": STARTING_DUCKS, "birds": [0] * (len(BIRDS) - 1), "edge": 0,
-            "golden": 0, "boost": 0.0, "champs": {}, "fire": 0, "graded": {}, "games": [], "raids": [], "raidWins": 0,
+            "golden": 0, "boost": 0.0, "champs": {}, "fire": 0, "graded": {}, "games": [], "raids": [], "raidWins": 0, "raidLevel": 1,
             "squad": [], "training": {}, "ranks": {}, "challenges": [], "bossFights": [], "soaks": [], "perks": {},
             "machines": {}, "machineCount": {}, "bakes": {}, "treats": {}, "spentBadges": {}, "caught": [], "seasonFire": {}, "log": [], "founding": None}
 
@@ -1063,15 +1068,17 @@ class DuckUtopia:
                 if got:
                     self._note(s, now, f"{'Won' if r.get('win') else 'Played'} on {r['champion']}: {', '.join(got)}.")
                 if squad:
-                    rep = raid(squad, mid, data["raids"], s["levels"]["fence"])
+                    rep = raid(squad, mid, s["raidLevel"], s["levels"]["fence"])
                     golden = sum(d["perk"]["power"] for d in squad if d.get("perk", {}).get("salt") == "golden")
                     self._reward(s, rep, boost, golden)
                     for d in squad:   # spa perks last one raid
                         s["perks"].pop(d["champion"], None)
                     rep.update(matchId=mid, t=now, champion=r["champion"])
                     s["raids"] = ([rep] + s["raids"])[:MAX_REPORTS]
-                    self._note(s, now, "Goose raid: " + (f"won! +{rep['reward']['crumbs']:,} breadcrumbs, +{rep['reward']['feathers']} feathers"
-                                                         if rep["win"] else f"lost. The geese took {rep['stolen']:,} breadcrumbs."))
+                    s["raidLevel"] = rep["next"] = s["raidLevel"] + RAID_UP if rep["win"] else max(1, s["raidLevel"] - RAID_DOWN)
+                    self._note(s, now, f"Goose raid (wave {rep['wave']}): " + (f"won! +{rep['reward']['crumbs']:,} breadcrumbs, +{rep['reward']['feathers']} feathers"
+                                                         if rep["win"] else f"lost, but {rep['chased']} of {rep['total']} geese were chased off. They took {rep['stolen']:,} breadcrumbs.")
+                               + f" Next raid: wave {rep['next']}.")
                 _fill_nests(s, now)
                 scores[key] = score(s)
         for p in players:   # grades that came in after their game was counted still earn their ducks
@@ -1148,7 +1155,8 @@ class DuckUtopia:
             s["feathers"] += feathers
             rep["reward"], rep["stolen"] = {"crumbs": crumbs, "feathers": feathers}, 0
         else:
-            stolen = round(min(s["crumbs"] * 0.15, max(500, crumb_rate(s) * STEAL_MINUTES)))
+            full = min(s["crumbs"] * 0.15, max(500, crumb_rate(s) * STEAL_MINUTES))
+            stolen = round(full * (1 - rep["chased"] / max(rep["total"], 1)))   # the more geese chased off, the less they take
             s["crumbs"] -= stolen
             rep["reward"], rep["stolen"] = {"crumbs": 0, "feathers": 0}, stolen
 
@@ -1272,8 +1280,8 @@ class DuckUtopia:
             squad = self._squad(s, recs, self._classes())
             if not squad:
                 raise ValueError("Play a game together first: defenders are champions you've played.")
-            # a practice wave is a few raids tougher than the next real one, so there's something to see
-            rep = raid(squad, f"practice-{now}", data.get("raids", 0) + 6, s["levels"]["fence"])
+            # a practice wave is a few waves tougher than the next real one, to see how far the squad could climb
+            rep = raid(squad, f"practice-{now}", s["raidLevel"] + 3, s["levels"]["fence"])
             rep.update(practice=True, t=now)
             return {"raid": rep}
         if action == "spar":   # a test fight in the Training Grounds: no challenge needed, nothing won or lost
@@ -1437,7 +1445,7 @@ class DuckUtopia:
             squad = [{**d, "boss": boss(d), "maxRank": d["rank"] >= MAX_RANK} for d in self._squad(s, recs, classes)]
             out.append({
                 **{k: s[k] for k in ("riotId", "feathers", "levels", "lost", "spawned", "hats", "pond", "birds", "edge", "golden", "boost",
-                                     "champs", "fire", "caught", "raids", "raidWins", "training", "ranks", "challenges", "bossFights", "soaks", "perks",
+                                     "champs", "fire", "caught", "raids", "raidWins", "raidLevel", "training", "ranks", "challenges", "bossFights", "soaks", "perks",
                                      "log", "founding", "founded")},
                 "crumbs": round(s["crumbs"], 2), "ducklings": sorted(s["ducklings"]),
                 "score": scores[i], "catchUp": catch_up(scores[i], best), "leading": len(scores) > 1 and scores[i] == best and scores.count(best) == 1,

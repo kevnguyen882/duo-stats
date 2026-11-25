@@ -152,6 +152,8 @@ section.panel{margin-bottom:14px}
 /* raid reports, side by side */
 .uraids{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media(max-width:700px){.uraids{grid-template-columns:1fr}}
+.ulevels{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 10px}
+.ulevels span{border-left:4px solid var(--c);background:rgba(0,0,0,.05);padding:4px 10px;border-radius:6px;font-size:13px}
 .urep{border-radius:10px;padding:12px;background:linear-gradient(#a47148,#8a5a34);color:#fff8ec;box-shadow:inset 0 0 0 3px #6b4423}
 .urep h3{margin:0 0 6px;font:800 14px ui-monospace,Menlo,monospace;display:flex;justify-content:space-between;gap:8px}
 .urep h3 .r{padding:1px 8px;border-radius:8px;background:#2f9e44}

@@ -320,16 +320,18 @@ function report(rep, who, i){
   return `<div class="urep ${rep.win ? '' : 'lost'}" style="--c:${COLORS[i] || COLORS[0]}">
     <h3><span class="who">${esc(who)}${rep.practice ? ' · practice' : ` · after ${esc(rep.champion || 'a game')}`}</span><span class="r">${rep.win ? 'Saved!' : 'Raided'}</span></h3>
     <div class="ugeese">${geese.map((k, j)=>`<img class="pix ${j < gone ? 'gone' : ''}" style="animation-delay:${j * 40}ms" src="${artURL(GOOSE_ART[k])}" alt="${k}" title="${k}">`).join('')}</div>
-    <div>${rep.chased} of ${rep.total} geese chased off in ${rep.rounds} round${rep.rounds === 1 ? '' : 's'} · wave ${rep.wave}</div>
+    <div>${rep.chased} of ${rep.total} geese chased off in ${rep.rounds} round${rep.rounds === 1 ? '' : 's'} · wave ${rep.wave}${rep.next ? ` · next raid: wave ${rep.next} ${rep.next > rep.wave ? '▲' : '▼'}` : ''}</div>
     <div class="sq">${rep.squad.map(d=>`<img class="pix ${d.up ? '' : 'ko'}" src="${artURL('duck-' + d.cls)}" title="${esc(d.champion)}${d.up ? '' : ' (knocked out)'}" alt="">`).join('')}</div>
-    <div class="rw">${rep.practice ? 'Practice: nothing won or lost.' : rep.win ? `+${fmt(rep.reward.crumbs)} breadcrumbs, +${rep.reward.feathers} feathers` : `The geese took ${fmt(rep.stolen)} breadcrumbs.`}</div>
+    <div class="rw">${rep.practice ? 'Practice: nothing won or lost.' : rep.win ? `+${fmt(rep.reward.crumbs)} breadcrumbs, +${rep.reward.feathers} feathers` : `The geese took ${fmt(rep.stolen)} breadcrumbs${rep.chased ? ` (less, for the ${Math.round(rep.chased / rep.total * 100)}% chased off)` : ''}.`}</div>
     <ol>${rep.log.map(l=>`<li>${esc(l)}</li>`).join('')}</ol></div>`;
 }
 function renderRaids(){
   const ps = U.players, latest = ps.map(p=>p.raids[0]).filter(Boolean).sort((a, b)=>b.t - a.t)[0];
   const same = latest ? ps.map(p=>p.raids.find(r=>r.matchId === latest.matchId)) : [];
-  $('#raids').innerHTML = `<p class="unote" style="margin-top:0">After every game you play together, the same wave of geese raids both Ductopias, and each squad of five fights it automatically.
-      A win brings breadcrumbs and goose feathers; a loss lets the geese steal some breadcrumbs. Buildings are never damaged.</p>
+  $('#raids').innerHTML = `<p class="unote" style="margin-top:0">After every game you play together, geese raid both Ductopias, and each squad of five fights them automatically.
+      Each Ductopia has its own raid level: a win sends a wave one bigger next time (with more feathers to win), a loss drops it by two. A win brings breadcrumbs and goose feathers;
+      a loss lets the geese steal some breadcrumbs, less the more of them you chased off. Buildings are never damaged.</p>
+    <div class="ulevels">${ps.map((p, i)=>`<span style="--c:${COLORS[i] || COLORS[0]}"><b>${esc(shortName(p.riotId))}</b> next raid: wave ${p.raidLevel || 1}</span>`).join('')}</div>
     ${latest ? `<div class="uraids">${ps.map((p, i)=>report(same[i], shortName(p.riotId), i)).join('')}</div>`
       : '<p class="uempty">No raids yet: the first one comes after your next game together.</p>'}
     ${practice ? `<h3 style="margin:14px 0 8px;font-size:14px">Practice raid</h3><div class="uraids">${report(practice, shortName(U.players[U.me].riotId), U.me)}</div>` : ''}
