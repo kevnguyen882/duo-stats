@@ -487,7 +487,7 @@ def migrate(s: dict):
     for k, v in (("ranks", {}), ("challenges", []), ("bossFights", []), ("soaks", []), ("perks", {}),   # Training Grounds, Spa
                  ("machines", {}), ("bakes", {}), ("treats", {}), ("spentBadges", {}),               # Bakery
                  ("caught", []), ("seasonFire", {}), ("machineCount", {}),                          # Volcano Spa, Bakery
-                 ("birds", [0] * (len(BIRDS) - 1))):                                                # Mystic Marsh
+                 ("birds", [0] * (len(BIRDS) - 1)), ("items", {}), ("mastered", [])):                                                # Mystic Marsh
         s.setdefault(k, v)
     # saved before new ducks joined the ladder below the swans: each bird keeps its place, and so its worth (a swan made
     # from 8 ducks becomes a baker duck, a black swan a finance chad duck, and so on)
@@ -772,6 +772,39 @@ def finish_bakes(s: dict, now: int) -> list:
     return out
 
 
+# ---- goose feathers: the bench, raid supplies and mastery ----
+BENCH_BONUS, BENCH_CAP = 0.01, 0.5   # each training level on a champion off the squad: +1% squad health and attack, up to +50%
+RAID_ITEMS = {   # item -> (name, feathers, what it does); bought ahead, one of each used up by the next real raid
+    "horn": ("War horn", 4, "the squad hits 50% harder in the first round"),
+    "pillow": ("Feather pillows", 6, "the first defender knocked out gets back up with half its health"),
+    "decoy": ("Goose decoys", 8, "a quarter of the geese chase decoys instead of raiding"),
+}
+ITEM_STOCK = 3                       # how many of each item can be stocked
+MASTERY_COST = 30                    # feathers to master a fully trained champion
+MASTERY = {   # class -> (move, what it does in raids)
+    "tank": ("Iron feathers", "takes 40% less from every bite"),
+    "mage": ("Firestorm", "hits five geese at once instead of three"),
+    "marksman": ("Opening volley", "its first shot each raid does triple damage"),
+    "support": ("Group hug", "heals every hurt defender at once"),
+    "fighter": ("Second wind", "heals twice as much from each hit"),
+    "assassin": ("Shadow step", "strikes twice in the first round"),
+}
+
+
+def bench_bonus(s: dict, squad: set) -> float:
+    """The squad's boost from training levels on champions who aren't in it."""
+    return round(min(BENCH_CAP, BENCH_BONUS * sum(lv for c, lv in s["training"].items() if c not in squad)), 2)
+
+
+def with_bench(d: dict, bonus: float) -> dict:
+    """A defender boosted by the bench. Its boss is still built from its own stats (baseHp, baseAtk)."""
+    if not bonus:
+        return d
+    d = dict(d, bench=bonus, baseHp=d.get("baseHp", d["hp"]), baseAtk=d.get("baseAtk", d["atk"]))
+    d["hp"], d["atk"] = round(d["hp"] * (1 + bonus)), round(d["atk"] * (1 + bonus), 1)
+    return d
+
+
 # ---- goose raids ----
 GEESE = {   # type -> (health, attack, cost in the wave's budget, how many come together)
     "goose": (40, 6, 10, 1), "armoured": (80, 5, 18, 1), "goslings": (12, 2, 10, 4), "flying": (30, 8, 14, 1),
@@ -790,15 +823,20 @@ def goose_wave(seed, wave: int) -> list:
     return out
 
 
-def raid(defenders: list, seed, wave: int, fence: int, max_rounds: int = 15) -> dict:
-    """Your squad against one goose wave, fought automatically. Returns the raid report."""
+def raid(defenders: list, seed, wave: int, fence: int, max_rounds: int = 15, items=()) -> dict:
+    """Your squad against one goose wave, fought automatically. items: raid supplies used (RAID_ITEMS). Returns the
+    raid report."""
     rng = random.Random(f"fight-{seed}-{'|'.join(d['champion'] for d in defenders)}")
     kinds = goose_wave(seed, wave)
+    decoyed = len(kinds) // 4 if "decoy" in items else 0
+    if decoyed:   # the decoys draw off a quarter of the wave before the fight
+        kinds = kinds[decoyed:]
     tough = 1 + 0.03 * wave   # later waves bring tougher geese, not just more of them
     geese = [{"kind": k, "hp": GEESE[k][0] * tough, "atk": GEESE[k][1] * tough} for k in kinds]
     squad = [{**d, "max": d["hp"], "used_ult": False} for d in defenders]
     shield = min(0.06 * fence, 0.5)   # fences and walls take some of every goose's bite
-    log = []
+    log = [f"{decoyed} geese chased the decoys instead."] if decoyed else []
+    pillow = "pillow" in items
     alive = lambda xs: [x for x in xs if x["hp"] > 0]
 
     def hit(g, dmg, pierce=False):
@@ -810,7 +848,7 @@ def raid(defenders: list, seed, wave: int, fence: int, max_rounds: int = 15) -> 
             targets = alive(geese)
             if not targets:
                 break
-            a, cls = d["atk"], d["cls"]
+            a, cls, master = d["atk"] * (1.5 if rounds == 1 and "horn" in items else 1), d["cls"], d.get("mastered")
             if d["pentas"] and not d["used_ult"] and rounds >= 2:
                 d["used_ult"] = True
                 for g in targets:
@@ -824,23 +862,33 @@ def raid(defenders: list, seed, wave: int, fence: int, max_rounds: int = 15) -> 
                     hit(g, a)
                 log.append(f"Round {rounds}: {d['champion']} hit {min(multi, len(targets))} geese at once.")
             elif cls == "mage":
-                for g in rng.sample(targets, min(3, len(targets))):
+                for g in rng.sample(targets, min(5 if master else 3, len(targets))):
                     hit(g, a * 0.6 * (1.5 if g["kind"] == "goslings" else 1))
             elif cls == "marksman":
-                hit(max(targets, key=lambda g: g["hp"]), a * 1.5, pierce=True)
+                volley = master and not d.get("volleyed")
+                d["volleyed"] = True
+                hit(max(targets, key=lambda g: g["hp"]), a * (4.5 if volley else 1.5), pierce=True)
+                if volley:
+                    log.append(f"Round {rounds}: {d['champion']} opened with a volley.")
             elif cls == "support":
                 hurt = [x for x in alive(squad) if x["hp"] < x["max"]]
-                if hurt:
+                if hurt and master:   # a group hug: everyone hurt, a little less each
+                    for x in hurt:
+                        x["hp"] = min(x["max"], x["hp"] + a * 0.6)
+                elif hurt:
                     x = min(hurt, key=lambda x: x["hp"] / x["max"])
                     x["hp"] = min(x["max"], x["hp"] + a)
                 else:
                     hit(rng.choice(targets), a * 0.5)
             elif cls == "assassin":
-                g = min(targets, key=lambda g: g["hp"])
-                hit(g, a * 1.3 * (1.5 if g["kind"] == "flying" else 1))
+                for _ in range(2 if master and rounds == 1 else 1):
+                    targets = alive(geese)
+                    if targets:
+                        g = min(targets, key=lambda g: g["hp"])
+                        hit(g, a * 1.3 * (1.5 if g["kind"] == "flying" else 1))
             elif cls == "fighter":
                 hit(rng.choice(targets), a * 1.1)
-                d["hp"] = min(d["max"], d["hp"] + a * 0.2)
+                d["hp"] = min(d["max"], d["hp"] + a * (0.4 if master else 0.2))
             else:   # tank
                 hit(rng.choice(targets), a * 0.8)
             if d["star"] == 3:   # S+: a flame aura singes every goose
@@ -857,8 +905,11 @@ def raid(defenders: list, seed, wave: int, fence: int, max_rounds: int = 15) -> 
             else:
                 pool = tanks or ds
             x = rng.choice(pool)
-            x["hp"] -= g["atk"] * (1 - shield)
-            if x["hp"] <= 0:
+            x["hp"] -= g["atk"] * (1 - shield) * (0.6 if x["cls"] == "tank" and x.get("mastered") else 1)
+            if x["hp"] <= 0 and pillow:
+                pillow, x["hp"] = False, x["max"] / 2
+                log.append(f"Round {rounds}: {x['champion']} landed on a feather pillow and got back up.")
+            elif x["hp"] <= 0:
                 log.append(f"Round {rounds}: {x['champion']} was knocked out.")
         if not alive(geese):
             log.append(f"Round {rounds}: the last goose ran off. Utopia saved!")
@@ -874,8 +925,8 @@ def raid(defenders: list, seed, wave: int, fence: int, max_rounds: int = 15) -> 
     counts = {}
     for k in kinds:
         counts[k] = counts.get(k, 0) + 1
-    return {"win": won, "rounds": rounds, "wave": wave, "geese": counts, "chased": len(geese) - len(alive(geese)),
-            "total": len(geese), "log": log[-14:],
+    return {"win": won, "rounds": rounds, "wave": wave, "geese": counts, "chased": len(geese) - len(alive(geese)) + decoyed,
+            "total": len(geese) + decoyed, "log": log[-14:], "items": [k for k in RAID_ITEMS if k in items],
             "squad": [{"champion": d["champion"], "cls": d["cls"], "up": d["hp"] > 0} for d in squad]}
 
 
@@ -883,7 +934,7 @@ def raid(defenders: list, seed, wave: int, fence: int, max_rounds: int = 15) -> 
 def new_utopia(riot_id: str, now: int) -> dict:
     return {"riotId": riot_id, "founded": now, "tick": now, "crumbs": float(FOUNDING_GIFT), "feathers": 0,
             "levels": dict(START_LEVELS), "ducklings": [], "lost": 0, "spawned": 0, "hats": {}, "pond": STARTING_DUCKS, "birds": [0] * (len(BIRDS) - 1), "edge": 0,
-            "golden": 0, "boost": 0.0, "champs": {}, "fire": 0, "graded": {}, "games": [], "raids": [], "raidWins": 0, "raidLevel": 1,
+            "golden": 0, "boost": 0.0, "champs": {}, "fire": 0, "graded": {}, "games": [], "raids": [], "raidWins": 0, "raidLevel": 1, "items": {}, "mastered": [],
             "squad": [], "training": {}, "ranks": {}, "challenges": [], "bossFights": [], "soaks": [], "perks": {},
             "machines": {}, "machineCount": {}, "bakes": {}, "treats": {}, "spentBadges": {}, "caught": [], "seasonFire": {}, "log": [], "founding": None}
 
@@ -1068,7 +1119,10 @@ class DuckUtopia:
                 if got:
                     self._note(s, now, f"{'Won' if r.get('win') else 'Played'} on {r['champion']}: {', '.join(got)}.")
                 if squad:
-                    rep = raid(squad, mid, s["raidLevel"], s["levels"]["fence"])
+                    items = [k for k in RAID_ITEMS if s["items"].get(k)]
+                    for k in items:   # one of each stocked supply is used up
+                        s["items"][k] -= 1
+                    rep = raid(squad, mid, s["raidLevel"], s["levels"]["fence"], items=items)
                     golden = sum(d["perk"]["power"] for d in squad if d.get("perk", {}).get("salt") == "golden")
                     self._reward(s, rep, boost, golden)
                     for d in squad:   # spa perks last one raid
@@ -1139,12 +1193,39 @@ class DuckUtopia:
                 break
             if c not in chosen and c not in soaking:
                 chosen.append(c)
-        return [self._defender(s, c, recs, classes) for c in chosen]
+        bonus = bench_bonus(s, set(chosen))
+        return [with_bench(self._defender(s, c, recs, classes), bonus) for c in chosen]
 
     @staticmethod
     def _defender(s: dict, c: str, recs: dict, classes: dict) -> dict:
-        return with_perk(defender(c, recs[c], classes.get(c, "fighter"), s["training"].get(c, 0), s["ranks"].get(c, 0)),
-                         s["perks"].get(c))
+        d = defender(c, recs[c], classes.get(c, "fighter"), s["training"].get(c, 0), s["ranks"].get(c, 0))
+        if c in s["mastered"]:
+            d["mastered"] = MASTERY[d["cls"]][0]
+        return with_perk(d, s["perks"].get(c))
+
+    def _challenge(self, s: dict, c, recs: dict, now: int) -> dict:
+        """One of c's waiting challenges in the Training Grounds: a fight against its boss. Returns the fight report."""
+        if c not in s["challenges"]:
+            raise ValueError(f"{c} has no challenge waiting: win a game on it to earn one.")
+        if c not in recs:
+            raise ValueError("Only champions you've played together can fight here.")
+        if s["ranks"].get(c, 0) >= MAX_RANK:
+            raise ValueError(f"{c} has beaten every boss.")
+        if any(x["champion"] == c for x in s["soaks"]):
+            raise ValueError(f"{c} is soaking in the spa: the challenge waits until it's out.")
+        d = self._defender(s, c, recs, self._classes())
+        rep = boss_fight(d, now)
+        s["challenges"].remove(c)
+        if d.get("perk") and d["perk"]["salt"] != "golden":   # golden salts are for raids, so they keep
+            s["perks"].pop(c)
+            rep["perk"] = d["perk"]
+        if rep["win"]:
+            s["ranks"][c] = s["ranks"].get(c, 0) + 1
+        rep.update(t=now, level=d["level"] + (1 if rep["win"] else 0))
+        s["bossFights"] = ([rep] + s["bossFights"])[:MAX_REPORTS]
+        self._note(s, now, f"Training Grounds: {c} beat {rep['boss']['name']} and reached level {rep['level']}." if rep["win"]
+                   else f"Training Grounds: {c} lost to {rep['boss']['name']}.")
+        return rep
 
     def _reward(self, s: dict, rep: dict, boost: float, golden: float = 0):
         """golden: the bonus from defenders with golden spa salts (0.6 = +60%)."""
@@ -1167,7 +1248,7 @@ class DuckUtopia:
     # ---- what you can do ----
     def _do(self, s: dict, body: dict, player, now: int, data: dict) -> dict:
         action = body.get("action")
-        rows = self.stats.together([player]) if action in ("squad", "train", "practice", "hat", "challenge", "spar", "soak") else {}
+        rows = self.stats.together([player]) if action in ("squad", "train", "practice", "hat", "challenge", "challenge_all", "master", "spar", "soak") else {}
         recs = champion_records(rows.get(player.key, []))
         if action == "upgrade":
             b = body.get("building")
@@ -1281,7 +1362,8 @@ class DuckUtopia:
             if not squad:
                 raise ValueError("Play a game together first: defenders are champions you've played.")
             # a practice wave is a few waves tougher than the next real one, to see how far the squad could climb
-            rep = raid(squad, f"practice-{now}", s["raidLevel"] + 3, s["levels"]["fence"])
+            rep = raid(squad, f"practice-{now}", s["raidLevel"] + 3, s["levels"]["fence"],
+                       items=[k for k in RAID_ITEMS if s["items"].get(k)])   # with the supplies in stock, none used up
             rep.update(practice=True, t=now)
             return {"raid": rep}
         if action == "spar":   # a test fight in the Training Grounds: no challenge needed, nothing won or lost
@@ -1295,28 +1377,45 @@ class DuckUtopia:
             rep.update(t=now, level=d["level"], practice=True, perk=d.get("perk"))
             return {"fight": rep}
         if action == "challenge":   # the Training Grounds: one defender against its boss
+            return {"fight": self._challenge(s, body.get("champion"), recs, now)}
+        if action == "challenge_all":   # every challenge waiting, one after another
+            ready = [c for c in s["challenges"] if c in recs and s["ranks"].get(c, 0) < MAX_RANK
+                     and not any(x["champion"] == c for x in s["soaks"])]
+            if not ready:
+                raise ValueError("No challenges ready: win a game on a champion to earn one.")
+            fights = []
+            for i, c in enumerate(ready):
+                if s["ranks"].get(c, 0) < MAX_RANK:   # (a champion that beats its last boss skips the rest of its challenges)
+                    f = self._challenge(s, c, recs, now + i)
+                    fights.append({"champion": c, "win": f["win"], "boss": f["boss"]["name"], "level": f["level"]})
+            return {"fights": fights, "won": sum(1 for f in fights if f["win"])}
+        if action == "buy_item":   # raid supplies, with goose feathers
+            k = body.get("item")
+            if k not in RAID_ITEMS:
+                raise ValueError("There's no such raid supply.")
+            name, cost, _ = RAID_ITEMS[k]
+            if s["items"].get(k, 0) >= ITEM_STOCK:
+                raise ValueError(f"You can stock up to {ITEM_STOCK} {name.lower()}.")
+            if s["feathers"] < cost:
+                raise ValueError(f"Not enough goose feathers: {cost} needed.")
+            s["feathers"] -= cost
+            s["items"][k] = s["items"].get(k, 0) + 1
+            return {"item": k, "stock": s["items"][k]}
+        if action == "master":   # a fully trained champion learns its class's mastery move
             c = body.get("champion")
-            if c not in s["challenges"]:
-                raise ValueError(f"{c} has no challenge waiting: win a game on it to earn one.")
             if c not in recs:
-                raise ValueError("Only champions you've played together can fight here.")
-            if s["ranks"].get(c, 0) >= MAX_RANK:
-                raise ValueError(f"{c} has beaten every boss.")
-            if any(x["champion"] == c for x in s["soaks"]):
-                raise ValueError(f"{c} is soaking in the spa: the challenge waits until it's out.")
-            d = self._defender(s, c, recs, self._classes())
-            rep = boss_fight(d, now)
-            s["challenges"].remove(c)
-            if d.get("perk") and d["perk"]["salt"] != "golden":   # golden salts are for raids, so they keep
-                s["perks"].pop(c)
-                rep["perk"] = d["perk"]
-            if rep["win"]:
-                s["ranks"][c] = s["ranks"].get(c, 0) + 1
-            rep.update(t=now, level=d["level"] + (1 if rep["win"] else 0))
-            s["bossFights"] = ([rep] + s["bossFights"])[:MAX_REPORTS]
-            self._note(s, now, f"Training Grounds: {c} beat {rep['boss']['name']} and reached level {rep['level']}." if rep["win"]
-                       else f"Training Grounds: {c} lost to {rep['boss']['name']}.")
-            return {"fight": rep}
+                raise ValueError("Only champions you've played together can be mastered.")
+            if s["training"].get(c, 0) < 10:
+                raise ValueError(f"Train {c} fully (10 levels) first.")
+            if c in s["mastered"]:
+                raise ValueError(f"{c} is already mastered.")
+            if s["feathers"] < MASTERY_COST:
+                raise ValueError(f"Not enough goose feathers: {MASTERY_COST} needed.")
+            s["feathers"] -= MASTERY_COST
+            s["mastered"].append(c)
+            move = MASTERY[self._classes().get(c, "fighter")][0]
+            self._note(s, now, f"{c} mastered {move}.")
+            return {"mastered": c, "move": move}
         if action == "soak":   # the Spa: a recovery soak, with bath salts at a temperature
             c, salt, temp = body.get("champion"), body.get("salt"), body.get("temp")
             if not s["levels"]["spa"]:
@@ -1445,7 +1544,7 @@ class DuckUtopia:
             squad = [{**d, "boss": boss(d), "maxRank": d["rank"] >= MAX_RANK} for d in self._squad(s, recs, classes)]
             out.append({
                 **{k: s[k] for k in ("riotId", "feathers", "levels", "lost", "spawned", "hats", "pond", "birds", "edge", "golden", "boost",
-                                     "champs", "fire", "caught", "raids", "raidWins", "raidLevel", "training", "ranks", "challenges", "bossFights", "soaks", "perks",
+                                     "champs", "fire", "caught", "raids", "raidWins", "raidLevel", "items", "mastered", "training", "ranks", "challenges", "bossFights", "soaks", "perks",
                                      "log", "founding", "founded")},
                 "crumbs": round(s["crumbs"], 2), "ducklings": sorted(s["ducklings"]),
                 "score": scores[i], "catchUp": catch_up(scores[i], best), "leading": len(scores) > 1 and scores[i] == best and scores.count(best) == 1,
@@ -1472,10 +1571,15 @@ class DuckUtopia:
                 "challengers": [{**d, "boss": boss(d), "maxRank": d["rank"] >= MAX_RANK}   # champions off the squad with a challenge waiting
                                 for d in (self._defender(s, c, recs, classes) for c in dict.fromkeys(s["challenges"])
                                           if c in recs and c not in {x["champion"] for x in squad})],
-                "champions": sorted(({"champion": c, "cls": classes.get(c, "fighter"), "games": r["games"]}
+                "benchBonus": bench_bonus(s, {d["champion"] for d in squad}),
+                "champions": sorted(({"champion": c, "cls": classes.get(c, "fighter"), "games": r["games"], "training": s["training"].get(c, 0),
+                                      "mastered": c in s["mastered"]}
                                      for c, r in recs.items()), key=lambda x: (-x["games"], x["champion"])),
             })
         return {"now": now, "me": 1 if viewer else 0, "players": out, "goldenRate": GOLDEN_RATE, "fireRate": FIRE_RATE, "winCrumbs": WIN_CRUMBS, "winMinutes": WIN_MINUTES, "raidMinutes": RAID_MINUTES,
+                "raidItems": [{"id": k, "name": n, "cost": c, "does": w} for k, (n, c, w) in RAID_ITEMS.items()], "itemStock": ITEM_STOCK,
+                "mastery": {cls: {"move": m, "does": w} for cls, (m, w) in MASTERY.items()}, "masteryCost": MASTERY_COST,
+                "benchStep": BENCH_BONUS, "benchCap": BENCH_CAP,
                 "scienceBoost": SCIENCE_BOOST,
                 "cityStages": [{"name": n, "first": city_stage(last)[1], "last": last} for n, last, _, _ in CITY_STAGES], "marshBirds": [{"id": k, "name": n, "rate": bird_rate(i)} for i, (k, n) in enumerate(BIRDS)],
                 "hatShop": [{"id": h, "name": n, "cost": c} for h, (n, c) in HATS.items()],

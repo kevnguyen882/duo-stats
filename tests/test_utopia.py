@@ -446,6 +446,26 @@ class RaidTests(unittest.TestCase):
         game._reward(dict(s), half, 1)
         self.assertEqual(half["stolen"], round(none["stolen"] / 2))
 
+    def test_raid_supplies(self):
+        plain, decoy = raid(self.squad(), "9", 20, 0), raid(self.squad(), "9", 20, 0, items=["decoy"])
+        self.assertEqual(decoy["total"], plain["total"])   # the decoys count as chased off
+        self.assertIn("chased the decoys", decoy["log"][0] if len(decoy["log"]) < 14 else "chased the decoys")
+        self.assertEqual(decoy["items"], ["decoy"])
+        weak = raid(self.squad(hp=30, atk=2), "9", 20, 0, items=["pillow"])
+        self.assertTrue(any("feather pillow" in line for line in weak["log"]))
+
+    def test_bench_bonus(self):
+        s = {"training": {"A": 10, "B": 4, "C": 3}}
+        self.assertEqual(utopia.bench_bonus(s, {"A"}), 0.07)            # only champions off the squad count
+        self.assertEqual(utopia.bench_bonus({"training": {f"x{i}": 10 for i in range(9)}}, set()), utopia.BENCH_CAP)
+        d = utopia.with_bench({"hp": 100, "atk": 10.0}, 0.1)
+        self.assertEqual((d["hp"], d["atk"], d["baseHp"], d["baseAtk"]), (110, 11.0, 100, 10.0))   # its boss stays the same
+
+    def test_mastery_moves_help_in_raids(self):
+        for cls in utopia.MASTERY:
+            wins = lambda m: sum(raid(self.squad(cls=cls, hp=150, atk=14, **({"mastered": "yes"} if m else {})), f"m{i}", 12, 0)["chased"] for i in range(20))
+            self.assertGreaterEqual(wins(True), wins(False), cls)
+
     def test_pentakill_ultimate(self):
         rep = raid(self.squad(hp=400, atk=10, pentas=1), "9", 10, 0)
         self.assertTrue(any("ultimate" in line for line in rep["log"]))
@@ -558,6 +578,51 @@ class GameTests(TempStorageCase):
         for p, rep in ((one, one["raids"][0]), (two, two["raids"][0])):   # up one after a win, down two (not below 1) after a loss
             self.assertEqual(p["raidLevel"], rep["wave"] + 1 if rep["win"] else max(1, rep["wave"] - 2))
             self.assertEqual(rep["next"], p["raidLevel"])
+
+    def feathers(self, n, **extra):
+        self.game.state(viewer=False, now=1000)
+        data = self.game._load()
+        data["players"]["duo one#na1"].update(feathers=n, **extra)
+        self.storage.write_json(self.game.path, data)
+
+    def act(self, **body):
+        return self.game.act({"owner": "duo one#na1", **body}, viewer=False, now=1500)
+
+    def test_raid_supplies_are_bought_and_used_up_by_the_next_raid(self):
+        self.feathers(15)
+        self.act(action="buy_item", item="decoy")
+        out = self.act(action="buy_item", item="horn")["players"][0]
+        self.assertEqual((out["feathers"], out["items"]), (3, {"decoy": 1, "horn": 1}))
+        with self.assertRaises(ValueError):   # not enough feathers left
+            self.act(action="buy_item", item="decoy")
+        self.rows["duo one#na1"].insert(0, row("3", 3))
+        one = self.game.state(viewer=False, now=2000)["players"][0]
+        self.assertEqual(one["raids"][0]["items"], ["horn", "decoy"])
+        self.assertEqual(one["items"], {"decoy": 0, "horn": 0})
+
+    def test_mastery_needs_full_training(self):
+        self.feathers(100, training={"Annie": 9})
+        with self.assertRaises(ValueError):
+            self.act(action="master", champion="Annie")
+        self.feathers(100, training={"Annie": 10})
+        out = self.act(action="master", champion="Annie")
+        self.assertEqual(out["players"][0]["feathers"], 100 - utopia.MASTERY_COST)
+        self.assertEqual(next(d for d in out["players"][0]["squad"] if d["champion"] == "Annie")["mastered"], utopia.MASTERY["mage"][0])   # Annie is a mage
+
+    def test_bench_training_boosts_the_squad(self):
+        self.feathers(0, training={"Zed": 10, "Lux": 5})   # neither is defending
+        p = self.game.state(viewer=False, now=1500)["players"][0]
+        self.assertEqual(p["benchBonus"], 0.15)
+        self.assertEqual(p["squad"][0]["bench"], 0.15)
+
+    def test_challenge_all(self):
+        self.feathers(0, challenges=["Annie", "Annie"])
+        out = self.act(action="challenge_all")
+        self.assertEqual([f["champion"] for f in out["result"]["fights"]], ["Annie", "Annie"])
+        self.assertEqual(out["players"][0]["challenges"], [])
+        self.assertEqual(out["result"]["won"], out["players"][0]["ranks"].get("Annie", 0))
+        with self.assertRaises(ValueError):
+            self.act(action="challenge_all")
 
     def test_old_saves_pick_up_raids_from_the_last_wave_won(self):
         s = utopia.new_utopia("A#1", 0)

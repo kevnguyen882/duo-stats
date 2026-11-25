@@ -284,17 +284,30 @@ function stars(n){ return n ? `<span class="star" title="${['', 'S-', 'S', 'S+']
 function renderSquad(){
   const p = U.players[viewing], own = mine();
   if(!p.squad.length){ $('#squad').innerHTML = '<p class="uempty">Defenders are champions you\'ve played together. Play a game first.</p>'; return; }
+  const featherBtn = (c, cls, training, mastered) => !own || mastered ? ''
+    : training < 10 ? `<button class="ghost" data-train="${esc(c)}" ${p.feathers < 2 + training ? 'disabled' : ''} title="Training: +10% health and attack${p.squad.some(d=>d.champion === c) ? '' : ', and +1% for the whole squad while it waits on the bench'}">Train ${pic('icon-feather')}${2 + training}</button>`
+    : `<button class="ghost" data-master="${esc(c)}" ${p.feathers < U.masteryCost ? 'disabled' : ''} title="${esc(U.mastery[cls].move)}: ${esc(U.mastery[cls].does)} in raids">Master ${pic('icon-feather')}${U.masteryCost}</button>`;
+  const mastery = (cls, mastered) => mastered ? ` · <b class="umaster" title="${esc(U.mastery[cls].does)} in raids">✦ ${esc(U.mastery[cls].move)}</b>` : '';
   const list = p.squad.map(d=>`<div class="udef">${pic('duck-' + d.cls, 'duck pix')}${champIcon(d.champion)}
-      <div class="t"><b>${esc(d.champion)} ${stars(d.star)}</b><span>${CLASS_NAME[d.cls]} · Lv ${d.level} · ${d.hp} HP · ${d.atk} ATK${d.training ? ` · trained ${d.training}` : ''}${d.pentas ? ' · ultimate' : ''}${d.perk ? ` · <b class="uperk">♨ ${perkText(d.perk)}</b>` : ''}</span></div>
-      ${own ? `<button class="ghost" data-train="${esc(d.champion)}" ${p.feathers < 2 + d.training || d.training >= 10 ? 'disabled' : ''} title="Training: +10% health and attack">Train ${pic('icon-feather')}${2 + d.training}</button>` : ''}
+      <div class="t"><b>${esc(d.champion)} ${stars(d.star)}</b><span>${CLASS_NAME[d.cls]} · Lv ${d.level} · ${d.hp} HP · ${d.atk} ATK${d.training ? ` · trained ${d.training}` : ''}${d.pentas ? ' · ultimate' : ''}${mastery(d.cls, d.mastered)}${d.perk ? ` · <b class="uperk">♨ ${perkText(d.perk)}</b>` : ''}</span></div>
+      ${featherBtn(d.champion, d.cls, d.training, d.mastered)}
     </div>`).join('');
+  const inSquad = new Set(p.squad.map(d=>d.champion));
+  const benchAll = p.champions.filter(c=>!inSquad.has(c.champion)), shownBench = [...benchAll.filter(c=>c.training), ...benchAll.filter(c=>!c.training)].slice(0, Math.max(6, benchAll.filter(c=>c.training).length));
+  const bench = benchAll.length ? `<h3 class="uspah">Bench</h3>
+    <p class="unote">Every training level on a champion who isn't defending gives the whole squad +${Math.round(U.benchStep * 100)}% health and attack (up to +${Math.round(U.benchCap * 100)}%).
+      Now: <b>+${Math.round(p.benchBonus * 100)}%</b>.</p>
+    ${shownBench.map(c=>`<div class="udef">${pic('duck-' + c.cls, 'duck pix')}${champIcon(c.champion)}
+      <div class="t"><b>${esc(c.champion)}</b><span>${CLASS_NAME[c.cls]} · ${plural(c.games, 'game')}${c.training ? ` · trained ${c.training}` : ''}${mastery(c.cls, c.mastered)}</span></div>
+      ${featherBtn(c.champion, c.cls, c.training, c.mastered)}</div>`).join('')}` : '';
   const chosen = new Set(p.squad.map(d=>d.champion));
   const picker = picking ? `<div class="upick" id="picker">${p.champions.slice(0, 40).map(c=>`<label class="${chosen.has(c.champion) ? 'on' : ''}">
       <input type="checkbox" value="${esc(c.champion)}" ${chosen.has(c.champion) ? 'checked' : ''}>${pic('duck-' + c.cls)}${esc(c.champion)} <span style="color:var(--muted)">${c.games}</span></label>`).join('')}</div>
       <div class="ubtns"><button data-squad-save>Save squad</button><button class="ghost" data-squad-cancel>Cancel</button></div>` : '';
-  $('#squad').innerHTML = list + (own ? (picking ? picker : '<div class="ubtns"><button class="ghost" data-squad-open>Change squad</button></div>')
+  $('#squad').innerHTML = list + (own ? (picking ? picker : '<div class="ubtns"><button class="ghost" data-squad-open>Change squad</button></div>') + bench
     : `<p class="unote">${esc(shortName(p.riotId))}'s squad. Stats come from their own games on each champion.</p>`)
     + (p.soaks.length ? `<p class="unote">In the spa: ${p.soaks.map(x=>esc(x.champion)).join(', ')}. Fill-ins defend until they're out.</p>` : '')
+    + `<p class="unote">Goose feathers train champions (10 levels each), and a fully trained one can master its class's move for ${U.masteryCost}, used in raids. ${Object.entries(U.mastery).map(([k, m])=>`<b>${CLASS_NAME[k]}</b>, ${esc(m.move)}: ${esc(m.does)}`).join('. ')}.</p>`
     + '<p class="unote">Tanks soak up hits, mages hit groups, marksmen pierce armour, supports heal, assassins pick off flying geese. Each champion\'s stats come from your games on it: games played set its level, win rate its health, KDA its attack, S grades its stars.</p>';
 }
 $('#squad').addEventListener('click', e=>{
@@ -303,7 +316,11 @@ $('#squad').addEventListener('click', e=>{
   else if(e.target.closest('[data-squad-save]')){
     const squad = [...document.querySelectorAll('#picker input:checked')].map(i=>i.value);
     picking = false; act({action: 'squad', squad});
-  } else { const t = e.target.closest('[data-train]'); if(t) act({action: 'train', champion: t.dataset.train}); }
+  } else {
+    const t = e.target.closest('[data-train]'), m = e.target.closest('[data-master]');
+    if(t) act({action: 'train', champion: t.dataset.train});
+    else if(m) act({action: 'master', champion: m.dataset.master});
+  }
 });
 $('#squad').addEventListener('change', e=>{
   const box = e.target.closest('#picker input'); if(!box) return;
@@ -322,6 +339,7 @@ function report(rep, who, i){
     <div class="ugeese">${geese.map((k, j)=>`<img class="pix ${j < gone ? 'gone' : ''}" style="animation-delay:${j * 40}ms" src="${artURL(GOOSE_ART[k])}" alt="${k}" title="${k}">`).join('')}</div>
     <div>${rep.chased} of ${rep.total} geese chased off in ${rep.rounds} round${rep.rounds === 1 ? '' : 's'} · wave ${rep.wave}${rep.next ? ` · next raid: wave ${rep.next} ${rep.next > rep.wave ? '▲' : '▼'}` : ''}</div>
     <div class="sq">${rep.squad.map(d=>`<img class="pix ${d.up ? '' : 'ko'}" src="${artURL('duck-' + d.cls)}" title="${esc(d.champion)}${d.up ? '' : ' (knocked out)'}" alt="">`).join('')}</div>
+    ${rep.items && rep.items.length ? `<div>Used: ${rep.items.map(k=>esc(U.raidItems.find(x=>x.id === k).name.toLowerCase())).join(', ')}</div>` : ''}
     <div class="rw">${rep.practice ? 'Practice: nothing won or lost.' : rep.win ? `+${fmt(rep.reward.crumbs)} breadcrumbs, +${rep.reward.feathers} feathers` : `The geese took ${fmt(rep.stolen)} breadcrumbs${rep.chased ? ` (less, for the ${Math.round(rep.chased / rep.total * 100)}% chased off)` : ''}.`}</div>
     <ol>${rep.log.map(l=>`<li>${esc(l)}</li>`).join('')}</ol></div>`;
 }
@@ -335,9 +353,21 @@ function renderRaids(){
     ${latest ? `<div class="uraids">${ps.map((p, i)=>report(same[i], shortName(p.riotId), i)).join('')}</div>`
       : '<p class="uempty">No raids yet: the first one comes after your next game together.</p>'}
     ${practice ? `<h3 style="margin:14px 0 8px;font-size:14px">Practice raid</h3><div class="uraids">${report(practice, shortName(U.players[U.me].riotId), U.me)}</div>` : ''}
-    ${U.players[U.me] && U.players[U.me].squad.length ? '<div class="ubtns"><button class="ghost" data-practice>Practice raid (nothing won or lost)</button></div>' : ''}`;
+    ${U.players[U.me] && U.players[U.me].squad.length ? '<div class="ubtns"><button class="ghost" data-practice>Practice raid (nothing won or lost)</button></div>' : ''}
+    ${U.players[U.me] ? supplies(U.players[U.me]) : ''}`;
 }
-$('#raids').addEventListener('click', e=>{ if(e.target.closest('[data-practice]')) act({action: 'practice'}, true); });
+function supplies(p){   // raid supplies, bought with goose feathers; one of each in stock is used up by the next raid
+  return `<h3 style="margin:14px 0 8px;font-size:14px">Raid supplies ${pic('icon-feather')}<span style="font-weight:400;color:var(--muted)"> ${p.feathers} feathers</span></h3>
+    <p class="unote" style="margin-top:0">One of each supply you have is used up by your next raid. Stock up to ${U.itemStock} of each.</p>
+    <div class="usupplies">${U.raidItems.map(x=>{ const have = (p.items || {})[x.id] || 0;
+      return `<div><b>${esc(x.name)}</b> <span class="have">${have}/${U.itemStock}</span><span>${esc(x.does)}</span>
+        <button class="ghost" data-item="${x.id}" ${have >= U.itemStock || p.feathers < x.cost ? 'disabled' : ''}>Buy ${pic('icon-feather')}${x.cost}</button></div>`; }).join('')}</div>`;
+}
+$('#raids').addEventListener('click', e=>{
+  const it = e.target.closest('[data-item]');
+  if(e.target.closest('[data-practice]')) act({action: 'practice'}, true);
+  else if(it) act({action: 'buy_item', item: it.dataset.item});
+});
 
 // ---- the Training Grounds: a win on any champion earns it a challenge; beat the boss for a level ----
 function fightReport(f, i){
@@ -361,15 +391,18 @@ function renderGrounds(){
   const rows = p.squad.map(row).join('')
     + (others.length ? `<h3 class="uspah">Not defending</h3>${others.map(row).join('')}` : '');
   const last = p.bossFights[0];
+  const ready = [...p.squad, ...others].filter(d=>!d.maxRank).reduce((n, d)=>n + waiting(d.champion), 0);
+  const all = own && ready > 1 ? `<div class="ubtns"><button data-challenge-all>Challenge all (${ready})</button></div>` : '';
   $('#grounds').innerHTML = `<p class="unote" style="margin-top:0">Win a game together on any champion and it earns a challenge here, whether it's one of your five defenders or not. Challenges add up, so two wins on the same champion mean two fights.
       Each challenge is a one-on-one fight against a boss built for that champion's level: win and it goes up a level for good; win or lose, the challenge is used up. Champions you aren't defending with show under Not defending while they have a challenge waiting.</p>
-    ${p.squad.length ? rows : '<p class="uempty">No defenders yet: play a game together first.</p>'}
+    ${all}${p.squad.length ? rows : '<p class="uempty">No defenders yet: play a game together first.</p>'}
     ${last ? `<h3 style="margin:14px 0 8px;font-size:14px">Latest boss fight</h3><div class="uraids">${fightReport(last, viewing)}</div>
       ${last.steps ? '<div class="ubtns"><button class="ghost" data-replay>Watch it again</button></div>' : ''}` : ''}`;
 }
 $('#grounds').addEventListener('click', e=>{
   const c = e.target.closest('[data-challenge]'), sp = e.target.closest('[data-spar]');
   if(c) act({action: 'challenge', champion: c.dataset.challenge});
+  else if(e.target.closest('[data-challenge-all]')) act({action: 'challenge_all'});
   else if(sp) act({action: 'spar', champion: sp.dataset.spar});
   else if(e.target.closest('[data-replay]')) playFight(U.players[viewing].bossFights[0]);
 });
@@ -798,6 +831,11 @@ async function act(body, isPractice){
     if(isPractice && s.result && s.result.raid) practice = s.result.raid;
     accept(s);
     if(s.result && s.result.fight) playFight(s.result.fight);
+    if(s.result && s.result.fights){
+      const f = s.result.fights;
+      $('#msg').className = 'msg'; $('#msg').innerHTML = `Challenged ${f.length} boss${f.length === 1 ? '' : 'es'}: won ${s.result.won}. ${f.map(x=>`${esc(x.champion)} ${x.win ? `beat ${esc(x.boss)} (Lv ${x.level})` : `lost to ${esc(x.boss)}`}`).join(' · ')}`;
+      setTimeout(()=>{ $('#msg').textContent = ''; }, 12000);
+    }
     if(s.result && s.result.caught) playLure(s.result);
     if(isPractice) document.querySelector('#raids').scrollIntoView({behavior: 'smooth', block: 'start'});
   }catch(e){ $('#msg').className = 'msg err'; $('#msg').textContent = e.message; setTimeout(()=>{ $('#msg').textContent = ''; }, 5000); }
